@@ -1,0 +1,19 @@
+# Normaliza los finales de línea automáticamente
+* text=auto eol=lf
+
+# Scripts que deben conservar LF
+*.sh   text eol=lf
+
+# Archivos que deben conservar CRLF (Windows)
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# Tratar como binarios (sin conversión de EOL ni diff de texto)
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.gz   binary
+*.zip  binary

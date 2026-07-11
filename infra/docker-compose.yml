@@ -1,0 +1,26 @@
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: abm-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - abm-db-data:/var/lib/postgresql/data
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: abm-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - abm-grafana-data:/var/lib/grafana
+    depends_on:
+      - db
+
+volumes:
+  abm-db-data:
+  abm-grafana-data:
