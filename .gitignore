@@ -1,3 +1,9 @@
+# ─── Rust / compilación ─────────────────────────────────────
+/target
+
+# ─── Salida de simulaciones (volcados JSON locales) ──────────
+/output
+
 # ─── Secretos y entorno local ───────────────────────────────
 .env
 .env.*

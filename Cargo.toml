@@ -1,0 +1,23 @@
+[package]
+name = "abm"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97.0"
+description = "Motor de simulación masiva basada en agentes (ABM), headless y determinista"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# ECS standalone de Bevy (sin render). default-features = false quita el executor
+# multihilo (feature `multi_threaded`): así el paralelismo no puede romper el determinismo.
+bevy_ecs = { version = "0.19", default-features = false, features = ["std"] }
+# RNG determinista y portable entre versiones/plataformas (ChaCha8). Prohibido StdRng.
+rand = "0.10"
+rand_chacha = "0.10"
+# Serialización de la config (TOML) y de la salida (JSON).
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1.1"
+# Errores de librería.
+thiserror = "2"
+# Errores en el binario (solo main.rs).
+anyhow = "1"

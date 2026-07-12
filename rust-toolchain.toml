@@ -1,0 +1,5 @@
+[toolchain]
+# Versión exacta del compilador: mismo codegen => contrato de reproducibilidad (CLAUDE §6).
+channel = "1.97.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

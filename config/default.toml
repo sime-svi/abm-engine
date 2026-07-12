@@ -1,0 +1,39 @@
+# Configuración base de simulación. TODOS los parámetros viven aquí, nada hardcodeado
+# (CLAUDE §5). El responsable dirige experimentos cambiando esta config, no el código.
+
+[run]
+name        = "baseline"   # nombre legible del experimento => nombre del JSON de salida
+seed        = 42           # semilla del RNG raíz. (seed, versión, config) => corrida reproducible
+total_ticks = 200          # número de ticks (pasos de tiempo enteros) a simular
+output_path = "output"     # carpeta destino de los volcados JSON (ignorada por git)
+
+[grid]
+width            = 100     # ancho de la cuadrícula (celdas)
+height           = 100     # alto de la cuadrícula (celdas)
+toroidal         = true    # bordes que se envuelven (elimina efectos de borde)
+neighborhood     = 8       # 8 = Moore (con diagonales) | 4 = Von Neumann (sin diagonales)
+single_occupancy = true    # como máximo 1 agente por celda (regla Sugarscape)
+
+[resource]
+max          = 8.0         # capacidad máxima del recurso por celda
+regrowth     = 1.0         # recurso que regenera cada celda por tick (hasta 'max')
+initial_fill = "full"      # "full" (todas a max) | "random" (0..max con el RNG sembrado)
+
+[agents]
+initial_count   = 300      # nº de agentes al inicio
+init_energy_min = 5.0      # energía inicial mínima (uniforme en [min, max])
+init_energy_max = 25.0     # energía inicial máxima
+appetite        = 4.0      # consumo máximo de recurso por tick
+metabolism      = 1.0      # energía gastada por tick
+max_age         = 200      # muerte por vejez si la edad supera este valor (ticks)
+
+[reproduction]
+enabled               = true
+energy_threshold      = 20.0   # energía mínima para reproducirse (θ)
+child_energy_fraction = 0.5    # fracción de la energía de la madre heredada por el hijo (φ), 0..1
+
+[movement]
+tiebreak = "fixed_order"   # "fixed_order" (celda actual primero; sin sorteo en el bucle)
+
+[metrics]
+metrics_every = 1          # LOD de almacenamiento: agregar métricas cada N ticks (1 = siempre)
