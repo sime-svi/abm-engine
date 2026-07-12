@@ -4,7 +4,7 @@
 [run]
 name        = "baseline"   # nombre legible del experimento => nombre del JSON de salida
 seed        = 42           # semilla del RNG raíz. (seed, versión, config) => corrida reproducible
-total_ticks = 200          # número de ticks (pasos de tiempo enteros) a simular
+total_ticks = 500          # número de ticks (pasos de tiempo enteros) a simular
 output_path = "output"     # carpeta destino de los volcados JSON (ignorada por git)
 
 [grid]
@@ -24,7 +24,7 @@ initial_count   = 300      # nº de agentes al inicio
 init_energy_min = 5.0      # energía inicial mínima (uniforme en [min, max])
 init_energy_max = 25.0     # energía inicial máxima
 appetite        = 4.0      # consumo máximo de recurso por tick
-metabolism      = 1.0      # energía gastada por tick
+metabolism      = 2.0      # energía gastada por tick (> resource.regrowth => capacidad de carga)
 max_age         = 200      # muerte por vejez si la edad supera este valor (ticks)
 
 [reproduction]

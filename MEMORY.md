@@ -109,3 +109,23 @@ Formato de entrada:
   con él en la misma carpeta. Convención registrada en `CLAUDE.md §8.1` (cambio confirmado por el
   responsable, como exige §8).
 - **Estado:** Convención activa y aplicada a la fase inicial.
+
+## [2026-07-13] Calibración del modelo: dinámica de capacidad de carga
+
+- **Qué:** Ajustado `config/default.toml`: `metabolism` 1.0 → **2.0** y `total_ticks` 200 → 500. Con
+  ello el modelo pasa de una trayectoria degenerada (la población saturaba el tablero de 10 000 celdas
+  y se congelaba, sin muertes) a una **dinámica sana de capacidad de carga**: *boom* inicial
+  (~300 → ~5000) y equilibrio estable ~5000 (media población del tablero) con nacimientos y muertes
+  continuos, recurso oscilando (~5500), sin saturar ni extinguirse.
+- **Por qué:** El fallo estaba en que `metabolism (1) = regrowth (1)`: en un tablero lleno cada agente
+  empataba energía y nadie moría → congelación. Regla de calibración descubierta: **`g < m < apetito`**
+  (regeneración por celda < metabolismo < apetito). El metabolismo por encima de la regeneración hace
+  que el hacinamiento provoque inanición (capacidad de carga); por debajo del apetito permite ganar
+  energía en celdas ricas (crecimiento).
+- **Cómo se eligió:** Barrido empírico de `m ∈ {2.0, 2.5, 3.0}` en corridas de 800 ticks (las tres son
+  sanas; a mayor `m`, menor población de equilibrio y más recurso libre). Elegido `m = 2.0` por el
+  ratio limpio 2:1 y una densidad de equilibrio ~50 %.
+- **Verificación:** determinismo intacto (dos corridas idénticas byte a byte), `cargo test` en verde
+  (los 3 tests; ahora también se ejercita la mortalidad). Sin cambios de código: solo `config` + docs
+  de la fase (`docs/design/inicial/`) actualizados.
+- **Estado:** Modelo de la fase inicial **calibrado y correcto**.

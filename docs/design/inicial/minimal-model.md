@@ -102,12 +102,19 @@ orden de `AgentId`), **cero sorteos en el bucle** con el desempate por orden fij
 - `E_k` y todas las métricas son **finitas** (nunca `NaN`/`inf`).
 - `population ≥ 0`; sin `AgentId` repetidos.
 
-## 7. Parámetros por defecto (corrida pequeña e inspeccionable)
+## 7. Parámetros por defecto (corrida inspeccionable)
 
-Definidos en `config/default.toml`. Valores base: `W = H = 100`, `total_ticks = 200`,
-`initial_count = 300`, `R_max = 8`, `g = 1`, `apetito = 4`, `m = 1`, `a_max = 200`, `θ = 20`,
-`φ = 0.5`, `seed = 42`. Elegidos para que la población **ni explote ni colapse** de inmediato y el
-comportamiento sea verificable a ojo. Se calibran por config, nunca por código (CLAUDE §5).
+Definidos en `config/default.toml`. Valores base: `W = H = 100`, `total_ticks = 500`,
+`initial_count = 300`, `R_max = 8`, `g = 1`, `apetito = 4`, `m = 2`, `a_max = 200`, `θ = 20`,
+`φ = 0.5`, `seed = 42`.
+
+**Relación de calibración clave — `g < m < apetito`:** el metabolismo `m = 2` es **mayor** que la
+regeneración por celda `g = 1`, lo que crea una **capacidad de carga**: cuando la densidad de agentes
+es alta, la comida por celda no cubre el metabolismo, algunos mueren de inanición y la población se
+estabiliza **por debajo** del tope físico del tablero (con estos valores, ~5000 de 10 000 celdas) en
+lugar de saturarlo y congelarse. Los dos límites a evitar: si `m ≤ g`, el tablero se satura y la
+dinámica se congela (sin muertes); si `m ≥ apetito`, ni en la mejor celda se gana energía y la
+población colapsa. Todo se calibra por config, nunca por código (CLAUDE §5).
 
 ## 8. Fuera de alcance (fases posteriores)
 

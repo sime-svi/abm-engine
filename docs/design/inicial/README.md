@@ -55,12 +55,17 @@ nacimientos, muertes).
 
 ## Consideraciones (lo que conviene saber)
 
-- ⚠️ **Con los números por defecto, los bichitos llenan todo el tablero y se quedan quietos.** Llega
-  un punto en que toda la comida se agota, la energía media baja del umbral para reproducirse, y ya no
-  nacen más; y en los 200 ticks de la corrida no muere ninguno (morirían de viejos justo después).
-  **No es un fallo**: es cuestión de **afinar los parámetros** en el `config`. Por ejemplo, subir el
-  *metabolismo* (lo que gastan por tick) por encima de lo que la comida regenera crea ciclos de auge
-  y caída mucho más interesantes.
+- **Dinámica sana de «capacidad de carga».** Con los valores por defecto la población hace un *boom*
+  inicial (de ~300 a ~5000 en los primeros 100 ticks) y luego se **estabiliza** en torno a la mitad
+  del tablero (~5000), con nacimientos y muertes ocurriendo sin parar: es un equilibrio **vivo**, no
+  un número congelado. Hacia el tick 200 verás un pico de muertes —la primera generación nació a la
+  vez, envejece a la vez y muere casi de golpe— y después el sistema se reequilibra solo.
+- **La clave del ajuste** (por si tocas el `config`): el *metabolismo* (lo que un agente gasta por
+  tick, `2.0`) es **mayor** que lo que una casilla regenera de comida (`1.0` por tick). Por eso, cuando
+  se juntan demasiados, la comida no da abasto y algunos pasan hambre y mueren; eso es justo lo que
+  impide que llenen todo el tablero y lo que crea el equilibrio. La regla es `regeneración < metabolismo
+  < apetito`: si el metabolismo igualara a la regeneración, la población saturaría el tablero y se
+  congelaría; si igualara al apetito, no podría crecer ni en la mejor casilla.
 - **Todavía no hay base de datos.** Los resultados salen a archivos **JSON** en la carpeta `output/`.
   La base de datos (PostgreSQL) llega en una fase posterior.
 - Es **un único programa**, aún no la estructura final de cinco «cajas» de código (*crates*). Pero ya
