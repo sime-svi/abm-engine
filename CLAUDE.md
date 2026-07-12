@@ -92,6 +92,16 @@ Este repositorio mantiene cuatro documentos vivos. **Mantenerlos actualizados es
 
 Regla de oro: si alguien lee estos cuatro archivos, debe entender el estado completo del proyecto sin mirar el código. Si al terminar una tarea eso ya no es cierto, la tarea no está terminada.
 
+### 8.1. Documentación por fases en `docs/design/`
+
+Cada **fase** completada (en el sentido de la pirámide invertida, §4) deja su rastro documentado en `docs/design/<nombre-de-fase>/`. Al cerrar una fase, **antes de darla por terminada**:
+
+1. Crea la carpeta `docs/design/<nombre-de-fase>/` con el nombre de la fase (ej. `docs/design/inicial/`).
+2. **Mueve** ahí el/los documento(s) de diseño técnico o matemático de esa fase (ej. `minimal-model.md`). Usa `git mv` para conservar el historial.
+3. **Crea** dentro un `README.md` que explique, **en lenguaje humano y sencillo** (sin dar por conocido el vocabulario técnico: introduce cada término y tradúcelo al momento), qué se está logrando en la fase, para qué sirve y qué queda fuera, junto con algunas **consideraciones** (decisiones tomadas, limitaciones y hallazgos).
+
+Así, en cada fase conviven el **diseño técnico** (el "cómo" formal, para implementar) y la **explicación llana** (el "qué" y el "por qué", para entender). Cualquiera debe poder seguir la evolución del proyecto leyendo en orden los `README.md` de las fases.
+
 ---
 
 ## 9. Git

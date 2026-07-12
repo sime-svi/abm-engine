@@ -94,3 +94,18 @@ Formato de entrada:
 - **Estado:** Base estable y verificada. `cargo fmt` + `cargo clippy -- -D warnings` + `cargo test`
   en verde; sin `unwrap`/`panic`/`unsafe`/reloj de pared en la lógica. Listo para calibrar el modelo
   o para subir de capa.
+
+## [2026-07-13] Convención de documentación por fases + reorganización de `docs/design/`
+
+- **Qué:** Añadida al `CLAUDE.md` la sección **§8.1**: al completar una fase se crea en `docs/design/`
+  una carpeta con el nombre de la fase, se mueve ahí el diseño técnico/matemático y se añade un
+  `README.md` en lenguaje llano (qué se logra, para qué, consideraciones). Aplicado a la fase
+  **inicial**: `docs/design/minimal-model.md` movido con `git mv` (historial conservado) a
+  `docs/design/inicial/minimal-model.md`, y creado `docs/design/inicial/README.md`.
+- **Por qué:** Trazabilidad. Separar el "cómo" formal (diseño técnico) del "qué/por qué" en lenguaje
+  sencillo, una carpeta por fase, para seguir la evolución leyendo los `README.md` en orden. Pedido
+  por el responsable.
+- **Decisiones:** El `README.md` de fase es el documento "para humanos"; el markdown técnico convive
+  con él en la misma carpeta. Convención registrada en `CLAUDE.md §8.1` (cambio confirmado por el
+  responsable, como exige §8).
+- **Estado:** Convención activa y aplicada a la fase inicial.

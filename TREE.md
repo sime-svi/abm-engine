@@ -70,7 +70,9 @@ abm/
 │
 ├── docs/
 │   └── design/                    # Modelos matemáticos y ecuaciones (precede al código)
-│       └── [x] minimal-model.md   # Modelo de forrajeo mínimo (v1)
+│       └── inicial/               # Una carpeta por fase (ver CLAUDE §8.1)
+│           ├── [x] README.md          # Explicación llana de la fase + consideraciones
+│           └── [x] minimal-model.md   # Diseño técnico: modelo de forrajeo (v1)
 │
 ├── tests/                         # Tests de integración (incl. determinismo)
 │   └── [x] determinism.rs         # misma semilla → misma salida + guardias
@@ -91,7 +93,8 @@ será básicamente mover carpetas:
 abm/
 ├── [x] Cargo.toml · rust-toolchain.toml · .gitignore
 ├── config/[x] default.toml
-├── docs/design/[x] minimal-model.md          # el modelo matemático (precede al código)
+├── docs/design/inicial/[x]                   # una carpeta por fase (CLAUDE §8.1):
+│      README.md (explicación llana) + minimal-model.md (diseño técnico)
 ├── tests/[x] determinism.rs
 └── src/
     ├── [x] main.rs · lib.rs · config.rs · error.rs
