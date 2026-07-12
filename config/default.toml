@@ -37,3 +37,8 @@ tiebreak = "fixed_order"   # "fixed_order" (celda actual primero; sin sorteo en 
 
 [metrics]
 metrics_every = 1          # LOD de almacenamiento: agregar métricas cada N ticks (1 = siempre)
+
+[persistence]
+sink = "json"              # "json" | "postgres" | "both". La conexión a la BD NO vive aquí (son
+                           # credenciales): se toma del entorno (DATABASE_URL o las POSTGRES_* de
+                           # infra/.env). "json" no necesita BD; por eso es el valor por defecto.

@@ -1,0 +1,21 @@
+# Fuente de datos de Grafana (aprovisionada). La contraseña NO está aquí: se toma de la variable
+# de entorno POSTGRES_PASSWORD que docker-compose pasa al contenedor desde infra/.env.
+apiVersion: 1
+
+datasources:
+  - name: ABM TimescaleDB
+    uid: abm_timescaledb
+    type: postgres
+    access: proxy
+    url: db:5432
+    user: $POSTGRES_USER
+    database: $POSTGRES_DB
+    isDefault: true
+    editable: true
+    jsonData:
+      database: $POSTGRES_DB
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: true
+    secureJsonData:
+      password: $POSTGRES_PASSWORD

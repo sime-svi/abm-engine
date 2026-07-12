@@ -1,0 +1,172 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "trend",
+      "title": "Población",
+      "description": "Última ejecución. Eje X = tick.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "abm_timescaledb" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "abm_timescaledb" },
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT tick, value AS \"población\" FROM metrics WHERE metric_name = 'population' AND run_id = (SELECT run_id FROM simulation_runs ORDER BY started_at DESC LIMIT 1) ORDER BY tick"
+        }
+      ],
+      "options": {
+        "xField": "tick",
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom", "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "trend",
+      "title": "Nacimientos y muertes por tick",
+      "description": "Última ejecución. Eje X = tick.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "abm_timescaledb" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "abm_timescaledb" },
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT tick, max(value) FILTER (WHERE metric_name = 'births') AS \"nacimientos\", max(value) FILTER (WHERE metric_name = 'deaths') AS \"muertes\" FROM metrics WHERE run_id = (SELECT run_id FROM simulation_runs ORDER BY started_at DESC LIMIT 1) GROUP BY tick ORDER BY tick"
+        }
+      ],
+      "options": {
+        "xField": "tick",
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom", "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5,
+            "showPoints": "never",
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "trend",
+      "title": "Energía media",
+      "description": "Última ejecución. Eje X = tick.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "abm_timescaledb" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "abm_timescaledb" },
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT tick, value AS \"energía media\" FROM metrics WHERE metric_name = 'energy_mean' AND run_id = (SELECT run_id FROM simulation_runs ORDER BY started_at DESC LIMIT 1) ORDER BY tick"
+        }
+      ],
+      "options": {
+        "xField": "tick",
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom", "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "trend",
+      "title": "Recurso total",
+      "description": "Última ejecución. Eje X = tick.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "abm_timescaledb" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "abm_timescaledb" },
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT tick, value AS \"recurso total\" FROM metrics WHERE metric_name = 'resource_total' AND run_id = (SELECT run_id FROM simulation_runs ORDER BY started_at DESC LIMIT 1) ORDER BY tick"
+        }
+      ],
+      "options": {
+        "xField": "tick",
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom", "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      }
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": ["abm"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "ABM — Visión general",
+  "uid": "abm-overview",
+  "version": 1,
+  "weekStart": ""
+}

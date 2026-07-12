@@ -2,6 +2,8 @@
 //! el motor. Futuro crate `abm-persistence`.
 
 pub mod json_sink;
+pub mod migrations;
+pub mod pg_sink;
 pub mod sink;
 
 use std::path::{Path, PathBuf};

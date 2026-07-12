@@ -1,7 +1,23 @@
 # DATABASE_SCHEMA.md — Arquitectura de la base de datos
 
-> Estado: **DISEÑO** (aún no implementado). Motor: PostgreSQL 16 + extensión TimescaleDB.
-> Este documento describe el esquema objetivo. La implementación se hace mediante migraciones versionadas en `infra/migrations/`, nunca a mano. Mantener este archivo sincronizado con el esquema real es obligatorio (ver CLAUDE.md §8).
+> Estado: **PARCIALMENTE IMPLEMENTADO** — migración `V1` (`simulation_runs` + `metrics`). Motor: PostgreSQL 16 + extensión TimescaleDB.
+> Este documento describe el esquema objetivo. La implementación se hace mediante migraciones versionadas en `infra/migrations/`, aplicadas por el propio binario (tabla de control `schema_migrations`), nunca a mano. Mantener este archivo sincronizado con el esquema real es obligatorio (ver CLAUDE.md §8).
+
+---
+
+## 0. Estado de implementación
+
+| Tabla | Estado | Migración |
+|---|---|---|
+| `simulation_runs` | ✅ implementada | `V1__initial.sql` |
+| `metrics` (hypertable) | ✅ implementada | `V1__initial.sql` |
+| `schema_migrations` (control) | ✅ implementada | (la crea el aplicador) |
+| `agent_dim` | ⬜ diseño | — |
+| `events` | ⬜ diseño | — |
+| `agent_snapshots` | ⬜ diseño | — |
+| `world_snapshots` | ⬜ diseño (opcional) | — |
+
+El destino se elige por config (`[persistence] sink = "json" | "postgres" | "both"`). La conexión se toma del entorno (`DATABASE_URL` o `POSTGRES_*`), nunca del código ni de la config versionada. Diseño técnico de la fase en `docs/design/persistencia/`.
 
 ---
 

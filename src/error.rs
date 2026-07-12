@@ -32,4 +32,8 @@ pub enum SimError {
     Io(#[from] std::io::Error),
     #[error("error de serialización JSON")]
     Serialize(#[from] serde_json::Error),
+    #[error("error de base de datos")]
+    Db(#[from] postgres::Error),
+    #[error("falta la variable de entorno {0} para conectar a la base de datos")]
+    MissingEnv(String),
 }

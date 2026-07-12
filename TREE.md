@@ -65,8 +65,12 @@ abm/
 ├── infra/
 │   ├── [x] docker-compose.yml     # Postgres/TimescaleDB + Grafana
 │   ├── [x] .env                   # Credenciales (IGNORADO por git)
+│   ├── grafana/                   # Aprovisionamiento de Grafana (se carga solo al arrancar)
+│   │   ├── [x] provisioning/datasources/datasource.yml
+│   │   ├── [x] provisioning/dashboards/provider.yml
+│   │   └── [x] dashboards/abm-overview.json
 │   └── migrations/                # Migraciones SQL versionadas del esquema
-│       └── [ ] .gitkeep
+│       └── [x] V1__initial.sql    # simulation_runs + metrics (hypertable)
 │
 ├── docs/
 │   └── design/                    # Modelos matemáticos y ecuaciones (precede al código)
@@ -93,16 +97,17 @@ será básicamente mover carpetas:
 abm/
 ├── [x] Cargo.toml · rust-toolchain.toml · .gitignore
 ├── config/[x] default.toml
-├── docs/design/inicial/[x]                   # una carpeta por fase (CLAUDE §8.1):
-│      README.md (explicación llana) + minimal-model.md (diseño técnico)
-├── tests/[x] determinism.rs
+├── docs/design/[x]                           # una carpeta por fase (CLAUDE §8.1):
+│      inicial/ (README + minimal-model) · persistencia/ (README + design)
+├── infra/migrations/[x] V1__initial.sql      # simulation_runs + metrics (hypertable)
+├── tests/[x] determinism.rs · persistence_pg.rs (BD, #[ignore])
 └── src/
     ├── [x] main.rs · lib.rs · config.rs · error.rs
     ├── core/        → futuro abm-core        (rng, time, schedule, world_setup)
     ├── domain/      → futuro abm-ruleset     (components, grid, params, buffers,
     │                    systems/{regrow, order, forage, reproduce, mortality, apply})
     ├── metrics/     → futuro abm-metrics     (schema, collect)
-    └── persistence/ → futuro abm-persistence (sink [trait], json_sink)
+    └── persistence/ → futuro abm-persistence (sink [trait], json_sink, pg_sink, migrations)
 ```
 
 Estado: determinista (misma semilla → mismo JSON byte a byte, verificado también entre procesos);

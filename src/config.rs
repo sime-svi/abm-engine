@@ -18,6 +18,7 @@ pub struct Config {
     pub reproduction: ReproductionConfig,
     pub movement: MovementConfig,
     pub metrics: MetricsConfig,
+    pub persistence: PersistenceConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,6 +166,32 @@ pub struct MetricsConfig {
 impl Default for MetricsConfig {
     fn default() -> Self {
         Self { metrics_every: 1 }
+    }
+}
+
+/// Destino de la salida de métricas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SinkKind {
+    /// Volcado a JSON en `output/` (por defecto; no necesita BD).
+    Json,
+    /// Escritura en PostgreSQL/TimescaleDB (conexión tomada del entorno).
+    Postgres,
+    /// Ambos destinos.
+    Both,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PersistenceConfig {
+    pub sink: SinkKind,
+}
+
+impl Default for PersistenceConfig {
+    fn default() -> Self {
+        Self {
+            sink: SinkKind::Json,
+        }
     }
 }
 
