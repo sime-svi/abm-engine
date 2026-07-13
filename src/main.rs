@@ -6,6 +6,10 @@ use abm::config::SinkKind;
 use anyhow::{Context, Result};
 
 fn main() -> Result<()> {
+    // Carga infra/.env (si existe) para la conexión a la BD, sin tener que exportarla a mano.
+    // No sobreescribe variables ya definidas en el entorno; se ignora si no hay archivo.
+    let _ = dotenvy::from_path("infra/.env");
+
     let config_path = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "config/default.toml".to_string());

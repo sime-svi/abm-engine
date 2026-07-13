@@ -173,3 +173,14 @@ Formato de entrada:
   contenedor de Grafana (`docker compose up -d`) para que cargue el aprovisionamiento — requiere Docker
   (el usuario no está en el grupo docker: usar `sudo`).
 - **Estado:** Ficheros listos y commiteables; falta recrear el contenedor y comprobar en el navegador.
+
+## [2026-07-13] Cierre de fase: README + autocarga de infra/.env
+
+- **Qué:** Reescrito el `README.md` de la raíz (estaba obsoleto: solo describía la infra). Ahora
+  documenta el motor, la puesta en marcha (JSON y BD+Grafana), la config, la estructura y los docs
+  vivos. Además, el binario **autocarga `infra/.env`** al arrancar (dep `dotenvy`), así conectar a la
+  BD ya no requiere el ritual `set -a; . infra/.env; set +a` (no sobreescribe variables ya definidas).
+- **Por qué:** Cerrar la fase con la documentación coherente y quitar fricción al responsable.
+- **Verificación:** corrida con `sink=both` desde un shell **sin** variables `POSTGRES_*` → conecta y
+  escribe (run_id impreso). `fmt` / `clippy -D warnings` / `test` en verde.
+- **Estado:** Primera fase (motor + persistencia + Grafana) **cerrada**. Pendiente solo el commit.

@@ -35,10 +35,9 @@ tiempo, que puedes **consultar con SQL** y **pintar en Grafana** sin escribir na
 
 ```bash
 # 1) Levanta la BD si no está corriendo:   cd infra && docker compose up -d
-# 2) Exporta las credenciales de infra/.env y corre con un sink de BD:
-set -a; . infra/.env; set +a
-# pon en el config [persistence] sink = "postgres" (o "both") y ejecuta:
+# 2) Pon en el config [persistence] sink = "postgres" (o "both") y ejecuta desde la raíz:
 cargo run --release -- config/default.toml
+# (el binario lee infra/.env solo; no hace falta exportar nada)
 ```
 
 El binario imprime el `run_id`. A partir de ahí, Grafana (http://localhost:3000) puede leer las tablas
