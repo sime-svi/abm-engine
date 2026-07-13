@@ -63,6 +63,10 @@ El árbol detallado y qué está implementado está en [`TREE.md`](TREE.md).
 Variables en `infra/.env` (plantilla en `infra/.env.example`): `POSTGRES_USER`, `POSTGRES_PASSWORD`,
 `POSTGRES_DB`. Los datos persisten en volúmenes de Docker (`abm-db-data`, `abm-grafana-data`).
 
+> Si `docker` responde `permission denied`, tu usuario no está en el grupo `docker`: usa
+> `sudo docker compose …`, o añádete al grupo una sola vez con `sudo usermod -aG docker $USER` y
+> reinicia la sesión. (El **motor** no necesita Docker para escribir en la BD: conecta por el puerto.)
+
 ## Comandos útiles
 
 ```bash
