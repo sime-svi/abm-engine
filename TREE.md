@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-07-11 — primer binario mínimo funcionando
+Última actualización: 2026-07-13 — motor con persistencia a PostgreSQL/TimescaleDB y modelo calibrado
 
 ---
 
@@ -74,12 +74,16 @@ abm/
 │
 ├── docs/
 │   └── design/                    # Modelos matemáticos y ecuaciones (precede al código)
-│       └── inicial/               # Una carpeta por fase (ver CLAUDE §8.1)
+│       ├── inicial/               # Una carpeta por fase (ver CLAUDE §8.1)
+│       │   ├── [x] README.md          # Explicación llana de la fase + consideraciones
+│       │   └── [x] minimal-model.md   # Diseño técnico: modelo de forrajeo (v1)
+│       └── persistencia/          # Fase 2: sink a PostgreSQL/TimescaleDB + Grafana
 │           ├── [x] README.md          # Explicación llana de la fase + consideraciones
-│           └── [x] minimal-model.md   # Diseño técnico: modelo de forrajeo (v1)
+│           └── [x] design.md          # Diseño técnico: sink PG, migraciones, fan-out
 │
 ├── tests/                         # Tests de integración (incl. determinismo)
-│   └── [x] determinism.rs         # misma semilla → misma salida + guardias
+│   ├── [x] determinism.rs         # misma semilla → misma salida + guardias
+│   └── [x] persistence_pg.rs      # escribe run+métricas en BD (#[ignore]; corre con --ignored)
 │
 └── output/                        # Volcados JSON locales (IGNORADO por git)
     └── [ ] .gitkeep
@@ -87,11 +91,12 @@ abm/
 
 ---
 
-## Estado actual — primer binario mínimo (2026-07-11)
+## Estado actual — motor con persistencia (2026-07-13)
 
-Existe ya el **primer binario mínimo** `abm` (pirámide invertida): un único paquete Cargo, aún **no**
-el workspace de cinco crates. Sus módulos anticipan esa separación, de modo que el futuro refactor
-será básicamente mover carpetas:
+Existe el binario `abm` (pirámide invertida): un único paquete Cargo, aún **no** el workspace de
+cinco crates. Sus módulos anticipan esa separación, de modo que el futuro refactor será básicamente
+mover carpetas. Cerradas hasta hoy las fases **«inicial»** (motor de forrajeo determinista → JSON) y
+**«persistencia»** (sink a PostgreSQL/TimescaleDB + Grafana aprovisionado):
 
 ```
 abm/
@@ -111,10 +116,17 @@ abm/
 ```
 
 Estado: determinista (misma semilla → mismo JSON byte a byte, verificado también entre procesos);
-`cargo fmt` / `clippy -D warnings` / `test` en verde. La infraestructura `infra/`
-(Postgres/TimescaleDB + Grafana) sigue disponible, pero el motor **aún no escribe en BD** (vuelca a
-`output/*.json`).
+`cargo fmt` / `clippy -D warnings` / `test` en verde (3/3 herméticos; el test de BD es `#[ignore]`).
+El motor ya **escribe en la BD** además del JSON: el destino se elige por config
+(`[persistence] sink = "json" | "postgres" | "both"`); la conexión se toma del entorno
+(`DATABASE_URL` o `POSTGRES_*` de `infra/.env`, autocargado). Infraestructura `infra/`
+(Postgres/TimescaleDB + Grafana) disponible y usada.
 
-**Nota de calibración:** con los parámetros por defecto la población satura la cuadrícula y se
-congela; ajustar `config` para dinámicas auge-caída es el siguiente paso de *modelado*. El salto a
-los cinco crates y a la BD llega cuando se decida subir de capa.
+**Modelo calibrado:** con los parámetros por defecto la población hace un *boom* inicial
+(~300 → ~5000) y se **estabiliza** en una capacidad de carga sana (~5000 de 10 000 celdas) con
+nacimientos y muertes continuos, gracias a la relación `g < m < apetito` (regeneración por celda <
+metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
+
+**Pendiente (fases siguientes):** refactor a los cinco crates; tablas `events` y `agent_snapshots`
+(LOD micro) con su sink; y **verificar Grafana en el navegador** (recrear el contenedor con
+`docker compose up -d` y abrir el dashboard). El diseño de estas piezas ya está en `DATABASE_SCHEMA.md`.

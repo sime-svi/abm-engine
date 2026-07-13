@@ -184,3 +184,24 @@ Formato de entrada:
 - **Verificación:** corrida con `sink=both` desde un shell **sin** variables `POSTGRES_*` → conecta y
   escribe (run_id impreso). `fmt` / `clippy -D warnings` / `test` en verde.
 - **Estado:** Primera fase (motor + persistencia + Grafana) **cerrada**. Pendiente solo el commit.
+
+## [2026-07-13] Sincronización de TREE.md con el estado real (auditoría de fases)
+
+- **Qué:** Auditadas las fases «inicial» y «persistencia» (docs de fase + docs vivos + código). Las dos
+  carpetas `docs/design/{inicial,persistencia}/` estaban completas y coherentes con el código, la
+  config y la migración; `fmt` / `clippy -D warnings` / `test` (3/3 herméticos, el de BD `#[ignore]`)
+  en verde. Pero `TREE.md` había quedado desincronizado: el commit de persistencia actualizó su bloque
+  de árbol pero dejó la prosa anterior a la calibración y a la BD. Corregido.
+- **Por qué:** CLAUDE §8 exige que los cuatro documentos vivos reflejen el estado real; `TREE.md`
+  contradecía a los otros tres (y a sí mismo: el árbol ya citaba la persistencia, pero la prosa la
+  negaba).
+- **Decisiones / problemas:** Cambios solo en `TREE.md` (nada de código): (1) fecha/título de «Última
+  actualización» y de «Estado actual» → 2026-07-13; (2) añadidas `docs/design/persistencia/` y
+  `tests/persistence_pg.rs` al árbol objetivo; (3) prosa «el motor **aún no escribe en BD**» → ahora
+  escribe (sink `json`/`postgres`/`both`, conexión desde el entorno); (4) «Nota de calibración»
+  (población satura la cuadrícula y se congela) → «Modelo calibrado» (capacidad de carga sana,
+  `g < m < apetito`, `m = 2 > g = 1`); (5) listado explícito de lo pendiente (5 crates,
+  `events`/`agent_snapshots`, verificar Grafana en el navegador).
+- **Estado tras el cambio:** Los cuatro documentos vivos coherentes entre sí y con el código. Únicos
+  pendientes reales: **verificar Grafana en el navegador** (requiere Docker) y, en fases siguientes, el
+  refactor a los cinco crates y las tablas de LOD micro (`events`, `agent_snapshots`).
