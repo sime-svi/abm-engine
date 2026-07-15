@@ -1,0 +1,63 @@
+# Configuración de la fase «terreno» (incremento 1). TODOS los parámetros viven aquí (CLAUDE §5).
+# Los defaults son los del documento madre REESCALADOS al tick diario (T_anio=365): toda tasa por
+# tick × 48/365, toda cadencia en ticks × 365/48 (diseño §7).
+
+[run]
+name        = "terreno"    # nombre legible => nombre del JSON de salida
+seed        = 42           # semilla del RNG raíz. (seed, config) => mundo reproducible
+total_ticks = 365          # ticks a simular (1 año con el tick diario)
+output_path = "output"     # carpeta destino (ignorada por git)
+dump_world  = false         # true => vuelca además un snapshot por celda del mundo generado
+
+[planet]
+r_km      = 6371.0         # radio del planeta (km)
+n0        = 48             # celdas por arista de cara en L=0 (6·n0² celdas totales)
+l_unif    = 0             # nivel uniforme del árbol LOD-ready (0 = base; sin subdividir aún)
+sea_level = 0.0            # cota por debajo de la cual hay océano (m)
+h_min     = -11000.0       # elevación mínima (m)
+h_max     = 9000.0         # elevación máxima (m)
+
+[worldgen]
+noise_octaves      = 6        # octavas del ruido de elevación (detalle)
+persistence        = 0.5      # peso decreciente de cada octava
+lacunarity         = 2.0      # subida de frecuencia por octava
+base_freq          = 1.6      # frecuencia base (nº de continentes ~)
+land_exp           = 3.0      # exponente hipsométrico (>1 => domina la tierra baja)
+river_threshold_km2 = 80000.0 # área de drenaje mínima para ser río (km²)
+resource_density   = 0.05     # fracción de celdas de tierra con depósito de recurso
+
+[climate]
+t_equator         = 30.0   # temperatura media en el ecuador a nivel del mar (°C)
+k_lat             = 0.6     # caída de temperatura por grado de latitud (°C/°)
+lapse             = 6.5     # gradiente térmico vertical (°C/km)
+seas_amp_pole     = 25.0    # amplitud estacional máxima (en el polo) (°C)
+t_year            = 365.0   # duración del año (ticks). >= 24 (anti-aliasing)
+t_freeze          = 0.0     # umbral de congelación lluvia→nieve (°C)
+k_melt            = 0.26    # fusión de nieve por grado (mm/(°C·tick)) [2·48/365]
+p_ref             = 5.0     # precipitación de referencia (mm/tick). Calibrada (>2.6 reescalado) para selva
+k_oro             = 0.5     # sensibilidad orográfica (sombra pluviométrica)
+m_oro_min         = 0.2     # factor orográfico mínimo (sotavento seco)
+m_oro_max         = 3.0     # factor orográfico máximo (barlovento húmedo)
+moisture_length_km = 1500.0 # escala de secado tierra adentro (km)
+seas_precip_amp   = 0.0     # amplitud de la modulación estacional de lluvia (0 = suave)
+
+[soil]
+runoff_base = 0.10         # coeficiente base de escorrentía
+k_slope     = 0.5          # sensibilidad de la escorrentía a la pendiente
+k_sat       = 0.4          # sensibilidad de la escorrentía a la saturación
+k_et        = 0.13         # evapotranspiración por grado (mm/(°C·tick)) [1.0·48/365]
+k_lat_flow  = 0.0066       # difusión lateral de humedad [0.05·48/365]
+w_cap_min   = 50.0         # capacidad de campo mínima (mm)
+w_cap_max   = 300.0        # capacidad de campo máxima (mm)
+
+[vegetation]
+theta_opt   = 0.6          # humedad óptima
+sigma_theta = 0.25         # tolerancia de humedad
+t_opt       = 22.0         # temperatura óptima (°C)
+sigma_t     = 12.0         # tolerancia de temperatura (°C)
+k_max       = 100.0        # capacidad de carga máxima
+r_veg       = 0.026        # tasa de crecimiento vegetal (1/tick) [0.2·48/365]
+n_veg       = 30           # cadencia de vegetación (ticks) [4·365/48]
+
+[persistence]
+sink = "json"              # destino de la salida (en este incremento solo JSON)

@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-07-13 — motor con persistencia a PostgreSQL/TimescaleDB y modelo calibrado
+Última actualización: 2026-07-13 — diseño de la fase «terreno» (incremento 1) sobre lo anterior
 
 ---
 
@@ -77,9 +77,13 @@ abm/
 │       ├── inicial/               # Una carpeta por fase (ver CLAUDE §8.1)
 │       │   ├── [x] README.md          # Explicación llana de la fase + consideraciones
 │       │   └── [x] minimal-model.md   # Diseño técnico: modelo de forrajeo (v1)
-│       └── persistencia/          # Fase 2: sink a PostgreSQL/TimescaleDB + Grafana
-│           ├── [x] README.md          # Explicación llana de la fase + consideraciones
-│           └── [x] design.md          # Diseño técnico: sink PG, migraciones, fan-out
+│       ├── persistencia/          # Fase 2: sink a PostgreSQL/TimescaleDB + Grafana
+│       │   ├── [x] README.md          # Explicación llana de la fase + consideraciones
+│       │   └── [x] design.md          # Diseño técnico: sink PG, migraciones, fan-out
+│       └── terreno/               # Fase 3: sustrato físico (esfera, clima, agua, vegetación)
+│           ├── [x] README.md                              # Explicación llana de la fase
+│           ├── [x] diseno_terreno_espacio_geografia.md    # Visión completa (madre)
+│           └── [x] incremento-1-diseno.md                 # Diseño del 1er incremento (IMPLEMENTADO)
 │
 ├── tests/                         # Tests de integración (incl. determinismo)
 │   ├── [x] determinism.rs         # misma semilla → misma salida + guardias
@@ -95,28 +99,37 @@ abm/
 
 Existe el binario `abm` (pirámide invertida): un único paquete Cargo, aún **no** el workspace de
 cinco crates. Sus módulos anticipan esa separación, de modo que el futuro refactor será básicamente
-mover carpetas. Cerradas hasta hoy las fases **«inicial»** (motor de forrajeo determinista → JSON) y
-**«persistencia»** (sink a PostgreSQL/TimescaleDB + Grafana aprovisionado):
+mover carpetas. Cerradas hasta hoy las fases **«inicial»** (motor de forrajeo determinista → JSON),
+**«persistencia»** (sink a PostgreSQL/TimescaleDB + Grafana aprovisionado) y el **«terreno» incr. 1**
+(sustrato físico esférico: clima, agua, vegetación; binario aparte `terreno`):
 
 ```
 abm/
 ├── [x] Cargo.toml · rust-toolchain.toml · .gitignore
-├── config/[x] default.toml
+├── config/[x] default.toml · terreno.toml
 ├── docs/design/[x]                           # una carpeta por fase (CLAUDE §8.1):
 │      inicial/ (README + minimal-model) · persistencia/ (README + design)
+│      terreno/ (README + visión madre + incremento-1-diseno) — IMPLEMENTADO (incr. 1)
 ├── infra/migrations/[x] V1__initial.sql      # simulation_runs + metrics (hypertable)
-├── tests/[x] determinism.rs · persistence_pg.rs (BD, #[ignore])
+├── tests/[x] determinism.rs · persistence_pg.rs (BD, #[ignore]) · terreno.rs
 └── src/
     ├── [x] main.rs · lib.rs · config.rs · error.rs
+    ├── [x] bin/terreno.rs                    # binario de la fase terreno (CLI aparte)
     ├── core/        → futuro abm-core        (rng, time, schedule, world_setup)
     ├── domain/      → futuro abm-ruleset     (components, grid, params, buffers,
     │                    systems/{regrow, order, forage, reproduce, mortality, apply})
     ├── metrics/     → futuro abm-metrics     (schema, collect)
-    └── persistence/ → futuro abm-persistence (sink [trait], json_sink, pg_sink, migrations)
+    ├── persistence/ → futuro abm-persistence (sink [trait], json_sink, pg_sink, migrations)
+    └── [x] terreno/  → sustrato físico esférico (fase «terreno», incr. 1):
+             config · geometry (cubo esférico equiangular) · noise (Perlin 3D) ·
+             world (SoA + Topology) · worldgen (elevación, ríos, lagos) ·
+             systems (clima, nieve, balance hídrico, agua superficial, vegetación,
+             interfaz de agentes) · metrics · mod (run + world_dump)
 ```
 
 Estado: determinista (misma semilla → mismo JSON byte a byte, verificado también entre procesos);
-`cargo fmt` / `clippy -D warnings` / `test` en verde (3/3 herméticos; el test de BD es `#[ignore]`).
+`cargo fmt` / `clippy -D warnings` / `test` en verde (forrajeo 3/3 + terreno 3 unit + 6 integración;
+el test de BD es `#[ignore]`). Terreno: balance de agua a 1e-13, 9 biomas emergentes, ríos y lagos.
 El motor ya **escribe en la BD** además del JSON: el destino se elige por config
 (`[persistence] sink = "json" | "postgres" | "both"`); la conexión se toma del entorno
 (`DATABASE_URL` o `POSTGRES_*` de `infra/.env`, autocargado). Infraestructura `infra/`

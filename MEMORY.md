@@ -205,3 +205,66 @@ Formato de entrada:
 - **Estado tras el cambio:** Los cuatro documentos vivos coherentes entre sí y con el código. Únicos
   pendientes reales: **verificar Grafana en el navegador** (requiere Docker) y, en fases siguientes, el
   refactor a los cinco crates y las tablas de LOD micro (`events`, `agent_snapshots`).
+
+## [2026-07-13] Diseño de la fase «terreno» — incremento 1 (sustrato físico)
+
+- **Qué:** Leída la visión completa del terreno (`docs/design/terreno/diseno_terreno_espacio_geografia.md`,
+  esfera + clima + agua + vegetación + erosión + pedogénesis + LOD adaptativo). Como es enorme, se
+  recortó un **primer incremento estable** y se documentó: nuevo `incremento-1-diseno.md` (diseño
+  técnico) + `README.md` de la fase (explicación llana). Aún **sin código**: es fase de diseño.
+- **Por qué:** La pirámide invertida (CLAUDE §4) prohíbe implementar la visión entera de golpe. El
+  documento madre es el plano; el incremento 1 es la primera capa verificable.
+- **Decisiones (acordadas con el responsable vía 4 preguntas):**
+  1. **Geometría:** cubo esférico **completo** desde el principio (6 caras, adyacencia real, lat/lon).
+     Esquinas del cubo (P8) resueltas con estárcil renormalizado sobre 7 vecinos → cerrada para el incr.
+  2. **Resolución:** estructuras **LOD-ready** pero corriendo a **nivel uniforme fijo**; la
+     subdivisión/colapso dinámica (6.1) se difiere al incremento 2. Recomendación mía (punto intermedio,
+     no era ninguna de las dos opciones ofrecidas): construir el árbol ya, activarlo después, para no
+     reescribir la física (que es «invariante a la escala»).
+  3. **Procesos:** solo los **rápidos** (clima, nieve, balance hídrico, agua superficial, vegetación).
+     **Relieve estático**: erosión (6.7) y pedogénesis (6.8) → incremento 3.
+  4. **Tick:** **fino ~365/año** (≈1 día). Regla de reescalado uniforme: tasas por tick ×(48/365),
+     cadencias en ticks ×(365/48). P1 cerrada. Anotado el desfase con la vida de agentes (~200 ticks).
+- **Alcance geométrico concreto fijado:** proyección **equiangular** (mejor reparto de área que la
+  gnomónica ingenua), área por celda vía ángulo sólido, vecindad inter-cara **precalculada por
+  geometría** (evita tabular a mano las 12 aristas), ruido de elevación **3D** (continuidad automática
+  entre caras), priority-flood + acumulación de flujo con **desempate por id** (determinista).
+- **Preguntas abiertas tras el incremento:** P1 cerrada (tick=365); P8 cerrada (esquinas); P4 = recurso
+  genérico único; P5 = hipsometría paramétrica; P6 no aplica (relieve estático); P2/P3/P7/P9 = futuro.
+- **Estado tras el cambio:** Fase «terreno» **diseñada, no implementada**. Documentos vivos: creados
+  `terreno/README.md` y `terreno/incremento-1-diseno.md`; `TREE.md` actualizado (árbol objetivo + prosa
+  + fecha). Sin tocar código, config, esquema de BD ni migraciones. Próximo paso natural: implementar el
+  incremento 1 (o refinar el diseño si el responsable lo revisa).
+
+## [2026-07-13] Implementación de la fase «terreno» — incremento 1
+
+- **Qué:** Implementado el sustrato físico esférico (módulo `abm::terreno` en `src/terreno/`, binario
+  `terreno`, `config/terreno.toml`, `tests/terreno.rs`). Genera un planeta (cubo esférico equiangular)
+  y corre los sistemas rápidos por tick (clima con estaciones y sombra pluviométrica, nieve, balance
+  hídrico tipo cubo, agua superficial/ríos/lagos, vegetación con biomas de Whittaker) de forma
+  determinista. Salida: métricas por tick a JSON (+ snapshot opcional del mundo). Independiente del
+  motor de forrajeo (no lo toca).
+- **Por qué:** Primer incremento estable de la fase (pirámide invertida), según el diseño acordado.
+- **Decisiones / problemas resueltos:**
+  - **Celdas como columnas `Vec` SoA** (no entidades ECS), igual que el recurso `Grid` del forrajeo:
+    mejor caché y orden de iteración trivialmente estable para ~100k celdas. Desviación documentada.
+  - **Bug de geometría**: el orden de la tupla de ejes de cara en `face_basis` no coincidía con el
+    desdoblado `(a,b,n)` → dos caras se solapaban. El test de "área = 4πR²" NO lo detectó (el solapamiento
+    suma igual); lo cazó un test nuevo de reciprocidad de vecinos ortogonales. Corregido.
+  - **Conservación de agua**: fugaba ~1e-4 relativo. Causa: la difusión lateral movía mm iguales entre
+    celdas de área desigual (el cubo esférico no es uniforme) → no conservaba volumen. Reescrita para
+    transferir volumen (razón de áreas) con limitador de flujo. Ahora cierra a **1e-13** (verificado).
+  - **Realismo (calibración por config, no código)**: la elevación lineal dejaba la tierra a ~4500 m
+    (mundo helado) → añadida curva hipsométrica `land_exp=3` (media ~490 m). `p_ref` reescalado (2.6)
+    daba <1000 mm/año → calibrado a 5.0 para que emerja la selva. Emergen los 9 biomas.
+  - **Alcance recortado con honestidad**: flujo de agua de **receptor único** (D8) en vez de D-infinito;
+    **lagos estáticos** (sin volumen dinámico/desborde). Irrelevante sin erosión; documentado en §12 del
+    diseño. D-infinito y lagos dinámicos → incrementos 2/3.
+  - **Esquinas del cubo (P8)**: celdas de esquina con 7 vecinos, estárcil de difusión renormalizado.
+  - **Tick fino (P1)**: `T_anio=365`; tasas por tick ×48/365, cadencias ×365/48 (tabla en config).
+- **Verificación:** `fmt` + `clippy -D warnings` limpios; `cargo test` en verde (forrajeo 3/3 intactos +
+  terreno 3 unit + 6 integración: determinismo, semillas distintas, continuidad esférica, conservación
+  de agua, caso sin lluvia, ríos). Determinismo byte a byte entre procesos confirmado.
+- **Estado tras el cambio:** Fase «terreno» incremento 1 **cerrada**. Documentos vivos actualizados
+  (este MEMORY, TREE, diseño §12, README de la fase). Pendiente: incrementos 2 (LOD dinámico) y 3
+  (erosión/pedogénesis); opcionalmente, verter las métricas de terreno a Postgres/Grafana.
