@@ -268,3 +268,27 @@ Formato de entrada:
 - **Estado tras el cambio:** Fase «terreno» incremento 1 **cerrada**. Documentos vivos actualizados
   (este MEMORY, TREE, diseño §12, README de la fase). Pendiente: incrementos 2 (LOD dinámico) y 3
   (erosión/pedogénesis); opcionalmente, verter las métricas de terreno a Postgres/Grafana.
+
+## [2026-07-15] Diseño de la fase «terreno» — incremento 2 (LOD dinámico)
+
+- **Qué:** Redactado `docs/design/terreno/incremento-2-diseno.md`, el diseño técnico del LOD adaptativo
+  (subdivisión/colapso), que es el siguiente paso según el mapa del incremento 1 (§10). Aún **sin
+  código**: se respeta la regla de la documentación (CLAUDE §7/§4) de que el diseño matemático precede
+  a la implementación, sobre todo en la pieza más sensible al determinismo de todo el terreno.
+- **Por qué:** El LOD dinámico es el incremento 2 planificado; su corrección (independencia del camino,
+  conservación de extensivos, vecindad entre niveles) exige cerrarse en papel antes de programar.
+- **Decisiones de diseño (con demostraciones en el doc):**
+  - **Bosque de quadtrees** por cara; hojas = celdas activas; columnas SoA reconstruidas y ordenadas por
+    `id` en cada paso de topología (cada `N_lod`) → determinismo trivial; `index_of` solo para vecindad.
+  - **Reparto conservativo**: estáticos recalculados del ruido (función pura); densidades (SWE, V)
+    copiadas al subdividir y promediadas por área al colapsar; agua `W` repartida por volumen∝capacidad.
+    Se demuestra la **independencia del camino** (subdividir+colapsar = identidad) para los tres.
+  - **Árbol balanceado 2:1**: vecinos difieren ≤1 nivel → 3 casos de vecindad (igual/grueso/2 finas).
+  - **La física apenas cambia**: ya es invariante a escala; la difusión del incr. 1 ya transfiere
+    volumen por pares con razón de áreas → conservativa entre niveles distintos sin tocar nada.
+  - **Driver sin agentes**: refinar por gradiente físico + costa/río/lago, con histéresis anti-parpadeo.
+  - Nuevos parámetros `[lod]` (l_min/l_max/n_lod/grad_sub/h_hist); con `l_max=l_min` se recupera el
+    incremento 1 exacto (test de no-regresión).
+- **Estado tras el cambio:** Incremento 2 **diseñado, no implementado**. TREE actualizado. Próximo paso:
+  implementarlo (árbol + operadores + vecindad multinivel + driver), con tests de independencia del
+  camino, conservación e invariante 2:1. Pendiente confirmación del responsable para arrancar el código.

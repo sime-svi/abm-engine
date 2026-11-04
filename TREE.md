@@ -83,7 +83,8 @@ abm/
 │       └── terreno/               # Fase 3: sustrato físico (esfera, clima, agua, vegetación)
 │           ├── [x] README.md                              # Explicación llana de la fase
 │           ├── [x] diseno_terreno_espacio_geografia.md    # Visión completa (madre)
-│           └── [x] incremento-1-diseno.md                 # Diseño del 1er incremento (IMPLEMENTADO)
+│           ├── [x] incremento-1-diseno.md                 # Diseño del 1er incremento (IMPLEMENTADO)
+│           └── [x] incremento-2-diseno.md                 # Diseño LOD dinámico (DISEÑADO, sin implementar)
 │
 ├── tests/                         # Tests de integración (incl. determinismo)
 │   ├── [x] determinism.rs         # misma semilla → misma salida + guardias
