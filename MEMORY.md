@@ -380,3 +380,30 @@ Formato de entrada:
   ticks (395 → 6697 → 4976). No se pudo entrar en la API autenticada de Grafana: la contraseña de
   admin ya no es la de fábrica (la cambió el responsable). Falta solo verlo en el navegador.
 - **Estado tras el cambio:** Infra operativa en los puertos nuevos. `fmt` / `clippy` / `test` en verde.
+
+## [2026-11-04] Diseño de la fase «terreno» — incremento 3 (relieve vivo), borrador v1.0
+
+- **Qué:** Redactado `docs/design/terreno/incremento-3-diseno.md`: erosión fluvial, sedimento, difusión
+  de ladera y suelo dinámico, compatibles con el LOD del incremento 2. Aún **sin código**. Además, `main`
+  quedó al día con `terreno` (el responsable delegó los commits: "de los commits te encargas tú").
+- **Por qué:** Es el siguiente incremento del plan de la fase, y arregla un defecto que perjudicaría a
+  los agentes: ~9 700 celdas-lago falsas (hondonadas del ruido). Para la interfaz de agentes, el agua
+  es infranqueable y cuenta como fuente.
+- **Decisiones de diseño (propuestas):**
+  - `h = h0 + e`: `h0` puro (incr. 2) y `e` dinámico, que el LOD copia y promedia (conserva `Σ e·a`).
+  - Incisión por **potencia de arroyo implícita** (Braun y Willett 2013), incondicionalmente estable
+    y monótona, con nivel de base = mar o superficie del lago.
+  - Sedimento que rellena depresiones (balance exacto erosionado = depositado + al mar).
+  - Difusión de ladera por pares con subpasos automáticos.
+  - Suelo `z` con `W_cap = W_cap0·z/z_init` (bit a bit el incr. 2 cuando `z = z_init`).
+  - Parámetros en unidades por año, no por tick.
+  - Prueba: la tierra nunca baja del nivel del mar por erosión, así que la erosión no mueve agua.
+- **Hallazgo a corregir al implementar:** el reparto del LOD (`split_state`) manda al mar nieve y
+  biomasa si las hijas de tierra suman `W_cap = 0`. Con suelo dinámico (roca desnuda) eso pasaría.
+- **Pendiente de confirmar por el responsable (§14 del diseño):**
+  1. dos regímenes de tiempo (génesis geológica de ~1 millón de años + erosión realista en ejecución);
+  2. reparto incr. 3 / incr. 4 (lagos dinámicos, D-infinito, fertilidad dinámica, eventos → incr. 4);
+  3. caudal ponderado por lluvia;
+  4. mar como sumidero de sedimento (sin deltas).
+- **Estado tras el cambio:** Incremento 3 **diseñado, no implementado**. TREE y README de la fase
+  actualizados. Próximo paso: confirmar las 4 decisiones e implementar.

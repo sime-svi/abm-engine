@@ -85,7 +85,8 @@ abm/
 │           ├── [x] README.md                              # Explicación llana de la fase
 │           ├── [x] diseno_terreno_espacio_geografia.md    # Visión completa (madre)
 │           ├── [x] incremento-1-diseno.md                 # Diseño del 1er incremento (IMPLEMENTADO)
-│           └── [x] incremento-2-diseno.md                 # Diseño LOD dinámico v1.1 (IMPLEMENTADO)
+│           ├── [x] incremento-2-diseno.md                 # Diseño LOD dinámico v1.1 (IMPLEMENTADO)
+│           └── [x] incremento-3-diseno.md                 # Diseño relieve vivo v1.0 (DISEÑADO, a confirmar)
 │
 ├── tests/                         # Tests de integración (incl. determinismo)
 │   ├── [x] determinism.rs         # misma semilla → misma salida + guardias
@@ -113,7 +114,7 @@ abm/
 ├── config/[x] default.toml · terreno.toml (con [lod])
 ├── docs/design/[x]                           # una carpeta por fase (CLAUDE §8.1):
 │      inicial/ (README + minimal-model) · persistencia/ (README + design)
-│      terreno/ (README + visión madre + incremento-1-diseno + incremento-2-diseno v1.1) — IMPLEMENTADOS
+│      terreno/ (README + visión madre + incr. 1 e incr. 2 — IMPLEMENTADOS + incr. 3 — DISEÑADO)
 ├── infra/migrations/[x] V1__initial.sql      # simulation_runs + metrics (hypertable)
 ├── tests/[x] determinism.rs · persistence_pg.rs (BD, #[ignore]) · terreno.rs
 └── src/
@@ -149,7 +150,8 @@ El motor de forrajeo ya **escribe en la BD** además del JSON: el destino se eli
 nacimientos y muertes continuos, gracias a la relación `g < m < apetito` (regeneración por celda <
 metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
 
-**Pendiente (fases siguientes):** terreno incremento 3 (erosión y pedogénesis, relieve vivo);
+**Pendiente (fases siguientes):** terreno incremento 3 (erosión y pedogénesis, relieve vivo: diseño
+v1.0 en `docs/design/terreno/incremento-3-diseno.md`, pendiente de confirmar sus 4 decisiones);
 refactor a los cinco crates; tablas `events` y `agent_snapshots` (LOD micro) con su sink; volcar
 las métricas del terreno a la BD; acoplar los agentes al planeta. El diseño de las tablas pendientes
 ya está en `DATABASE_SCHEMA.md`.

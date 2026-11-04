@@ -104,3 +104,7 @@ Con el LOD el planeta tiene ~190 000 celdas en lugar de 13 824, así que convien
 - **Ajustes a la física del incremento 1**, necesarios para que todo sea coherente al cambiar de tamaño: la pendiente, la distancia al mar, el reparto de humedad entre vecinas y el sorteo del recurso se calculan ahora de otra forma. Se comprobó que en la malla uniforme apenas mueven los resultados (los biomas cambian menos de medio punto).
 
 Lo que **queda para los siguientes incrementos**: el relieve vivo que talla valles (erosión y pedogénesis, incr. 3), y que la malla se afine también donde haya agentes o eventos, cuando existan.
+
+## Incremento 3 — el relieve vivo (en diseño)
+
+Diseñado en [`incremento-3-diseno.md`](./incremento-3-diseno.md), todavía sin programar. La idea en una frase: antes de empezar la simulación se "envejece" el planeta un millón de años, de modo que los ríos excavan sus valles, el sedimento rellena las hondonadas falsas y el suelo se forma. Durante la simulación normal la erosión sigue funcionando, pero al ritmo real, casi imperceptible en unos años. Tiene cuatro decisiones pendientes de confirmar (§14 del diseño).
