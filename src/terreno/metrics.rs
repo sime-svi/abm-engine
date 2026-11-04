@@ -1,14 +1,20 @@
 //! Métricas agregadas por tick (diseño §8) y esquema serde de la salida. Structs tipados (orden de
 //! campos estable) => JSON byte-comparable entre corridas, igual que el motor de forrajeo.
+//!
+//! Esquema v2 (incremento 2): nº de hojas y hojas por nivel, actividad del LOD (subdivisiones,
+//! colapsos, agua enviada al mar por el reparto), área de tierra, y longitud de ríos con el lado
+//! real de cada celda.
 
 use serde::{Deserialize, Serialize};
 
-use crate::terreno::config::TerrenoConfig;
 use crate::terreno::systems::TickAccount;
 use crate::terreno::world::{Biome, Surface, World};
 
 /// Nº de franjas de latitud para la temperatura media por banda (cada una de 15°).
 pub const N_BANDS: usize = 6;
+
+/// Versión del esquema del documento de salida.
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Área por bioma (m²), con nombre estable para claves de salida.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -21,16 +27,24 @@ pub struct BiomeArea {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TerrenoTickMetrics {
     pub tick: u64,
+    /// Nº de hojas activas (celdas) y su reparto por nivel (índice = nivel).
+    pub num_cells: u64,
+    pub cells_by_level: Vec<u64>,
     pub temp_mean: f64,
     pub temp_by_band: Vec<f64>,
     pub precip_total_m3: f64,
     pub theta_mean: f64,
     pub elev_mean_land: f64,
+    pub land_area_m2: f64,
     pub snow_cover_m2: f64,
     pub river_cells: u64,
     pub lake_cells: u64,
     pub river_length_km: f64,
     pub discharge_max_m3: f64,
+    /// Actividad del paso de topología del tick (0 si no lo hubo).
+    pub lod_subdivisions: u64,
+    pub lod_collapses: u64,
+    pub lod_to_ocean_m3: f64,
     pub water_residual_m3: f64,
     pub water_residual_rel: f64,
     pub biome_area: Vec<BiomeArea>,
@@ -42,7 +56,11 @@ pub struct TerrenoRunMeta {
     pub name: String,
     pub seed: u64,
     pub engine_version: String,
-    pub face_n: u32,
+    /// Celdas por arista de cara en el nivel 0, y niveles del árbol LOD.
+    pub n0: u32,
+    pub l_min: u32,
+    pub l_max: u32,
+    /// Nº de hojas tras la génesis (incluido el refinamiento inicial).
     pub num_cells: u64,
     pub r_km: f64,
     pub total_ticks: u64,
@@ -56,13 +74,8 @@ pub struct TerrenoDoc {
     pub ticks: Vec<TerrenoTickMetrics>,
 }
 
-/// Calcula las métricas del tick actual. Reducciones en orden de id (deterministas).
-pub fn compute(
-    world: &World,
-    cfg: &TerrenoConfig,
-    acct: &TickAccount,
-    t: u64,
-) -> TerrenoTickMetrics {
+/// Calcula las métricas del tick actual. Reducciones en orden de clave (deterministas).
+pub fn compute(world: &World, acct: &TickAccount, t: u64) -> TerrenoTickMetrics {
     let num = world.topo.num_cells;
 
     // Temperatura media global (ponderada por área) y por franja de latitud.
@@ -98,6 +111,7 @@ pub fn compute(
     let mut snow_cover = 0.0;
     let mut river_cells = 0u64;
     let mut lake_cells = 0u64;
+    let mut river_length_km = 0.0;
     let mut biome_m2 = [0.0_f64; Biome::ALL.len()];
     for id in 0..num {
         let a = world.topo.area[id];
@@ -111,15 +125,14 @@ pub fn compute(
             }
         }
         match world.surface[id] {
-            Surface::Rio => river_cells += 1,
+            Surface::Rio => {
+                river_cells += 1;
+                river_length_km += world.topo.side_km(id);
+            }
             Surface::Lago => lake_cells += 1,
             _ => {}
         }
-        let bi = Biome::ALL
-            .iter()
-            .position(|b| *b == world.biome[id])
-            .unwrap();
-        biome_m2[bi] += a;
+        biome_m2[world.biome[id].index()] += a;
     }
     let theta_mean = if land_area > 0.0 {
         theta_area / land_area
@@ -131,7 +144,6 @@ pub fn compute(
     } else {
         0.0
     };
-    let cell_side_km = (std::f64::consts::FRAC_PI_2 * cfg.planet.r_km) / world.topo.n as f64;
 
     let biome_area = Biome::ALL
         .iter()
@@ -151,16 +163,22 @@ pub fn compute(
 
     TerrenoTickMetrics {
         tick: t,
+        num_cells: num as u64,
+        cells_by_level: world.topo.cells_by_level(),
         temp_mean,
         temp_by_band,
         precip_total_m3: precip_total,
         theta_mean,
         elev_mean_land,
+        land_area_m2: land_area,
         snow_cover_m2: snow_cover,
         river_cells,
         lake_cells,
-        river_length_km: river_cells as f64 * cell_side_km,
+        river_length_km,
         discharge_max_m3: acct.discharge_max,
+        lod_subdivisions: acct.lod_subdivisions,
+        lod_collapses: acct.lod_collapses,
+        lod_to_ocean_m3: acct.lod_to_ocean_vol,
         water_residual_m3: residual,
         water_residual_rel,
         biome_area,

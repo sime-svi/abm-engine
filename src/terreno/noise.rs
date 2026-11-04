@@ -9,6 +9,7 @@ use rand::seq::SliceRandom;
 use rand_chacha::ChaCha8Rng;
 
 /// Tabla de permutación 512 (256 duplicada) para el ruido de gradiente.
+#[derive(Clone)]
 pub struct Perlin3 {
     perm: [u8; 512],
 }
@@ -99,8 +100,11 @@ impl Perlin3 {
         lerp(y1, y2, w)
     }
 
-    /// Suma multi-octava (fractal browniano) en `[-1, 1]` aprox.
-    pub fn fbm(
+    /// Suma multi-octava (fractal browniano) **sin normalizar**: `Σ_{k<oct} p^k · ruido(λ^k · x)`.
+    ///
+    /// Es la pieza del LOD (incremento 2 §3.1): al dividir por una normalización **fija**, añadir
+    /// octavas en los niveles finos solo suma detalle, sin reescalar las octavas anteriores.
+    pub fn fbm_sum(
         &self,
         x: f64,
         y: f64,
@@ -112,14 +116,41 @@ impl Perlin3 {
         let mut amp = 1.0;
         let mut freq = 1.0;
         let mut sum = 0.0;
-        let mut norm = 0.0;
         for _ in 0..oct {
             sum += amp * self.get(x * freq, y * freq, z * freq);
-            norm += amp;
             amp *= persistencia;
             freq *= lacunaridad;
         }
-        if norm > 0.0 { sum / norm } else { 0.0 }
+        sum
+    }
+
+    /// Suma de amplitudes `Σ_{k<oct} p^k` (normalización de [`Self::fbm_sum`]).
+    pub fn fbm_norm(oct: u32, persistencia: f64) -> f64 {
+        let mut amp = 1.0;
+        let mut norm = 0.0;
+        for _ in 0..oct {
+            norm += amp;
+            amp *= persistencia;
+        }
+        norm
+    }
+
+    /// Suma multi-octava normalizada por sus propias amplitudes, en `[-1, 1]` aprox.
+    pub fn fbm(
+        &self,
+        x: f64,
+        y: f64,
+        z: f64,
+        oct: u32,
+        persistencia: f64,
+        lacunaridad: f64,
+    ) -> f64 {
+        let norm = Self::fbm_norm(oct, persistencia);
+        if norm > 0.0 {
+            self.fbm_sum(x, y, z, oct, persistencia, lacunaridad) / norm
+        } else {
+            0.0
+        }
     }
 }
 

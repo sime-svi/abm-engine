@@ -1,4 +1,4 @@
-# Configuración de la fase «terreno» (incremento 1). TODOS los parámetros viven aquí (CLAUDE §5).
+# Configuración de la fase «terreno» (incrementos 1 y 2). TODOS los parámetros viven aquí (CLAUDE §5).
 # Los defaults son los del documento madre REESCALADOS al tick diario (T_anio=365): toda tasa por
 # tick × 48/365, toda cadencia en ticks × 365/48 (diseño §7).
 
@@ -12,7 +12,6 @@ dump_world  = false         # true => vuelca además un snapshot por celda del m
 [planet]
 r_km      = 6371.0         # radio del planeta (km)
 n0        = 48             # celdas por arista de cara en L=0 (6·n0² celdas totales)
-l_unif    = 0             # nivel uniforme del árbol LOD-ready (0 = base; sin subdividir aún)
 sea_level = 0.0            # cota por debajo de la cual hay océano (m)
 h_min     = -11000.0       # elevación mínima (m)
 h_max     = 9000.0         # elevación máxima (m)
@@ -22,6 +21,7 @@ noise_octaves      = 6        # octavas del ruido de elevación (detalle)
 persistence        = 0.5      # peso decreciente de cada octava
 lacunarity         = 2.0      # subida de frecuencia por octava
 base_freq          = 1.6      # frecuencia base (nº de continentes ~)
+octaves_per_level  = 1        # octavas extra por cada nivel LOD sobre l_min (detalle fino al afinar)
 land_exp           = 3.0      # exponente hipsométrico (>1 => domina la tierra baja)
 river_threshold_km2 = 80000.0 # área de drenaje mínima para ser río (km²)
 resource_density   = 0.05     # fracción de celdas de tierra con depósito de recurso
@@ -58,6 +58,18 @@ sigma_t     = 12.0         # tolerancia de temperatura (°C)
 k_max       = 100.0        # capacidad de carga máxima
 r_veg       = 0.026        # tasa de crecimiento vegetal (1/tick) [0.2·48/365]
 n_veg       = 30           # cadencia de vegetación (ticks) [4·365/48]
+v_init      = 1.0          # biomasa inicial de la tierra (y de la tierra nueva que descubre el LOD)
+
+[lod]
+# LOD dinámico (incremento 2): la malla se subdivide donde hay detalle y se colapsa donde no.
+l_min           = 0        # nivel base uniforme (antes planet.l_unif)
+l_max           = 3        # nivel máximo; l_max = l_min => LOD apagado (malla uniforme del incr. 1)
+n_lod           = 60       # cada cuántos ticks se revisa la malla
+dh_sub          = 500.0    # m: diferencia de altura con un vecino de tierra que pide subdividir
+dt_sub          = 4.0      # °C: ídem temperatura
+dtheta_sub      = 0.3      # ídem humedad relativa del suelo (0..1)
+h_hist          = 0.5      # histéresis: solo se colapsa por debajo de h_hist · umbral
+refine_features = true     # afinar costas, ríos y lagos
 
 [persistence]
 sink = "json"              # destino de la salida (en este incremento solo JSON)

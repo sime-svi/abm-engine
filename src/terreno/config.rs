@@ -17,6 +17,7 @@ pub struct TerrenoConfig {
     pub climate: ClimateCfg,
     pub soil: SoilCfg,
     pub vegetation: VegCfg,
+    pub lod: LodCfg,
     pub persistence: PersistenceCfg,
 }
 
@@ -49,8 +50,6 @@ pub struct PlanetCfg {
     pub r_km: f64,
     /// Celdas por arista de cara en L=0.
     pub n0: u32,
-    /// Nivel uniforme al que se puebla el árbol (LOD-ready pero sin subdividir).
-    pub l_unif: u32,
     pub sea_level: f64,
     pub h_min: f64,
     pub h_max: f64,
@@ -61,7 +60,6 @@ impl Default for PlanetCfg {
         Self {
             r_km: 6371.0,
             n0: 48,
-            l_unif: 0,
             sea_level: 0.0,
             h_min: -11000.0,
             h_max: 9000.0,
@@ -76,6 +74,9 @@ pub struct WorldgenCfg {
     pub persistence: f64,
     pub lacunarity: f64,
     pub base_freq: f64,
+    /// Octavas de ruido que se añaden por cada nivel por encima de `lod.l_min` (incremento 2 §3.1):
+    /// con lacunaridad 2, una por nivel mantiene la razón tamaño de celda / detalle más fino.
+    pub octaves_per_level: u32,
     /// Exponente hipsométrico de la tierra emergida (>1 => domina la tierra baja, tipo Tierra).
     pub land_exp: f64,
     /// Umbral de área de drenaje (km²) para que una celda sea río.
@@ -91,6 +92,7 @@ impl Default for WorldgenCfg {
             persistence: 0.5,
             lacunarity: 2.0,
             base_freq: 1.6,
+            octaves_per_level: 1,
             land_exp: 3.0,
             river_threshold_km2: 80_000.0,
             resource_density: 0.05,
@@ -174,6 +176,8 @@ pub struct VegCfg {
     pub k_max: f64,
     pub r_veg: f64,
     pub n_veg: u64,
+    /// Biomasa inicial de la tierra (génesis) y de la tierra nueva que aparece al afinar la costa.
+    pub v_init: f64,
 }
 
 impl Default for VegCfg {
@@ -186,7 +190,52 @@ impl Default for VegCfg {
             k_max: 100.0,
             r_veg: 0.026, // 0.2 /tick · 48/365
             n_veg: 30,    // 4 ticks · 365/48
+            v_init: 1.0,
         }
+    }
+}
+
+/// LOD dinámico (incremento 2, `docs/design/terreno/incremento-2-diseno.md` §8 y §11).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct LodCfg {
+    /// Nivel base uniforme de arranque (sustituye a `planet.l_unif` del incremento 1).
+    pub l_min: u32,
+    /// Nivel máximo de subdivisión. `l_max = l_min` => LOD apagado (malla uniforme).
+    pub l_max: u32,
+    /// Cadencia del paso de topología (ticks).
+    pub n_lod: u64,
+    /// Variación de altura con algún vecino de tierra que dispara subdividir (m).
+    pub dh_sub: f64,
+    /// Variación de temperatura con algún vecino de tierra que dispara subdividir (°C).
+    pub dt_sub: f64,
+    /// Variación de humedad relativa del suelo con algún vecino de tierra que dispara subdividir.
+    pub dtheta_sub: f64,
+    /// Histéresis: solo se colapsa si las variaciones bajan de `h_hist · umbral` (0 < h_hist ≤ 1).
+    pub h_hist: f64,
+    /// Refinar los rasgos geográficos: costa, ríos y lagos.
+    pub refine_features: bool,
+}
+
+impl Default for LodCfg {
+    fn default() -> Self {
+        Self {
+            l_min: 0,
+            l_max: 3,
+            n_lod: 60,
+            dh_sub: 500.0,
+            dt_sub: 4.0,
+            dtheta_sub: 0.3,
+            h_hist: 0.5,
+            refine_features: true,
+        }
+    }
+}
+
+impl LodCfg {
+    /// `true` si el LOD dinámico está activo (hay margen para subdividir).
+    pub fn enabled(&self) -> bool {
+        self.l_max > self.l_min
     }
 }
 
@@ -226,9 +275,9 @@ impl TerrenoConfig {
         Ok(cfg)
     }
 
-    /// Número de celdas por arista de cara al nivel uniforme: `n0 · 2^l_unif`.
+    /// Número de celdas por arista de cara al nivel base: `n0 · 2^l_min`.
     pub fn face_n(&self) -> u32 {
-        self.planet.n0 * (1u32 << self.planet.l_unif)
+        self.planet.n0 << self.lod.l_min
     }
 
     /// Comprueba invariantes que el TOML por sí solo no garantiza.
@@ -237,8 +286,29 @@ impl TerrenoConfig {
         if self.planet.n0 == 0 {
             return Err(invalid("planet.n0 debe ser > 0"));
         }
-        if self.planet.l_unif > 10 {
-            return Err(invalid("planet.l_unif fuera de rango razonable (0..=10)"));
+        if self.lod.l_min > self.lod.l_max {
+            return Err(invalid("se requiere lod.l_min <= lod.l_max"));
+        }
+        if self.lod.l_max > 12 {
+            return Err(invalid("lod.l_max fuera de rango razonable (0..=12)"));
+        }
+        // La clave de celda reserva 28 bits por coordenada y la vecindad mira un nivel más (§2).
+        if (self.planet.n0 as u64) << (self.lod.l_max + 1) > 1u64 << 28 {
+            return Err(invalid("planet.n0 · 2^(lod.l_max+1) no cabe en 28 bits"));
+        }
+        if self.lod.n_lod == 0 {
+            return Err(invalid("lod.n_lod debe ser >= 1"));
+        }
+        if !(self.lod.h_hist > 0.0 && self.lod.h_hist <= 1.0) {
+            return Err(invalid("se requiere 0 < lod.h_hist <= 1"));
+        }
+        if !(self.lod.dh_sub > 0.0 && self.lod.dt_sub > 0.0 && self.lod.dtheta_sub > 0.0) {
+            return Err(invalid(
+                "los umbrales lod.dh_sub, lod.dt_sub y lod.dtheta_sub deben ser > 0",
+            ));
+        }
+        if self.vegetation.v_init < 0.0 {
+            return Err(invalid("vegetation.v_init debe ser >= 0"));
         }
         if self.planet.h_max <= self.planet.h_min {
             return Err(invalid("planet.h_max debe ser > planet.h_min"));

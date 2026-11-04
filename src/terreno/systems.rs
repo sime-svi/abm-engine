@@ -1,11 +1,15 @@
 //! Sistemas por tick (diseño §5): clima, nieve, balance hídrico, agua superficial y vegetación,
 //! más la interfaz de lectura con agentes. Orden de ejecución fijo (§5 del diseño). Todo recorre las
-//! celdas en orden de id => reducciones deterministas. Sin asignaciones por tick (buffers en `Scratch`).
+//! hojas en orden de clave => reducciones deterministas. Sin asignaciones por tick (buffers en
+//! `Scratch`; solo se redimensionan en los pasos de topología del LOD).
+//!
+//! Incremento 2 (§7): la física es local por celda salvo la difusión lateral, que ahora recorre los
+//! pares de vecinos multinivel con una fórmula **simétrica**.
 
 use std::f64::consts::PI;
 
 use crate::terreno::config::TerrenoConfig;
-use crate::terreno::geometry::es_diagonal;
+use crate::terreno::lod::LodReport;
 use crate::terreno::world::{Biome, Surface, World};
 
 /// Buffers de trabajo reutilizados por tick (CLAUDE §5: sin `Vec::new()` en el bucle caliente).
@@ -27,6 +31,21 @@ impl Scratch {
             q: vec![0.0; num],
         }
     }
+
+    /// Ajusta los buffers al nº de hojas tras un paso de topología (única asignación fuera de la
+    /// génesis; nunca dentro de un tick).
+    pub fn resize(&mut self, num: usize) {
+        for v in [
+            &mut self.p_liq,
+            &mut self.r,
+            &mut self.d,
+            &mut self.gen_vol,
+            &mut self.q,
+        ] {
+            v.clear();
+            v.resize(num, 0.0);
+        }
+    }
 }
 
 /// Cierre del balance de agua global del tick (m³). Métrica de validación clave (diseño §9).
@@ -35,14 +54,20 @@ pub struct TickAccount {
     pub precip_vol: f64,
     pub et_vol: f64,
     pub to_ocean_vol: f64,
+    /// Agua enviada al mar por el reparto del LOD en el paso de topología del tick (m³).
+    pub lod_to_ocean_vol: f64,
     pub dstore_vol: f64,
     pub discharge_max: f64,
+    /// Subdivisiones y colapsos del paso de topología del tick (0 si no lo hubo).
+    pub lod_subdivisions: u64,
+    pub lod_collapses: u64,
 }
 
 impl TickAccount {
-    /// Residual del balance: `entrada − evaporación − salida al mar − Δalmacenamiento`. Debe ≈ 0.
+    /// Residual del balance: `entrada − evaporación − salida al mar − lod_al_mar − Δalmacenamiento`.
+    /// Debe ≈ 0. El almacenamiento previo se mide antes del paso de topología (incremento 2 §6.4).
     pub fn residual(&self) -> f64 {
-        self.precip_vol - self.et_vol - self.to_ocean_vol - self.dstore_vol
+        self.precip_vol - self.et_vol - self.to_ocean_vol - self.lod_to_ocean_vol - self.dstore_vol
     }
 }
 
@@ -66,7 +91,7 @@ fn wind_east(abslat_deg: f64) -> f64 {
 }
 
 /// Bioma de Whittaker a partir de la temperatura media (°C) y la precipitación anual (mm/año).
-fn whittaker(t: f64, p_annual: f64) -> Biome {
+pub(crate) fn whittaker(t: f64, p_annual: f64) -> Biome {
     if t < -10.0 {
         Biome::Hielo
     } else if t < -2.0 {
@@ -96,15 +121,23 @@ fn whittaker(t: f64, p_annual: f64) -> Biome {
     }
 }
 
-/// Ejecuta un tick completo y devuelve el balance de agua. `veg_now` = corre la vegetación este tick.
-pub fn step(world: &mut World, cfg: &TerrenoConfig, sc: &mut Scratch, t: u64) -> TickAccount {
-    // Volumen de almacenamiento (suelo + nieve) antes del tick, para Δalmacenamiento.
-    let store_before = total_store_vol(world);
-
+/// Ejecuta un tick completo y devuelve el balance de agua.
+///
+/// `store_before` es el almacenamiento (suelo + nieve) medido **antes** del paso de topología del
+/// tick, y `lod` el resumen de ese paso (vacío si no lo hubo): así el residual cubre también la
+/// conservación del LOD (incremento 2 §6.4).
+pub fn step(
+    world: &mut World,
+    cfg: &TerrenoConfig,
+    sc: &mut Scratch,
+    t: u64,
+    store_before: f64,
+    lod: &LodReport,
+) -> TickAccount {
     climate(world, cfg, t);
     snow(world, cfg, sc);
     let et_vol = water_balance(world, cfg, sc);
-    lateral_diffusion(world, cfg, sc);
+    lateral_diffusion(world, cfg);
     let (to_ocean_vol, discharge_max) = surface_water(world, sc);
 
     // Acumuladores de medias (para idoneidad y biomas).
@@ -131,13 +164,16 @@ pub fn step(world: &mut World, cfg: &TerrenoConfig, sc: &mut Scratch, t: u64) ->
         precip_vol,
         et_vol,
         to_ocean_vol,
+        lod_to_ocean_vol: lod.to_ocean_vol,
         dstore_vol: store_after - store_before,
         discharge_max,
+        lod_subdivisions: lod.subdivisions,
+        lod_collapses: lod.collapses,
     }
 }
 
 /// Volumen total almacenado en tierra: agua del suelo + nieve (m³).
-fn total_store_vol(world: &World) -> f64 {
+pub fn total_store_vol(world: &World) -> f64 {
     let mut v = 0.0;
     for id in 0..world.topo.num_cells {
         if !matches!(world.surface[id], Surface::Oceano) {
@@ -229,50 +265,44 @@ fn water_balance(world: &mut World, cfg: &TerrenoConfig, sc: &mut Scratch) -> f6
     et_vol
 }
 
-/// Flujo lateral de humedad (difusión casi isótropa). **Exactamente conservativa**: cada par se
-/// aplica una vez con un limitador de flujo (no se saca más agua de la que hay ni se rebasa la
-/// capacidad), en orden fijo de id => determinista y sin fugas por `clamp` (diseño §9, esquinas §2.4).
-fn lateral_diffusion(world: &mut World, cfg: &TerrenoConfig, _sc: &mut Scratch) {
+/// Flujo lateral de humedad (difusión casi isótropa) sobre los pares de vecinos (incremento 2 §7).
+///
+/// **Simétrica**: el flujo de volumen entre `i` y `j` usa la media armónica de `W_cap·A` de las dos
+/// celdas, así que intercambiar `i` y `j` da el mismo flujo con signo opuesto (también entre celdas
+/// de niveles distintos). **Exactamente conservativa**: se mueve volumen, con un limitador que no
+/// vacía al donante ni rebasa la capacidad del receptor. Orden fijo de pares => determinista.
+fn lateral_diffusion(world: &mut World, cfg: &TerrenoConfig) {
     let k = cfg.soil.k_lat_flow;
     if k <= 0.0 {
         return;
     }
-    for id in 0..world.topo.num_cells {
-        if matches!(world.surface[id], Surface::Oceano) {
+    for p in world.topo.pairs.iter() {
+        let (i, j) = (p.a as usize, p.b as usize);
+        // Solo entre celdas de tierra (el océano no tiene agua del suelo).
+        if matches!(world.surface[i], Surface::Oceano)
+            || matches!(world.surface[j], Surface::Oceano)
+        {
             continue;
         }
-        for (kk, &nb) in world.topo.neighbors[id].iter().enumerate() {
-            if nb < 0 {
-                continue;
-            }
-            let nb = nb as usize;
-            // Cada par se procesa una sola vez y solo entre celdas de tierra.
-            if nb <= id || matches!(world.surface[nb], Surface::Oceano) {
-                continue;
-            }
-            let peso = if es_diagonal(kk) {
-                std::f64::consts::FRAC_1_SQRT_2
-            } else {
-                1.0
-            };
-            // `f` = mm a retirar de i (con signo). Como las áreas del cubo esférico difieren
-            // ligeramente, se transfiere VOLUMEN: los mm que entran en j son `f·A_i/A_j`.
-            let (ai, aj) = (world.topo.area[id], world.topo.area[nb]);
-            let f = k * peso * (world.theta(id) - world.theta(nb)) * world.w_cap[id];
-            let f = if f >= 0.0 {
-                // Agua sale de i: no vaciar i ni rebasar la capacidad de j (en mm de i).
-                f.min(world.w[id])
-                    .min((world.w_cap[nb] - world.w[nb]) * aj / ai)
-            } else {
-                // Agua entra en i: no rebasar la capacidad de i ni vaciar j (en mm de i).
-                let into_i = (-f)
-                    .min(world.w_cap[id] - world.w[id])
-                    .min(world.w[nb] * aj / ai);
-                -into_i
-            };
-            world.w[id] -= f;
-            world.w[nb] += f * ai / aj;
-        }
+        let (ai, aj) = (world.topo.area[i], world.topo.area[j]);
+        let (xi, xj) = (world.w_cap[i] * ai, world.w_cap[j] * aj);
+        let hm = if xi + xj > 0.0 {
+            2.0 * xi * xj / (xi + xj)
+        } else {
+            0.0
+        };
+        // `q` = volumen (mm·m²) que pasa de i a j (con signo).
+        let q = k * p.g * (world.theta(i) - world.theta(j)) * hm;
+        let q = if q >= 0.0 {
+            q.min(world.w[i].max(0.0) * ai)
+                .min((world.w_cap[j] - world.w[j]).max(0.0) * aj)
+        } else {
+            -(-q)
+                .min(world.w[j].max(0.0) * aj)
+                .min((world.w_cap[i] - world.w[i]).max(0.0) * ai)
+        };
+        world.w[i] -= q / ai;
+        world.w[j] += q / aj;
     }
 }
 
@@ -356,10 +386,7 @@ pub fn habitabilidad(world: &World, cfg: &TerrenoConfig, id: usize) -> f64 {
 /// Agua disponible: humedad del suelo + bonus por río/lago adyacente.
 pub fn agua_disponible(world: &World, id: usize) -> f64 {
     let mut a = world.theta(id);
-    for &nb in world.topo.neighbors[id].iter() {
-        if nb < 0 {
-            continue;
-        }
+    for &nb in world.topo.neighbors(id) {
         match world.surface[nb as usize] {
             Surface::Rio => a += 0.5,
             Surface::Lago => a += 0.5,

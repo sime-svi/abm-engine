@@ -5,8 +5,9 @@ Motor de simulación masiva basada en agentes, **headless** (sin interfaz gráfi
 bit a bit). La visión completa y las reglas del proyecto están en [`CLAUDE.md`](CLAUDE.md).
 
 > Estado actual: motor mínimo funcionando (modelo de forrajeo en cuadrícula tipo *Sugarscape*) con
-> salida a JSON y a PostgreSQL/TimescaleDB, y visualización en Grafana. Ver el histórico en
-> [`MEMORY.md`](MEMORY.md) y la explicación por fases en [`docs/design/`](docs/design/).
+> salida a JSON y a PostgreSQL/TimescaleDB, y visualización en Grafana; y, aparte, el **sustrato
+> físico** de un planeta esférico (clima, agua, ríos, vegetación) con **resolución adaptativa** (LOD).
+> Ver el histórico en [`MEMORY.md`](MEMORY.md) y la explicación por fases en [`docs/design/`](docs/design/).
 
 ## Requisitos
 
@@ -21,11 +22,27 @@ cargo run --release -- config/default.toml   # genera output/<name>.json
 cargo test                                    # tests (incluye determinismo)
 ```
 
+## Simulación del terreno (planeta)
+
+Binario aparte, `terreno`: genera un planeta esférico a partir de una semilla y simula un año de
+clima, nieve, agua del suelo, ríos y vegetación. La malla se **afina sola** donde hay detalle (costas,
+ríos, relieve abrupto) y se vuelve gruesa donde no (LOD dinámico).
+
+```bash
+cargo run --release --bin terreno    # usa config/terreno.toml → output/terreno_terreno.json
+cargo test --test terreno            # tests de la fase
+```
+
+Con el LOD activo conviene `--release` (~13 s por año simulado). Para la malla uniforme sin LOD,
+pon `l_max = 0` en la sección `[lod]` de `config/terreno.toml`. Explicación llana en
+[`docs/design/terreno/README.md`](docs/design/terreno/README.md).
+
 ## Configuración
 
 **Todos** los parámetros viven en `config/*.toml` (nada hardcodeado): tamaño de la cuadrícula, nº de
 agentes, semilla, metabolismo, reproducción, destino de la salida, etc. Se dirigen experimentos
-cambiando la config, no el código. Punto de partida: [`config/default.toml`](config/default.toml).
+cambiando la config, no el código. Puntos de partida: [`config/default.toml`](config/default.toml)
+(forrajeo) y [`config/terreno.toml`](config/terreno.toml) (planeta).
 
 ## Persistencia en base de datos + Grafana
 
@@ -43,7 +60,7 @@ con migraciones (`infra/migrations/`) que aplica el propio binario.
 ## Estructura del repositorio
 
 ```
-src/            # el motor: core/ (motor) · domain/ (reglas) · metrics/ · persistence/
+src/            # el motor: core/ (motor) · domain/ (reglas) · metrics/ · persistence/ · terreno/ (planeta)
 config/         # parámetros de simulación (.toml)
 docs/design/    # diseño + explicación llana, una carpeta por fase
 infra/          # Docker (PostgreSQL/TimescaleDB + Grafana), migraciones y provisioning

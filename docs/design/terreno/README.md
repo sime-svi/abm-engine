@@ -20,7 +20,7 @@ La idea central es que **nada de eso se pinta a mano**. No colocamos "aquí un d
 
 La metodología del proyecto (la "pirámide invertida", CLAUDE §4) prohíbe construir el tejado antes que los cimientos: no se sube de nivel hasta que lo de abajo es **estable y verificado**. La visión completa del terreno (el documento [`diseno_terreno_espacio_geografia.md`](./diseno_terreno_espacio_geografia.md)) es enorme: incluye ríos que tallan valles a lo largo de milenios y una resolución que se afina sola donde hay acción. Hacer todo eso de golpe sería frágil.
 
-Por eso la fase se parte en incrementos. El primero está diseñado en [`incremento-1-diseno.md`](./incremento-1-diseno.md).
+Por eso la fase se parte en incrementos. El primero está diseñado en [`incremento-1-diseno.md`](./incremento-1-diseno.md) y el segundo en [`incremento-2-diseno.md`](./incremento-2-diseno.md).
 
 ## Incremento 1 — qué logra y qué deja fuera
 
@@ -62,4 +62,45 @@ cargo test --test terreno          # tests de la fase
 - **Los números por defecto del diseño eran demasiado fríos y secos**: la elevación repartida de forma lineal dejaba la tierra altísima (mundo helado), y la lluvia de referencia no llegaba para selva tropical. Se añadió una curva de relieve realista (`land_exp`) y se subió la lluvia de referencia (`p_ref`). Todo por configuración, sin tocar código.
 - **Alcance recortado con honestidad**: los ríos usan un modelo de "un solo receptor" (más simple que el D-infinito del plano), y los lagos son estáticos (sin volumen dinámico todavía). Son simplificaciones conscientes, irrelevantes mientras no haya erosión, y están documentadas en el diseño técnico (§12).
 
-Lo que **queda para los siguientes incrementos**: la resolución que se afina sola (LOD adaptativo, incr. 2) y el relieve vivo que talla valles (erosión y pedogénesis, incr. 3).
+Lo que **quedaba para los siguientes incrementos**: la resolución que se afina sola (LOD adaptativo, incr. 2, ya hecho: ver abajo) y el relieve vivo que talla valles (erosión y pedogénesis, incr. 3).
+
+## Incremento 2 — la resolución que se afina sola
+
+### Qué logra
+
+Hasta ahora el planeta se dividía en celdas todas del mismo tamaño (unos 200 km de lado). Eso es tosco donde pasan cosas (una costa, un río) y derrochador donde no pasa nada (el océano abierto). Ahora **cada celda puede partirse en 4 más pequeñas** cuando la zona lo merece, y esas 4 pueden volver a juntarse cuando deja de merecerlo. Hasta 3 veces: de ~200 km a ~26 km.
+
+**Vocabulario mínimo:**
+- **Árbol de cuatro** (*quadtree*): la estructura que resulta de ir partiendo celdas en 4. Cada cara del cubo es un árbol; las celdas que existen de verdad en cada momento son las **hojas** del árbol.
+- **Subdividir / colapsar**: partir una celda en 4 hijas / juntar 4 hermanas en su madre.
+- **Regla 2:1**: dos celdas vecinas nunca se llevan más de un nivel de tamaño (una celda no puede tocar a otra 4 veces más pequeña). Mantiene la malla ordenada y simplifica quién es vecino de quién.
+- **Histéresis**: margen para no ir y venir. Se subdivide cuando una diferencia supera un umbral, pero solo se colapsa cuando baja **claramente** por debajo (la mitad).
+
+**Dónde se afina** (todo regulable en `config/terreno.toml`, sección `[lod]`): costas, ríos y lagos; relieve abrupto (más de 500 m de diferencia con un vecino); y contrastes fuertes de temperatura (4 °C) o de humedad del suelo.
+
+**Lo más importante: no se inventa ni se pierde nada al cambiar de tamaño.**
+- Lo que es fijo del terreno (altura, tipo de suelo…) se **recalcula** para cada celda nueva a partir de la semilla, no se copia de la madre. Por eso la celda pequeña tiene su altura "verdadera" con más detalle: cada nivel añade una capa más de detalle al relieve (una **octava** más de ruido).
+- Lo que cambia con el tiempo (agua del suelo, nieve, vegetación) se **reparte** entre las hijas de forma que el total se conserva exactamente. Y si se parte una celda y se vuelve a juntar enseguida, queda como estaba (**independencia del camino**).
+- Cuando al afinar la costa resulta que un trozo era mar, su agua se manda al mar y **se apunta** en el balance. El balance de agua del planeta sigue cuadrando: el error es de unas pocas billonésimas.
+
+### Cómo se ejecuta
+
+```
+cargo run --release --bin terreno    # usa config/terreno.toml (con LOD) → output/terreno_terreno.json
+cargo test --test terreno            # tests de la fase (incrementos 1 y 2)
+```
+
+Con el LOD el planeta tiene ~190 000 celdas en lugar de 13 824, así que conviene `--release` (modo optimizado): un año simulado tarda ~13 s. Para volver al mundo uniforme del incremento 1 basta poner `l_max = 0` en `[lod]`.
+
+### Consideraciones y hallazgos (04-11-2026)
+
+- **Primero se revisó el diseño contra el código** (versión 1.1 del diseño). El de julio daba por hechas cosas que el código del incremento 1 no hacía: por ejemplo, la altura dependía de toda la malla y no solo de la posición, y nada decía qué hacer con el agua de una celda que al afinarse resulta ser mar. Se cerraron seis huecos en el papel antes de programar.
+- **Los ríos y la malla se influyen mutuamente, y eso daba vueltas sin fin.** El río se calcula sobre la malla (cada celda manda su agua a su vecina más baja, la que llamamos su **receptor**), y la malla se afina siguiendo al río. Al juntar 4 celdas, la grande podía recoger el agua de las 4 y "convertirse en río", lo que obligaba a volver a partirla. En el planeta completo había un vaivén permanente de ~270 cambios por revisión. Se resolvió con dos ideas:
+  - un **ensayo en seco**: antes de juntar celdas, se prueba en una copia y se descarta lo que provocaría que se volvieran a partir;
+  - una **marca pegajosa**: lo que alguna vez fue río o lago ya no se vuelve a juntar.
+  Con el relieve fijo, la malla deja de cambiar en ~13 revisiones. Lo cazó un test escrito a propósito para eso.
+- **El resultado global apenas cambia**, que es lo que se buscaba: misma temperatura media (9,13 °C), misma fracción de tierra (39 %) y biomas parecidos. Lo que gana es detalle local: costas y ríos dibujados a 26 km en vez de a 200.
+- **Aparecen muchos lagos pequeños** (~9 700 celdas): con más detalle, el relieve de ruido tiene muchas hondonadas cerradas, porque todavía no hay erosión que las vacíe. Se espera que el incremento 3 lo corrija.
+- **Ajustes a la física del incremento 1**, necesarios para que todo sea coherente al cambiar de tamaño: la pendiente, la distancia al mar, el reparto de humedad entre vecinas y el sorteo del recurso se calculan ahora de otra forma. Se comprobó que en la malla uniforme apenas mueven los resultados (los biomas cambian menos de medio punto).
+
+Lo que **queda para los siguientes incrementos**: el relieve vivo que talla valles (erosión y pedogénesis, incr. 3), y que la malla se afine también donde haya agentes o eventos, cuando existan.

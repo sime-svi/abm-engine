@@ -292,3 +292,68 @@ Formato de entrada:
 - **Estado tras el cambio:** Incremento 2 **diseñado, no implementado**. TREE actualizado. Próximo paso:
   implementarlo (árbol + operadores + vecindad multinivel + driver), con tests de independencia del
   camino, conservación e invariante 2:1. Pendiente confirmación del responsable para arrancar el código.
+
+## [2026-11-04] Revisión del diseño del incremento 2 (v1.1) + git + comprobación de Grafana
+
+- **Qué:** Al retomar la sesión (casi 4 meses después) se contrastó el diseño v1.0 del LOD dinámico con
+  el código real del incremento 1, y aparecieron seis huecos. Se commiteó el borrador v1.0 tal cual
+  (`d0e100c`), se fusionó `terreno` en `main` (fast-forward: incremento 1 + borrador) y se reescribió el
+  diseño como **v1.1** (`docs/design/terreno/incremento-2-diseno.md`, con tabla "cambios respecto a la
+  v1.0"). El responsable aprobó todas las propuestas ("sí a todo").
+- **Por qué:** La v1.0 suponía cosas que el código no cumplía: (1) la altura se normalizaba con el
+  min/max de toda la malla (no era función pura de la posición); (2) pendiente/suelo dependían de los
+  vecinos y el recurso de un RNG secuencial; (3) nada decía qué hacer con el agua de hijas que al afinar
+  la costa resultan ser mar; (4) "la red de ríos no se recomputa" era falso y faltaba histéresis en los
+  rasgos; (5) vecinos en tabla fija de 8 y difusión asimétrica (usaba la celda de id menor: ~4× de error
+  entre gruesa y fina); (6) con 6 octavas fijas, refinar más allá del nivel 2 no añadía relieve.
+- **Decisiones (v1.1):** clave `u64` y búsqueda binaria (sin `HashMap`); estáticos = función pura de
+  `(cara, nivel, i, j)` (normalización congelada, **una octava más por nivel**, pendiente por diferencias
+  centrales, recurso por hash SplitMix64); derivados globales recalculados en cada cambio de malla
+  (distancia al mar por Dijkstra); vecindad por **anillo al nivel L+1** (simétrica, CSR, peso lado/
+  esquina); difusión **simétrica** (media armónica); reparto solo entre hijas de tierra con término
+  **`lod_al_mar`** en el balance; umbrales físicos `dh_sub`/`dt_sub`/`dtheta_sub`; se separan
+  determinismo e independencia del camino; no regresión = "LOD que no dispara ≡ LOD apagado".
+- **Grafana (pendiente arrastrado):** no se pudo verificar. Los contenedores `abm-db`/`abm-grafana`
+  llevan parados desde julio, y el puerto **5432 está ocupado por un proceso ajeno al proyecto** (no
+  visible desde esta instancia; probablemente otra instancia WSL, que comparte red). Arrancar la BD
+  del proyecto chocaría. El usuario ya está en el grupo `docker`. **Cuidado:** con `sink=postgres` el
+  motor intentaría conectar a ese otro Postgres.
+- **Estado tras el cambio:** Diseño v1.1 cerrado y aprobado; `main` = `terreno` en `d0e100c`.
+
+## [2026-11-04] Implementación de la fase «terreno» — incremento 2 (LOD dinámico)
+
+- **Qué:** Implementado el LOD adaptativo según el diseño v1.1. Módulos nuevos `statics.rs`,
+  `hydro.rs` y `lod.rs`; reescritos `geometry.rs`, `world.rs`, `worldgen.rs`, `metrics.rs` (esquema
+  v2) y `mod.rs`; difusión simétrica en `systems.rs`; sección `[lod]` en `config/terreno.toml`
+  (`l_max = 3`), más `worldgen.octaves_per_level` y `vegetation.v_init` (`planet.l_unif` pasa a ser
+  `lod.l_min`). La malla se subdivide en costas, ríos, lagos, relieve abrupto y contrastes de T/θ, y
+  se colapsa con histéresis; equilibrio 2:1 con cascada y veto.
+- **Por qué:** Incremento 2 de la pirámide del terreno: detalle donde aporta, sin pagar la malla fina
+  entera.
+- **Decisiones / problemas (cazados por los tests nuevos):**
+  - **Parpadeo**: una familia colapsaba y su madre, al recoger el drenaje de las 4 hijas (185 151 km²
+    frente a un umbral de 80 000), pasaba a ser río y se volvía a partir cada 2 pasos → **ensayo en
+    seco**: el paso se aplica en una copia del mundo y se vetan los colapsos cuya madre volvería a
+    subdividirse.
+  - **No convergencia en el planeta completo** (~270 subdivisiones + ~270 colapsos por paso,
+    indefinidamente): la red de ríos (receptor único) depende de la malla y la malla de los ríos →
+    **marca hidrológica pegajosa** (lo que fue río/lago no se colapsa; las hijas la heredan).
+    Converge en 13 pasos. Se retiró el colchón espacial de 1 celda de la v1.1 (redundante).
+    Límite: con erosión (incr. 3) la marca necesitará caducidad.
+  - **Génesis**: la tierra nueva nace seca y disparaba el criterio de θ → el refinamiento inicial usa
+    solo criterios estáticos.
+  - `gen` es palabra reservada en Rust 2024 → el campo se llama `statgen`.
+- **Verificación:** `fmt` + `clippy -D warnings` limpios; `cargo test` en verde (11 unitarios +
+  forrajeo 3 + terreno 14; BD `#[ignore]`). Salida idéntica byte a byte entre dos procesos y entre
+  debug y release. Balance de agua con LOD a 2.7e-12. Config por defecto: génesis con **190 278
+  celdas** (21,5 % de la malla uniforme fina), ~13 s y ~340 MB por año en release. Frente al
+  incremento 1 (compilado aparte desde `cfc82ce`): misma T media (9,13 °C) y misma fracción de tierra
+  (39 %); la nueva línea base uniforme deja la altura bit a bit igual y mueve los biomas menos de
+  0,4 puntos.
+- **Hallazgo de dinámica:** a nivel 3 (9 octavas) el relieve de ruido sin erosión tiene muchas
+  hondonadas cerradas → ~9 700 celdas-lago (34 a nivel uniforme). Son lagos estáticos (tierra
+  saturada para la física); se espera que la erosión del incremento 3 los reduzca.
+- **Estado tras el cambio:** Incremento 2 **implementado y verificado** en la rama `terreno` (sin
+  commitear). Documentos actualizados: diseño §8/§9/§13, nota en el diseño del incremento 1, README
+  de la fase, README raíz, TREE. Pendiente: commit; incremento 3 (erosión/pedogénesis); Grafana
+  (bloqueado por el puerto 5432).

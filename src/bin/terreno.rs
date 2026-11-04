@@ -32,14 +32,31 @@ fn main() -> Result<()> {
 
     let last = doc.ticks.last();
     println!(
-        "Simulación de terreno '{}' completada: {} celdas, {} ticks.",
-        cfg.run.name, doc.run.num_cells, cfg.run.total_ticks
+        "Simulación de terreno '{}' completada: {} celdas tras la génesis (niveles {}..={}), {} ticks.",
+        cfg.run.name, doc.run.num_cells, doc.run.l_min, doc.run.l_max, cfg.run.total_ticks
     );
     if let Some(m) = last {
         println!(
-            "  Último tick: T media {:.2} °C, θ media {:.3}, ríos {}, lagos {}, residual agua rel {:.2e}",
-            m.temp_mean, m.theta_mean, m.river_cells, m.lake_cells, m.water_residual_rel
+            "  Último tick: {} celdas (por nivel {:?}), T media {:.2} °C, θ media {:.3}, ríos {} ({:.0} km), lagos {}",
+            m.num_cells,
+            m.cells_by_level,
+            m.temp_mean,
+            m.theta_mean,
+            m.river_cells,
+            m.river_length_km,
+            m.lake_cells
         );
     }
+    let peor = doc
+        .ticks
+        .iter()
+        .map(|t| t.water_residual_rel.abs())
+        .fold(0.0_f64, f64::max);
+    let (subs, cols): (u64, u64) = doc.ticks.iter().fold((0, 0), |(s, c), t| {
+        (s + t.lod_subdivisions, c + t.lod_collapses)
+    });
+    println!(
+        "  LOD durante la corrida: {subs} subdivisiones, {cols} colapsos. Peor residual de agua relativo: {peor:.2e}"
+    );
     Ok(())
 }
