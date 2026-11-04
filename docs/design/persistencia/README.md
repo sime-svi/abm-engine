@@ -40,7 +40,7 @@ cargo run --release -- config/default.toml
 # (el binario lee infra/.env solo; no hace falta exportar nada)
 ```
 
-El binario imprime el `run_id`. A partir de ahí, Grafana (http://localhost:3000) puede leer las tablas
+El binario imprime el `run_id`. A partir de ahí, Grafana (http://localhost:23000 (puerto cambiado el 2026-11-04; antes 3000)) puede leer las tablas
 `simulation_runs` y `metrics` para hacer gráficas.
 
 ## Consideraciones

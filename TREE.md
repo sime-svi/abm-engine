@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-04 — fase «terreno» incremento 2 (LOD dinámico) implementado
+Última actualización: 2026-11-04 — terreno incremento 2 (LOD dinámico) + infra en puertos 25432/23000
 
 ---
 
@@ -64,7 +64,7 @@ abm/
 │       └── src/ [ ] main.rs
 │
 ├── infra/
-│   ├── [x] docker-compose.yml     # Postgres/TimescaleDB + Grafana
+│   ├── [x] docker-compose.yml     # Postgres/TimescaleDB (host :25432) + Grafana (host :23000), subred fija
 │   ├── [x] .env                   # Credenciales (IGNORADO por git)
 │   ├── grafana/                   # Aprovisionamiento de Grafana (se carga solo al arrancar)
 │   │   ├── [x] provisioning/datasources/datasource.yml
@@ -150,9 +150,12 @@ nacimientos y muertes continuos, gracias a la relación `g < m < apetito` (regen
 metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
 
 **Pendiente (fases siguientes):** terreno incremento 3 (erosión y pedogénesis, relieve vivo);
-refactor a los cinco crates; tablas `events` y `agent_snapshots` (LOD micro) con su sink; y
-**verificar Grafana en el navegador**. Esto último está bloqueado desde el 2026-11-04: los
-contenedores `abm-db` y `abm-grafana` están parados y el puerto 5432 lo ocupa un proceso ajeno al
-proyecto (posiblemente otra instancia WSL, que comparte red), así que la BD del proyecto no podría
-arrancar sin liberar o cambiar ese puerto. El diseño de las tablas pendientes ya está en
-`DATABASE_SCHEMA.md`.
+refactor a los cinco crates; tablas `events` y `agent_snapshots` (LOD micro) con su sink; volcar
+las métricas del terreno a la BD; acoplar los agentes al planeta. El diseño de las tablas pendientes
+ya está en `DATABASE_SCHEMA.md`.
+
+**Infraestructura (2026-11-04):** BD en `localhost:25432` y Grafana en `http://localhost:23000`
+(puertos en `infra/.env`; los habituales están ocupados en esta máquina) y red Docker con subred fija
+`10.88.42.0/24` (chocaba con una red de otra instancia WSL). Verificado: motor → BD, Grafana → BD y
+la consulta del dashboard devuelven datos. Falta solo mirarlo en el navegador (con la contraseña de
+Grafana del responsable).

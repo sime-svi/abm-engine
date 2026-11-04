@@ -3,6 +3,8 @@ name = "abm"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.97.0"
+# Hay dos binarios (`abm`, el motor de forrajeo, y `terreno`): `cargo run` sin `--bin` ejecuta `abm`.
+default-run = "abm"
 description = "Motor de simulación masiva basada en agentes (ABM), headless y determinista"
 license = "MIT OR Apache-2.0"
 

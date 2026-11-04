@@ -357,3 +357,26 @@ Formato de entrada:
   commitear). Documentos actualizados: diseño §8/§9/§13, nota en el diseño del incremento 1, README
   de la fase, README raíz, TREE. Pendiente: commit; incremento 3 (erosión/pedogénesis); Grafana
   (bloqueado por el puerto 5432).
+
+## [2026-11-04] Infra en puertos nuevos + subred fija: Grafana verificado de punta a punta
+
+- **Qué:** BD publicada en `localhost:25432` y Grafana en `http://localhost:23000` (antes 5432/3000),
+  configurables en `infra/.env` (`PGPORT`, `GRAFANA_PORT`; plantilla en `.env.example`). El motor ya
+  leía `PGPORT` (su valor por defecto pasa a 25432) y el test de BD también lo lee ahora. La red de
+  compose tiene una **subred fija `10.88.42.0/24`**. Además, `Cargo.toml` declara `default-run = "abm"`.
+  Commits: `94bc0d0` (terreno incr. 2) y el de esta entrada.
+- **Por qué:** El responsable tiene varios puertos ocupados (5432, 5433, 5435, 55432, 55433, por
+  otros proyectos o instancias) y pidió un puerto "random": se eligieron 25432/23000, libres y por
+  debajo del rango efímero del sistema (32768–60999). Al levantar los contenedores salió un segundo
+  problema: Grafana daba "connection reset" y ni la BD lo alcanzaba. Causa: **otra instancia WSL
+  tenía una red de Docker con la misma subred (172.18.0.0/16)**. Las instancias de WSL2 comparten la
+  red del kernel, así que había dos rutas iguales y el tráfico se iba a la otra red. Se fijó una
+  subred fuera de los rangos por defecto de Docker. Lo de `default-run`: desde el binario `terreno`
+  (julio), el `cargo run --release -- config/default.toml` del README fallaba ("could not determine
+  which binary to run").
+- **Verificación:** Grafana sano (v13.1.0), dashboard aprovisionado (logs) y Grafana → `db:5432`
+  alcanzable; `cargo test --test persistence_pg -- --ignored` en verde contra el puerto 25432; corrida
+  real con `sink = "both"` (run_id `45500c55…`) y la consulta del panel «Población» devuelve sus 500
+  ticks (395 → 6697 → 4976). No se pudo entrar en la API autenticada de Grafana: la contraseña de
+  admin ya no es la de fábrica (la cambió el responsable). Falta solo verlo en el navegador.
+- **Estado tras el cambio:** Infra operativa en los puertos nuevos. `fmt` / `clippy` / `test` en verde.

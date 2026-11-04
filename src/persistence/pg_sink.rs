@@ -26,7 +26,9 @@ fn connection_string() -> Result<String, SimError> {
     let password = std::env::var("POSTGRES_PASSWORD").unwrap_or_default();
     let dbname = std::env::var("POSTGRES_DB").unwrap_or_else(|_| user.clone());
     let host = std::env::var("PGHOST").unwrap_or_else(|_| "localhost".into());
-    let port = std::env::var("PGPORT").unwrap_or_else(|_| "5432".into());
+    // 25432 = puerto por defecto con el que `infra/docker-compose.yml` publica la BD del proyecto
+    // (no el 5432 estándar: en esta máquina lo ocupa otro Postgres ajeno al proyecto).
+    let port = std::env::var("PGPORT").unwrap_or_else(|_| "25432".into());
     Ok(format!(
         "host={host} port={port} user={user} password={password} dbname={dbname}"
     ))

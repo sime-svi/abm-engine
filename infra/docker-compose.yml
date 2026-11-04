@@ -7,7 +7,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      # Puerto del host configurable (infra/.env: PGPORT). 25432 por defecto: el 5432 y otros están
+      # ocupados en esta máquina; dentro de la red de Docker la BD sigue en db:5432.
+      - "${PGPORT:-25432}:5432"
     volumes:
       - abm-db-data:/var/lib/postgresql/data
 
@@ -15,7 +17,8 @@ services:
     image: grafana/grafana:latest
     container_name: abm-grafana
     ports:
-      - "3000:3000"
+      # Puerto del host configurable (infra/.env: GRAFANA_PORT). 23000 por defecto.
+      - "${GRAFANA_PORT:-23000}:3000"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -26,6 +29,16 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
       - db
+
+# Red propia con subred fija, fuera de los rangos que Docker reparte por defecto (172.17-31.x,
+# 192.168.x). Todas las instancias de WSL2 comparten la red del kernel: si otra instancia tiene una
+# red de Docker con la misma subred (pasó con 172.18.0.0/16), el tráfico hacia los contenedores se
+# pierde y ni la BD ni Grafana son alcanzables.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.88.42.0/24
 
 volumes:
   abm-db-data:

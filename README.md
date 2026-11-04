@@ -46,13 +46,14 @@ cambiando la config, no el código. Puntos de partida: [`config/default.toml`](c
 
 ## Persistencia en base de datos + Grafana
 
-1. Copia las credenciales: `cp infra/.env.example infra/.env` y edítalas.
+1. Copia las credenciales: `cp infra/.env.example infra/.env` y edítalas (ahí van también los
+   puertos: `PGPORT=25432` para la BD y `GRAFANA_PORT=23000` para Grafana).
 2. Levanta la infraestructura: `cd infra && docker compose up -d`.
 3. En el config, elige el destino: `[persistence] sink = "postgres"` (o `"both"` para JSON + BD).
 4. Corre el motor: `cargo run --release -- config/default.toml`.
    La conexión se toma del entorno; el binario **lee `infra/.env` solo** (ejecuta desde la raíz del
    repo), así que no tienes que exportar nada a mano.
-5. Abre **Grafana** en http://localhost:3000 → dashboard **«ABM — Visión general»** (ya viene creado).
+5. Abre **Grafana** en http://localhost:23000 → dashboard **«ABM — Visión general»** (ya viene creado).
 
 El esquema de la base de datos está en [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md); las tablas se crean
 con migraciones (`infra/migrations/`) que aplica el propio binario.
@@ -74,11 +75,20 @@ El árbol detallado y qué está implementado está en [`TREE.md`](TREE.md).
 
 | Servicio    | Imagen                              | URL / Puerto          |
 |-------------|-------------------------------------|-----------------------|
-| TimescaleDB | `timescale/timescaledb:latest-pg16` | `localhost:5432`      |
-| Grafana     | `grafana/grafana:latest`            | http://localhost:3000 |
+| TimescaleDB | `timescale/timescaledb:latest-pg16` | `localhost:25432`      |
+| Grafana     | `grafana/grafana:latest`            | http://localhost:23000 |
 
 Variables en `infra/.env` (plantilla en `infra/.env.example`): `POSTGRES_USER`, `POSTGRES_PASSWORD`,
-`POSTGRES_DB`. Los datos persisten en volúmenes de Docker (`abm-db-data`, `abm-grafana-data`).
+`POSTGRES_DB`, y los puertos del host `PGPORT` (BD, 25432) y `GRAFANA_PORT` (23000). Se evitan los
+habituales 5432/3000 porque en esta máquina están ocupados por otros proyectos; si chocan, cámbialos
+solo en `infra/.env`. Los datos persisten en volúmenes de Docker (`abm-db-data`, `abm-grafana-data`).
+
+> La red de los contenedores tiene una subred fija (`10.88.42.0/24`): todas las instancias de WSL2
+> comparten la red, y si otra instancia tiene una red de Docker con la misma subred, los contenedores
+> dejan de ser alcanzables (pasó con `172.18.0.0/16`). Si alguna vez choca, cámbiala en
+> `infra/docker-compose.yml` y recrea con `docker compose down && docker compose up -d`.
+>
+> Si olvidaste la contraseña de Grafana: `docker exec -it abm-grafana grafana cli admin reset-admin-password <nueva>`.
 
 > Si `docker` responde `permission denied`, tu usuario no está en el grupo `docker`: usa
 > `sudo docker compose …`, o añádete al grupo una sola vez con `sudo usermod -aG docker $USER` y

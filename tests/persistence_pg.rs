@@ -2,7 +2,7 @@
 //! normales siguen siendo herméticos. Ejecutar explícitamente con la BD levantada:
 //!
 //! ```bash
-//! set -a; . infra/.env; set +a          # exporta POSTGRES_USER/PASSWORD/DB
+//! set -a; . infra/.env; set +a          # exporta POSTGRES_USER/PASSWORD/DB y PGPORT
 //! cargo test --test persistence_pg -- --ignored --nocapture
 //! ```
 
@@ -21,7 +21,9 @@ fn escribe_run_y_metricas() {
         let u = std::env::var("POSTGRES_USER").expect("POSTGRES_USER o DATABASE_URL");
         let p = std::env::var("POSTGRES_PASSWORD").unwrap_or_default();
         let d = std::env::var("POSTGRES_DB").unwrap_or_else(|_| u.clone());
-        format!("host=localhost port=5432 user={u} password={p} dbname={d}")
+        let host = std::env::var("PGHOST").unwrap_or_else(|_| "localhost".into());
+        let port = std::env::var("PGPORT").unwrap_or_else(|_| "25432".into());
+        format!("host={host} port={port} user={u} password={p} dbname={d}")
     });
     let mut client = postgres::Client::connect(&url, postgres::NoTls).expect("conectar");
     let rid = run_id.to_string();
