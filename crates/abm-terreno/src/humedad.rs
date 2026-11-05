@@ -242,26 +242,19 @@ impl Anillos {
 }
 
 /// Al acabar la génesis: activa el agotamiento (nota §3: `w` se calcula después del prerrodaje de
-/// erosión) y fija `c_P` (nota §2). Sin `climate.agotamiento_humedad`, `w = 1`; sin
-/// `climate.conservar_lluvia`, `c_P = 1`.
+/// erosión) y fija `c_P` (nota §2).
 pub fn activar(world: &mut World, cfg: &TerrenoConfig) {
-    if cfg.climate.agotamiento_humedad {
-        world.humedad_activa = true;
-        refrescar(world, cfg);
-    }
-    // La desviación se mide siempre que haya agotamiento o corrección (es un dato de la salida);
-    // `c_P` solo se aplica con `conservar_lluvia`.
-    if cfg.climate.agotamiento_humedad || cfg.climate.conservar_lluvia {
-        let (desvio, c_p) = factor_conservacion(world, cfg);
-        world.desvio_lluvia = desvio;
-        world.c_p = c_p;
-    }
+    world.humedad_activa = true;
+    refrescar(world, cfg);
+    let (desvio, c_p) = factor_conservacion(world, cfg);
+    world.desvio_lluvia = desvio;
+    world.c_p = c_p;
 }
 
-/// Rehace `w` de todas las celdas (tras un paso de erosión o un cambio de malla). No hace nada si
-/// el agotamiento no está activo.
+/// Rehace `w` de todas las celdas (tras un paso de erosión o un cambio de malla). Durante la
+/// génesis geológica aún no está activo.
 pub fn refrescar(world: &mut World, cfg: &TerrenoConfig) {
-    if !(world.humedad_activa && cfg.climate.agotamiento_humedad) {
+    if !world.humedad_activa {
         return;
     }
     let mut an = match world.anillos.take() {
@@ -304,8 +297,8 @@ fn w_media_celda(an: &Anillos, world: &World, s: usize, l_oro: u32) -> f64 {
 /// Desviación de la lluvia media anual sobre tierra y factor `c_P` que la corrige (nota §2). La
 /// referencia es la lluvia sin efecto orográfico ni agotamiento (franja y distancia a la costa): la
 /// orografía de antes de la nota (`k_oro = 0,5`) la dejaba a un 0,3 %, así que es "la anterior".
-/// `c_P = 1` si la desviación cabe en `tol_lluvia` o si la corrección está apagada; si no,
-/// `c_P = lluvia de referencia / lluvia actual`, que recupera el total.
+/// `c_P = 1` si la desviación cabe en `tol_lluvia`; si no, `c_P = lluvia de referencia / lluvia
+/// actual`, que recupera el total. Es un apaño provisional (CLAUDE §2.8): ver la nota §7.
 pub fn factor_conservacion(world: &World, cfg: &TerrenoConfig) -> (f64, f64) {
     let (mut referencia, mut actual) = (0.0, 0.0);
     for s in 0..world.topo.num_cells {
@@ -318,14 +311,14 @@ pub fn factor_conservacion(world: &World, cfg: &TerrenoConfig) -> (f64, f64) {
             world.topo.area[s],
         );
         referencia += precip_no_season(cfg, lat, dist, 0.0) * a;
-        actual += precip_no_season(cfg, lat, dist, oro_slope_e(world, cfg, s)) * world.w_hum[s] * a;
+        actual += precip_no_season(cfg, lat, dist, oro_slope_e(world, s)) * world.w_hum[s] * a;
     }
     if !(referencia > 0.0 && actual > 0.0) {
         return (0.0, 1.0);
     }
     let desvio = actual / referencia - 1.0;
     let c = &cfg.climate;
-    let c_p = if c.conservar_lluvia && desvio.abs() > c.tol_lluvia {
+    let c_p = if desvio.abs() > c.tol_lluvia {
         referencia / actual
     } else {
         1.0

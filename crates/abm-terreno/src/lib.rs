@@ -101,12 +101,10 @@ pub fn run_with_info(
             r_km: cfg.planet.r_km,
             total_ticks: cfg.run.total_ticks,
             genesis,
-            lluvia: (cfg.climate.agotamiento_humedad || cfg.climate.conservar_lluvia).then_some(
-                metrics::LluviaMeta {
-                    desvio: world.desvio_lluvia,
-                    c_p: world.c_p,
-                },
-            ),
+            lluvia: metrics::LluviaMeta {
+                desvio: world.desvio_lluvia,
+                c_p: world.c_p,
+            },
         },
         ticks,
     };

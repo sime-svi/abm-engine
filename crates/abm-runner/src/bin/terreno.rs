@@ -70,13 +70,12 @@ fn main() -> Result<()> {
             100.0 * g.after.land_fraction
         );
     }
-    if let Some(l) = &doc.run.lluvia {
-        println!(
-            "  Sombra pluviométrica: la orografía y el agotamiento de humedad cambian la lluvia sobre tierra un {:+.1} %; c_P = {:.4}.",
-            100.0 * l.desvio,
-            l.c_p
-        );
-    }
+    let l = &doc.run.lluvia;
+    println!(
+        "  Sombra pluviométrica: la orografía y el agotamiento de humedad cambian la lluvia sobre tierra un {:+.1} %; c_P = {:.4}.",
+        100.0 * l.desvio,
+        l.c_p
+    );
     let last = doc.ticks.last();
     println!(
         "Simulación de terreno '{}' completada: {} celdas tras la génesis (niveles {}..={}), {} ticks.",

@@ -722,3 +722,18 @@ Formato de entrada:
   Probada con las dos notas del día (`ece0868` agentes, `bb6a8c0` terreno): idénticas. Con la config encendida, detecta la diferencia.
 - **Por qué:** el responsable preguntó si el método escalará con ~100 sistemas y pidió soluciones para los cinco puntos que salieron: interruptores permanentes, no regresión, interacciones entre sistemas, herramientas de medida y rendimiento. Esta es la parte que no necesita decisión suya: la comprobación manual de hoy, ya repetible en un solo comando.
 - **Estado:** el resto de los cinco puntos queda propuesto al responsable. Retirar los interruptores tras cada decisión y crear una batería de escenarios de referencia tocan las convenciones de CLAUDE.md y necesitan su confirmación.
+
+## [2026-11-05] Realismo primero y retirada de los interruptores decididos
+
+- **Qué:**
+  - CLAUDE.md recoge, confirmado por el responsable:
+    - **§2.8 realismo primero:** si una calibración no llega a un objetivo realista, primero se duda de la base, no se fuerza un parámetro;
+    - **§5:** interruptores solo mientras se mide; tras la decisión, Claude los retira sin preguntar; todo lo medido se puede consultar;
+    - **§10.5:** batería de escenarios de referencia;
+    - **§2.1:** herramientas fuera del motor en Python o bash.
+  - Se retiraron todos los interruptores ya decididos:
+    - terreno: `moisture_from_coast`, `agotamiento_humedad`, `conservar_lluvia`, `mar_plano` (queda `tol_lluvia`); `d_oro_km` ≥ 10;
+    - agentes: `apetito_gasto_total`, `respuesta_funcional`, `leche_por_condicion`, `destete_forzoso`, `dimorfismo`, `esterilidad_individual` y `metricas.demografia`.
+  - Los campos nuevos de la salida pasan a ser normales (siempre presentes). Se borran las configs "todo apagado" de `config/experiments/`.
+- **Por qué:** el responsable no quiere mantener ni decidir interruptores ("si no es imprescindible y molesta, se va fuera"). La referencia del pasado es el commit anterior, con `herramientas/no_regresion.sh`.
+- **Verificación:** la salida por defecto es **idéntica byte a byte** a la de `5be42fa` (agentes y terreno). `fmt`, `clippy --workspace --all-targets -D warnings` y `cargo test --workspace` en verde; el test de biología del diseño v1.0, que ya no tiene camino, se retira (14 de simulación).

@@ -34,8 +34,8 @@ pub struct CellStatics {
     pub aspect: f64,
     pub grad_e: f64,
     pub grad_n: f64,
-    /// `∂h/∂este` del relieve que ve el aire, con el mar plano al nivel del mar (`climate.mar_plano`,
-    /// nota de sombra pluviométrica §6): las mismas diferencias centrales con `max(h, nivel_mar)`.
+    /// `∂h/∂este` del relieve que ve el aire, con el mar plano al nivel del mar (nota de sombra
+    /// pluviométrica §6): las mismas diferencias centrales con `max(h, nivel_mar)`.
     pub grad_air_e: f64,
     pub w_cap: f64,
     pub k_perm: f64,
@@ -315,7 +315,7 @@ impl StaticGen {
     }
 
     /// Como [`StaticGen::oro_gradient0`], y además la componente este del relieve que ve el aire,
-    /// con el mar plano (`max(h, nivel_mar)`, `climate.mar_plano`): `(este, norte, este_aire)`.
+    /// con el mar plano (`max(h, nivel_mar)`): `(este, norte, este_aire)`.
     pub fn oro_gradient0_air(&self, g: &CellGeom, level: u32) -> (f64, f64, f64) {
         if !self.uses_oro_reference(level) {
             return (0.0, 0.0, 0.0);

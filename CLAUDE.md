@@ -16,13 +16,14 @@ La salida son datos: registros históricos, métricas y eventos estructurados, v
 
 Estos principios no se negocian sin discusión explícita con el responsable del proyecto:
 
-1. **Lenguaje: Rust.** Sin excepciones para el motor. Elegido por seguridad de memoria y concurrencia masiva.
+1. **Lenguaje: Rust.** Sin excepciones para el motor. Elegido por seguridad de memoria y concurrencia masiva. Las herramientas fuera del motor (análisis, medidas, verificación; carpeta `herramientas/`) pueden usar Python o bash *(confirmado por el responsable el 2026-11-05)*.
 2. **Paradigma: ECS puro (Entity Component System).** Prohibida la POO tradicional para las entidades. Todo se modela como datos en arrays contiguos (Struct of Arrays) para maximizar el aprovechamiento de la caché de CPU. Referencia: Bevy ECS en modo headless o Flecs.
 3. **Headless al 100%.** Cero renderizado, cero UI en tiempo real. La única salida es el volcado de datos.
 4. **Determinismo y reproducibilidad.** Toda ejecución debe poder replicarse bit a bit a partir de su semilla y su versión de ruleset. Ver sección 6.
 5. **LOD / Lazy Evaluation.** El detalle se calcula y se almacena solo cuando aporta valor. Lo que no se observa a alto detalle se resuelve con agregados estadísticos.
 6. **Desacoplamiento Core / Ruleset.** El motor (tiempo, memoria, scheduling, concurrencia) es agnóstico a las reglas. Las reglas (ecuaciones, parámetros, lógica de estados) no conocen los detalles internos del motor.
 7. **Abstracción matemática primero.** Todo comportamiento complejo se reduce a fórmulas y estados transaccionales **antes** de codificarse. El diseño matemático vive en `docs/design/` y precede a la implementación.
+8. **Realismo primero.** El objetivo es un mundo real, no cumplir cifras escritas. Si una calibración no alcanza un objetivo realista, **primero se duda de la base** (los datos de entrada, el relieve, las condiciones iniciales, la propia fórmula) y solo después de un parámetro. Nunca se fuerza un parámetro hasta un valor irreal para compensar otra irrealidad: construir sobre bases irreales y añadir capas encima acaba en un sistema irreal. Si hace falta un apaño provisional, se marca como tal y se anota la causa real que hay que corregir. *(Confirmado por el responsable el 2026-11-05.)*
 
 ---
 
@@ -60,6 +61,8 @@ Nunca implementes una capa N+1 si la capa N no produce datos estables y verifica
 - **Gestión de errores:** `Result` + `thiserror` para errores de librería; `anyhow` solo en el binario `abm-runner`. Nada de `unwrap()`/`panic!` fuera de tests y del arranque.
 - **Configuración externa:** todos los parámetros de simulación viven en archivos `config/*.toml`, nunca hardcodeados. El responsable dirige experimentos cambiando config, no código.
 - **Sin asignaciones en el hot loop:** reserva buffers una vez y reutilízalos por tick. Perfila antes de optimizar, pero no introduzcas `Vec::new()` por tick alegremente.
+- **Interruptores de cambios del modelo:** un cambio nuevo puede llevar un interruptor en la config mientras se desarrolla y se mide (cada cambio por separado y todos juntos). Cuando el responsable decide, Claude **retira sin preguntar** los interruptores que no sean imprescindibles, con el código viejo que encendían. La referencia del comportamiento anterior es el commit anterior (`herramientas/no_regresion.sh`), no una rama del código. Solo se conserva una opción si es una alternativa científica que se quiere comparar de forma permanente, documentada y con su test. *(Confirmado por el responsable el 2026-11-05.)*
+- **Todo lo medido se puede consultar:** las métricas que sostienen una decisión van a la salida (JSON) o a un script reproducible de `herramientas/`, no a cálculos sueltos.
 
 ---
 
@@ -122,6 +125,7 @@ Una tarea no está completa hasta que:
 2. `cargo test` en verde (incluye tests de determinismo: misma semilla → misma salida).
 3. Los documentos vivos (sección 8) están actualizados.
 4. Si aplica, la migración de BD existe y el esquema documentado coincide con el real.
+5. La **batería de escenarios de referencia** pasa (escenarios fijos con unas pocas métricas clave y sus márgenes, que vigilan lo que emerge al juntar sistemas; ver `herramientas/`). No se exige que la salida sea idéntica byte a byte salvo cuando un cambio no debe alterar nada. Si un cambio intencionado saca una métrica de su margen, se documenta en su nota y se actualiza el margen.
 
 Ante cualquier ambigüedad sobre el modelo, las ecuaciones o la escala, **pregunta al responsable antes de codificar**. El diseño matemático manda sobre la implementación.
 

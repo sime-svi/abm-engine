@@ -127,16 +127,11 @@ pub struct ClimateCfg {
     pub seas_precip_amp: f64,
     /// Escala (km) a la que la lluvia "ve" el relieve (nota de lluvia orográfica): el factor
     /// orográfico usa la pendiente de un relieve de referencia a esta escala, igual en malla fina o
-    /// gruesa. 0 = desactivado (pendiente local de la celda, como hasta el incremento 3).
+    /// gruesa. También es el paso del camino del viento del agotamiento de humedad.
     pub d_oro_km: f64,
-    /// Distancia de humedad medida desde la línea de costa (`true`) o desde el centro de la celda
-    /// de mar más cercana (`false`, como hasta el incremento 3; nota de lluvia orográfica §8).
-    pub moisture_from_coast: bool,
     /// Agotamiento de humedad a favor del viento (nota de sombra pluviométrica §3): el aire que
-    /// subió una cordillera soltó su vapor y no lo recupera al bajar. Factor `w = e^(−Λ/H_v)`, con
-    /// `Λ` los metros de subida recientes del camino del viento. `false` = sin agotamiento (`w = 1`).
-    pub agotamiento_humedad: bool,
-    /// `H_v` (m): subida que deja al aire con ~37 % de su vapor.
+    /// subió una cordillera soltó su vapor y no lo recupera al bajar. `H_v` (m): subida que deja al
+    /// aire con ~37 % de su vapor.
     pub h_v_m: f64,
     /// `L_recarga` (km): distancia de recarga de humedad sobre tierra (las subidas lejanas pesan menos).
     pub l_recarga_km: f64,
@@ -145,15 +140,9 @@ pub struct ClimateCfg {
     /// Conservación de la lluvia total sobre tierra (nota de sombra pluviométrica §2): si la
     /// orografía y el agotamiento la desvían más de `tol_lluvia` de la de referencia (sin efecto
     /// orográfico ni agotamiento), se calcula en la génesis un factor global `c_P` sobre la lluvia
-    /// de la tierra que recupera el total. `false` = sin corrección (`c_P = 1`).
-    pub conservar_lluvia: bool,
-    /// Desviación admitida de la lluvia total sobre tierra antes de corregirla con `c_P`.
+    /// de la tierra que recupera el total. **Provisional** (CLAUDE §2.8): lo realista será calibrar
+    /// la lluvia de base con datos de la Tierra cuando el relieve sea realista.
     pub tol_lluvia: f64,
-    /// El aire ve el mar como una superficie plana al nivel del mar (decisión técnica, nota de sombra
-    /// pluviométrica §6): sobre el mar no hay efecto orográfico y en la costa la pendiente se mide
-    /// desde el nivel del mar, no desde el fondo marino. `false` = el fondo marino cuenta como
-    /// relieve (como hasta la nota de sombra pluviométrica).
-    pub mar_plano: bool,
 }
 
 impl Default for ClimateCfg {
@@ -179,14 +168,10 @@ impl Default for ClimateCfg {
             moisture_length_km: 1500.0,
             seas_precip_amp: 0.0,
             d_oro_km: 25.0,
-            moisture_from_coast: true,
-            agotamiento_humedad: true,
             h_v_m: 2500.0,
             l_recarga_km: 1000.0,
             l_traj_km: 2000.0,
-            conservar_lluvia: true,
             tol_lluvia: 0.05,
-            mar_plano: true,
         }
     }
 }
@@ -441,22 +426,16 @@ impl TerrenoConfig {
         if !(0.0..=1.0).contains(&self.climate.seas_precip_amp) {
             return Err(invalid("se requiere 0 <= climate.seas_precip_amp <= 1"));
         }
-        if !(self.climate.d_oro_km >= 0.0 && self.climate.d_oro_km < 0.5 * self.planet.r_km) {
-            return Err(invalid("se requiere 0 <= climate.d_oro_km < r_km/2"));
+        // El agotamiento de humedad recorre anillos con puntos cada d_oro: por debajo de 10 km
+        // serían más de 5 millones de puntos (nota de sombra pluviométrica §6.1).
+        if !(self.climate.d_oro_km >= 10.0 && self.climate.d_oro_km < 0.5 * self.planet.r_km) {
+            return Err(invalid("se requiere 10 <= climate.d_oro_km < r_km/2"));
         }
         let c = &self.climate;
-        if c.agotamiento_humedad {
-            // Λ se mide sobre el relieve de referencia, en pasos de d_oro (nota de sombra §3).
-            if c.d_oro_km <= 0.0 {
-                return Err(invalid(
-                    "climate.agotamiento_humedad necesita climate.d_oro_km > 0",
-                ));
-            }
-            if !(c.h_v_m > 0.0 && c.l_recarga_km > 0.0 && c.l_traj_km >= 0.0) {
-                return Err(invalid(
-                    "se requiere climate.h_v_m > 0, l_recarga_km > 0 y l_traj_km >= 0",
-                ));
-            }
+        if !(c.h_v_m > 0.0 && c.l_recarga_km > 0.0 && c.l_traj_km >= 0.0) {
+            return Err(invalid(
+                "se requiere climate.h_v_m > 0, l_recarga_km > 0 y l_traj_km >= 0",
+            ));
         }
         if !(c.tol_lluvia >= 0.0 && c.tol_lluvia.is_finite()) {
             return Err(invalid("se requiere climate.tol_lluvia >= 0"));

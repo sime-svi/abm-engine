@@ -174,7 +174,7 @@ pub struct World {
     pub oro0_e: Vec<f64>,  // gradiente orográfico puro (relieve de nacimiento a escala d_oro), este
     pub oro0_n: Vec<f64>,  // ídem, norte
     /// Gradiente este puro del relieve que ve el aire (mar plano), a la escala orográfica de la
-    /// celda: la de referencia `d_oro` si la usa, si no la suya (`climate.mar_plano`).
+    /// celda: la de referencia `d_oro` si la usa, si no la suya.
     pub oro_air0_e: Vec<f64>,
     pub k_perm: Vec<f64>,   // permeabilidad (0..1)
     pub fert: Vec<f64>,     // fertilidad efectiva (0..1)
@@ -207,7 +207,7 @@ pub struct World {
     pub c_p: f64,
     /// Desviación de la lluvia total sobre tierra que causa el agotamiento (antes de `c_P`).
     pub desvio_lluvia: f64,
-    /// `true` cuando `w` está activo: tras la génesis y con `climate.agotamiento_humedad`.
+    /// `true` cuando `w` está activo: tras la génesis geológica.
     pub humedad_activa: bool,
     /// Anillos del camino del viento (se construyen al primer uso; no van a la caché de disco).
     pub anillos: Option<Box<crate::humedad::Anillos>>,

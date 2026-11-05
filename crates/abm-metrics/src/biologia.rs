@@ -89,9 +89,6 @@ pub struct RegistroBio {
     balance: Balance,
     anual: Vec<Anual>,
     ids: Vec<u64>,
-    /// Interruptores que deciden qué campos opcionales se escriben (revisión 1).
-    destete: bool,
-    demografia: bool,
     /// Anchura de los grupos de fecundidad (días), nº de grupos y límites de los grupos de
     /// mortalidad, por especie.
     ancho_fec: u32,
@@ -126,8 +123,6 @@ impl RegistroBio {
         let cat = world.resource::<Catalogo>();
         let hab = world.resource::<Habitat>();
         let rho_veg = cat.forraje.rho_veg;
-        let en = &cfg.energetica;
-        let demografia = cfg.metricas.demografia;
         let ancho_fec =
             (cfg.metricas.ancho_fecundidad_anios * cfg.tiempo.dias_anio as f64).round() as u32;
         let ancho_fec = ancho_fec.max(1);
@@ -187,14 +182,14 @@ impl RegistroBio {
                 ayuno_dias: e.e_max(e.masa) / e.gasto_adulto(1.0),
                 n_max: n_max[k],
                 poblacion_inicial: iniciales[k],
-                masa_kg_hembra: en.dimorfismo.then_some(e.masa_sexo[0]),
-                masa_kg_macho: en.dimorfismo.then_some(e.masa_sexo[1]),
-                ayuno_dias_hembra: en.dimorfismo.then(|| e.ayuno_s(0)),
-                ayuno_dias_macho: en.dimorfismo.then(|| e.ayuno_s(1)),
-                h_medio: cfg.forraje.respuesta_funcional.then_some(e.h_medio),
-                mu_est_anios: en.esterilidad_individual.then(|| e.mu_est / e.dias_anio),
-                sigma_est_anios: en.esterilidad_individual.then(|| e.sigma_est / e.dias_anio),
-                grupos_edad_dias: demografia.then_some(limites[k]),
+                masa_kg_hembra: e.masa_sexo[0],
+                masa_kg_macho: e.masa_sexo[1],
+                ayuno_dias_hembra: e.ayuno_s(0),
+                ayuno_dias_macho: e.ayuno_s(1),
+                h_medio: e.h_medio,
+                mu_est_anios: e.mu_est / e.dias_anio,
+                sigma_est_anios: e.sigma_est / e.dias_anio,
+                grupos_edad_dias: limites[k],
             })
             .collect();
         let meta = BioRunMeta {
@@ -225,8 +220,6 @@ impl RegistroBio {
             balance: Balance::default(),
             anual,
             ids: Vec::new(),
-            destete: en.destete_forzoso,
-            demografia,
             ancho_fec,
             n_grupos,
             limites,
@@ -340,11 +333,9 @@ pub fn collect_bio(
         reservas.sumar(res.0);
         let an = &mut reg.anual[k];
         an.expo[sexo_i(*sexo)][e.clase(edad.0)] += 1;
-        if reg.demografia {
-            an.expo_g[sexo.i()][grupo_mortalidad(edad.0, reg.limites[k])] += 1;
-            if *sexo == Sexo::Hembra {
-                an.expo_hembras_grupo[grupo_fec(edad.0, reg.ancho_fec, reg.n_grupos[k])] += 1;
-            }
+        an.expo_g[sexo.i()][grupo_mortalidad(edad.0, reg.limites[k])] += 1;
+        if *sexo == Sexo::Hembra {
+            an.expo_hembras_grupo[grupo_fec(edad.0, reg.ancho_fec, reg.n_grupos[k])] += 1;
         }
     }
 
@@ -378,9 +369,7 @@ pub fn collect_bio(
         let e = &cat.especies[k];
         let an = &mut reg.anual[k];
         an.muertes_clase[sexo_i(m.sexo)][e.clase(m.edad)] += 1;
-        if reg.demografia {
-            an.muertes_g[m.sexo.i()][grupo_mortalidad(m.edad, reg.limites[k])] += 1;
-        }
+        an.muertes_g[m.sexo.i()][grupo_mortalidad(m.edad, reg.limites[k])] += 1;
     }
     for p in &libro.partos {
         let k = p.esp as usize;
@@ -391,9 +380,7 @@ pub fn collect_bio(
             an.intervalos_dias += i;
             an.intervalos_n += 1;
         }
-        if reg.demografia {
-            an.nac_grupo[grupo_fec(p.edad_madre, reg.ancho_fec, reg.n_grupos[k])] += p.crias as u64;
-        }
+        an.nac_grupo[grupo_fec(p.edad_madre, reg.ancho_fec, reg.n_grupos[k])] += p.crias as u64;
     }
     for f in &libro.fin_repro {
         if let Some(a) = f.edad_ultimo_parto {
@@ -470,16 +457,14 @@ pub fn collect_bio(
                     forraje_max_kg: tope / 1000.0,
                     consumo_kg: iv.consumo_kcal / rho / 1000.0,
                     rebrote_kg: iv.rebrote_g / 1000.0,
-                    destetes_forzosos: reg.destete.then_some(iv.destetes_forzosos),
-                    crias_destetadas_forzoso: reg.destete.then_some(iv.crias_destetadas),
-                    muertes_destete: reg.destete.then_some(iv.muertes[4]),
-                    condicion_lactantes: reg.demografia.then(|| {
-                        if c.lactantes > 0 {
-                            c.condicion_lactantes.valor() / c.lactantes as f64
-                        } else {
-                            0.0
-                        }
-                    }),
+                    destetes_forzosos: iv.destetes_forzosos,
+                    crias_destetadas_forzoso: iv.crias_destetadas,
+                    muertes_destete: iv.muertes[4],
+                    condicion_lactantes: if c.lactantes > 0 {
+                        c.condicion_lactantes.valor() / c.lactantes as f64
+                    } else {
+                        0.0
+                    },
                 }
             })
             .collect();
@@ -568,19 +553,18 @@ pub fn collect_bio(
                         .then(|| an.consumo_kcal / rho / an.rebrote_g),
                     piramide_hembras: pir_h,
                     piramide_machos: pir_m,
-                    muertes_destete: reg.destete.then_some(an.muertes[4]),
-                    fecundidad_grupos: reg.demografia.then(|| {
-                        an.nac_grupo
-                            .iter()
-                            .zip(&an.expo_hembras_grupo)
-                            .map(|(&n, &x)| tasa(n, x))
-                            .collect()
-                    }),
-                    n_ultimo_parto: reg.demografia.then_some(an.ultimo_parto_n),
-                    edad_ultimo_parto_anios: (reg.demografia && an.ultimo_parto_n > 0)
+                    muertes_destete: an.muertes[4],
+                    fecundidad_grupos: an
+                        .nac_grupo
+                        .iter()
+                        .zip(&an.expo_hembras_grupo)
+                        .map(|(&n, &x)| tasa(n, x))
+                        .collect(),
+                    n_ultimo_parto: an.ultimo_parto_n,
+                    edad_ultimo_parto_anios: (an.ultimo_parto_n > 0)
                         .then(|| an.ultimo_parto_dias as f64 / an.ultimo_parto_n as f64 / da),
-                    mortalidad_hembras: reg.demografia.then(|| mortalidad(0)),
-                    mortalidad_machos: reg.demografia.then(|| mortalidad(1)),
+                    mortalidad_hembras: mortalidad(0),
+                    mortalidad_machos: mortalidad(1),
                 }
             })
             .collect();

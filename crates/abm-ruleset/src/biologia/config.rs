@@ -102,25 +102,14 @@ pub struct EnergeticaCfg {
     pub b0_ecto: f64,
     pub e_a: f64,
     pub t_ref: f64,
-    /// Revisión 1, cambio 1 (D1 + hiperfagia): el apetito es energía asimilada y se refiere al
-    /// gasto total del día, `Ap = k_ap · G_total`. `false` = `Ap = k_ap · B(m) · PAL`.
-    pub apetito_gasto_total: bool,
-    /// Revisión 1, cambio 3.1: la leche baja con la condición de la madre, entre `r_lact` (leche
-    /// completa) y `r_aband` (sin leche). `false` = leche completa siempre.
-    pub leche_por_condicion: bool,
+    /// Revisión 1 §3.1: la leche baja con la condición de la madre, entre `r_lact` (leche
+    /// completa) y `r_aband` (sin leche).
     pub r_lact: f64,
     pub r_aband: f64,
-    /// Revisión 1, cambio 3.2: destete forzoso. Si la condición de la lactante baja de `r_aband`,
-    /// la lactancia termina; las crías de al menos `f_dest_min · d_destete` días sobreviven
-    /// destetadas y las más jóvenes mueren con `p_huerf`. `false` = sin destete forzoso.
-    pub destete_forzoso: bool,
+    /// Revisión 1 §3.2: destete forzoso. Si la condición de la lactante baja de `r_aband`, la
+    /// lactancia termina; las crías de al menos `f_dest_min · d_destete` días sobreviven
+    /// destetadas y las más jóvenes mueren con `p_huerf`.
     pub f_dest_min: f64,
-    /// Revisión 1, cambio 3.4: dimorfismo sexual. Cada sexo usa su masa adulta y su grasa máxima
-    /// si la especie las da. `false` = la misma para los dos sexos.
-    pub dimorfismo: bool,
-    /// Revisión 1, cambio 4: edad de esterilidad individual `a_est ~ Normal(μ_est, σ_est)`,
-    /// truncada a `[a_rep, a_fin_rep]`. `false` = fértil hasta `a_fin_rep`.
-    pub esterilidad_individual: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -132,10 +121,6 @@ pub struct ForrajeCfg {
     pub tau_c: f64,
     /// Rebrote mínimo (banco de semillas), fracción de la regeneración máxima.
     pub g0_frac: f64,
-    /// Revisión 1, cambio 2 (sustituye a la opción `respuesta` del incremento 1, D16): respuesta
-    /// funcional de Holling tipo II. Cada uno come `d · V/(V + V_½)`, con `V_½ = h_½ · K` (`h_½`
-    /// por especie). `false` = todo el stock accesible, como el diseño v1.0 (§6.4).
-    pub respuesta_funcional: bool,
 }
 
 /// Cómo se reparten las edades de la población inicial.
@@ -253,13 +238,10 @@ pub struct SequiaCfg {
     pub factor: f64,
 }
 
-/// Métricas opcionales (no cambian el modelo, solo lo que se escribe).
+/// Métricas (no cambian el modelo, solo lo que se escribe).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct MetricasCfg {
-    /// Demografía por edades y condición (revisión 1): fecundidad por grupos de edad de la madre,
-    /// edad del último parto, mortalidad por grupo de edad y sexo, y condición de las lactantes.
-    pub demografia: bool,
     /// Anchura de los grupos de edad de la fecundidad (años).
     pub ancho_fecundidad_anios: f64,
 }
@@ -267,7 +249,6 @@ pub struct MetricasCfg {
 impl Default for MetricasCfg {
     fn default() -> Self {
         Self {
-            demografia: true,
             ancho_fecundidad_anios: 5.0,
         }
     }
@@ -344,14 +325,9 @@ impl Default for EnergeticaCfg {
             b0_ecto: 7.0,
             e_a: 0.65,
             t_ref: 20.0,
-            apetito_gasto_total: true,
-            leche_por_condicion: true,
             r_lact: 0.3,
             r_aband: 0.1,
-            destete_forzoso: true,
             f_dest_min: 0.5,
-            dimorfismo: true,
-            esterilidad_individual: true,
         }
     }
 }
@@ -362,7 +338,6 @@ impl Default for ForrajeCfg {
             rho_veg: 4.4,
             tau_c: 0.5,
             g0_frac: 0.01,
-            respuesta_funcional: true,
         }
     }
 }

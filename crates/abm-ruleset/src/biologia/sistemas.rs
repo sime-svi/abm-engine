@@ -97,16 +97,14 @@ pub fn bio_demanda(
     } = &mut *buf;
     // Leche según la condición de cada lactante, con su estado al empezar el tick.
     leche_madre.clear();
-    if en.leche_por_condicion {
-        for (id, esp, sexo, _, masa, res, repro, ..) in q.iter() {
-            if repro.estado == EstadoRepro::Lactante {
-                let e = &cat.especies[esp.0 as usize];
-                let r = res.0 / e.e_max_s(sexo.i(), masa.0);
-                leche_madre.push((id.0, g_leche(r, en.r_lact, en.r_aband)));
-            }
+    for (id, esp, sexo, _, masa, res, repro, ..) in q.iter() {
+        if repro.estado == EstadoRepro::Lactante {
+            let e = &cat.especies[esp.0 as usize];
+            let r = res.0 / e.e_max_s(sexo.i(), masa.0);
+            leche_madre.push((id.0, g_leche(r, en.r_lact, en.r_aband)));
         }
-        leche_madre.sort_unstable_by_key(|x| x.0);
     }
+    leche_madre.sort_unstable_by_key(|x| x.0);
     leche.clear();
     for (_, esp, sexo, edad, masa, res, repro, celda, dep, mut d) in q.iter_mut() {
         let e = &cat.especies[esp.0 as usize];
@@ -129,12 +127,10 @@ pub fn bio_demanda(
         };
         if let Some(dep) = dep {
             d.leche = e.phi_leche(edad.0) * g;
-            if en.leche_por_condicion {
-                // La cría no compensa comiendo más la leche que falta (revisión 1 §3.1).
-                d.leche *= leche_madre
-                    .binary_search_by_key(&dep.madre, |x| x.0)
-                    .map_or(1.0, |i| leche_madre[i].1);
-            }
+            // La cría no compensa comiendo más la leche que falta (revisión 1 §3.1).
+            d.leche *= leche_madre
+                .binary_search_by_key(&dep.madre, |x| x.0)
+                .map_or(1.0, |i| leche_madre[i].1);
             if d.leche > 0.0 {
                 leche.push((dep.madre, d.leche));
             }
@@ -159,28 +155,22 @@ pub fn bio_demanda(
             d.g_leche = s.valor() / en.eps_leche;
         }
         let g = d.g_propio + d.g_leche;
-        // Apetito en energía asimilada (D1): referido al gasto total del día (revisión 1 §1:
-        // hiperfagia de gestantes y lactantes) o, como en el incremento 1, al de mantenimiento.
-        let apetito = if en.apetito_gasto_total {
-            e.k_ap * g
-        } else {
-            e.k_ap * e.basal(m, hab.f_ecto[c]) * e.pal
-        };
+        // Apetito en energía asimilada (D1), referido al gasto total del día (revisión 1 §1:
+        // hiperfagia de gestantes y lactantes).
+        let apetito = e.k_ap * g;
         let falta = (e.e_max_s(sexo.i(), m) - res.0 + g).max(0.0);
         let mut dem = apetito.min(falta) / e.eps;
         if dep.is_some() {
             dem *= 1.0 - e.phi_leche(edad.0);
         }
         let i = hab.idx(c, esp.0 as usize);
-        if cat.forraje.respuesta_funcional {
-            // Holling tipo II (revisión 1 §2): con poco forraje se come menos antes de agotarlo.
-            let v_medio = e.h_medio * hab.k[i];
-            dem *= if hab.v[i] + v_medio > 0.0 {
-                hab.v[i] / (hab.v[i] + v_medio)
-            } else {
-                0.0
-            };
-        }
+        // Holling tipo II (revisión 1 §2): con poco forraje se come menos antes de agotarlo.
+        let v_medio = e.h_medio * hab.k[i];
+        dem *= if hab.v[i] + v_medio > 0.0 {
+            hab.v[i] / (hab.v[i] + v_medio)
+        } else {
+            0.0
+        };
         d.demanda = dem;
         demanda[i].sumar(dem);
     }
@@ -274,12 +264,11 @@ type QRepro<'a> = (
 
 /// Parto (§6.7): crías por Bernoulli de la parte fraccionaria de la camada, sexo por `ρ_sexo`,
 /// reserva inicial `r_0·E_max(m0)` pagada por la madre (si no alcanza, reparte lo que tiene). Cada
-/// hija recibe su edad de esterilidad si `esterilidad` (revisión 1 §4).
+/// hija recibe su edad de esterilidad (revisión 1 §4).
 #[allow(clippy::too_many_arguments)]
 fn parto(
     e: &Especie,
     r_0: f64,
-    esterilidad: bool,
     semilla: u64,
     t: u64,
     id: u64,
@@ -307,10 +296,10 @@ fn parto(
         )
     };
     let a_fin = |cid: u64, macho: bool| {
-        if esterilidad && !macho {
-            e.a_est(semilla, cid)
-        } else {
+        if macho {
             e.a_fin_rep
+        } else {
+            e.a_est(semilla, cid)
         }
     };
     if e.f_grasa_sexo[0] == e.f_grasa_sexo[1] {
@@ -441,7 +430,7 @@ pub fn bio_reproduccion(
             }
             continue;
         }
-        // Fin de la vida reproductiva: a_fin_rep o, con esterilidad individual, su a_est.
+        // Fin de la vida reproductiva: su edad de esterilidad (revisión 1 §4), fijada al nacer.
         let a_fin = repro.a_fin;
         let e_max = e.e_max_s(0, masa.0);
         if repro.estado == EstadoRepro::Inmadura && a >= e.a_rep {
@@ -463,7 +452,6 @@ pub fn bio_reproduccion(
                         parto(
                             e,
                             en.r_0,
-                            en.esterilidad_individual,
                             semilla,
                             t,
                             id.0,
@@ -489,7 +477,7 @@ pub fn bio_reproduccion(
                 } else if vivas == 0 {
                     repro.estado = EstadoRepro::Disponible;
                     repro.dias_rest = 0;
-                } else if en.destete_forzoso && res.0 < en.r_aband * e_max {
+                } else if res.0 < en.r_aband * e_max {
                     // Destete forzoso (revisión 1 §3.2): la madre prioriza su supervivencia. Sus
                     // crías se resuelven en A7 (las jóvenes, con la regla de los huérfanos).
                     repro.estado = EstadoRepro::Disponible;

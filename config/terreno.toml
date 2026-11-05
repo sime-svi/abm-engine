@@ -40,19 +40,15 @@ k_oro             = 150.0   # sensibilidad orográfica (nota de sombra pluviomé
 m_oro_min         = 0.2     # factor orográfico mínimo (sotavento seco)
 m_oro_max         = 3.0     # factor orográfico máximo (barlovento húmedo)
 moisture_length_km = 1500.0 # escala de secado tierra adentro (km)
-moisture_from_coast = true  # distancia de humedad desde la línea de costa (false = desde el centro de la celda de mar, hasta el incr. 3)
-d_oro_km          = 25.0    # escala (km) a la que la lluvia "ve" el relieve (nota de lluvia orográfica; 0 = pendiente local)
+d_oro_km          = 25.0    # escala (km) a la que la lluvia "ve" el relieve (nota de lluvia orográfica); >= 10
 seas_precip_amp   = 0.0     # amplitud de la modulación estacional de lluvia (0 = suave)
 # Sombra pluviométrica extensa (nota de sombra pluviométrica §3): el aire que sube una cordillera
-# suelta su vapor y no lo recupera al bajar. w = exp(-Λ/h_v), con Λ los metros de subida recientes
-# del camino del viento (hacia atrás, en pasos de d_oro, hasta el mar o l_traj_km).
-agotamiento_humedad = true  # false = sin agotamiento (w = 1)
+# suelta su vapor y no lo recupera al bajar. w = exp(-Λ/h_v), con Λ los metros de subida del camino
+# del viento (hacia atrás, en pasos de d_oro, hasta el mar o l_traj_km). El aire ve el mar plano.
 h_v_m             = 2500.0  # subida que deja al aire con ~37 % de su vapor (m)
 l_recarga_km      = 1000.0  # distancia de recarga de humedad sobre tierra (km)
 l_traj_km         = 2000.0  # longitud máxima del camino hacia atrás (km)
-conservar_lluvia  = true    # si orografía y agotamiento desvían la lluvia total sobre tierra más de tol_lluvia, factor c_P en la génesis
-tol_lluvia        = 0.05    # desviación admitida (5 %)
-mar_plano         = true    # el aire ve el mar plano: sin efecto orográfico sobre el mar ni pendiente del fondo marino en la costa (decisión técnica)
+tol_lluvia        = 0.05    # si orografía y agotamiento desvían la lluvia total sobre tierra más de esto, factor c_P (provisional, CLAUDE §2.8)
 
 [soil]
 runoff_base = 0.10         # coeficiente base de escorrentía

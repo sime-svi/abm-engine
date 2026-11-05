@@ -27,16 +27,6 @@ fn serie(doc: &BioDoc, k: usize) -> Vec<u64> {
     doc.ticks.iter().map(|t| t.especies[k].n).collect()
 }
 
-/// Los cuatro cambios de la revisión 1 apagados: la biología del incremento 1.
-fn incremento1(c: &mut BioConfig) {
-    c.energetica.apetito_gasto_total = false;
-    c.energetica.leche_por_condicion = false;
-    c.energetica.destete_forzoso = false;
-    c.energetica.dimorfismo = false;
-    c.energetica.esterilidad_individual = false;
-    c.forraje.respuesta_funcional = false;
-}
-
 /// Media de `N / N_max` de una especie en los resúmenes anuales `desde..`.
 fn n_relativa(doc: &BioDoc, k: usize, desde: usize) -> f64 {
     let n_max = doc.run.especies[k].n_max;
@@ -85,11 +75,10 @@ fn sin_forraje_se_extinguen_en_su_ayuno() {
     let doc = run_biologia(&c).unwrap();
     for (k, e) in doc.run.especies.iter().enumerate() {
         let n = serie(&doc, k);
-        let por_sexo = [e.ayuno_dias_hembra, e.ayuno_dias_macho];
-        let (corto, largo) = por_sexo
-            .iter()
-            .map(|x| x.unwrap_or(e.ayuno_dias))
-            .fold((f64::INFINITY, 0.0f64), |(a, b), x| (a.min(x), b.max(x)));
+        let (corto, largo) = (
+            e.ayuno_dias_hembra.min(e.ayuno_dias_macho),
+            e.ayuno_dias_hembra.max(e.ayuno_dias_macho),
+        );
         let antes = (0.9 * corto) as usize;
         let despues = (1.1 * largo).ceil() as usize;
         assert!(n[antes] > 0, "{}: nadie llega al día {antes}", e.nombre);
@@ -236,31 +225,6 @@ fn tabla_de_vida_simulada_de_una_cohorte() {
 }
 
 #[test]
-fn sin_los_cambios_de_la_revision_no_hay_regulacion() {
-    // Hallazgo A del incremento 1: con el reparto del diseño v1.0, en celdas aisladas la población
-    // supera N_max, agota el forraje y acaba en hambruna.
-    let mut c = cfg_base();
-    incremento1(&mut c);
-    c.especies.truncate(1);
-    c.habitat.zonas[0].celdas = 2;
-    c.run.total_ticks = 365 * 25;
-    c.run.metrics_every = 365;
-    let doc = run_biologia(&c).unwrap();
-    let n_max = doc.run.especies[0].n_max;
-    let pico = serie(&doc, 0).into_iter().max().unwrap() as f64;
-    assert!(
-        pico > n_max,
-        "con el diseño v1.0 la población supera N_max ({pico})"
-    );
-    let inan: u64 = doc
-        .ticks
-        .iter()
-        .map(|t| t.especies[0].muertes_inanicion)
-        .sum();
-    assert!(inan > 0, "y acaba en hambruna");
-}
-
-#[test]
 fn con_respuesta_funcional_la_poblacion_se_regula() {
     // Revisión 1 §2: con clima constante durante 100 años no hay extinción y la población
     // converge cerca de N_max. Medido (nota de revisión §8): N/N_max ≈ 1,2 (la nota pedía
@@ -332,7 +296,7 @@ fn con_forraje_abundante_se_rehacen_reservas_y_la_lactante_mantiene_su_condicion
         .ticks
         .iter()
         .filter(|t| t.especies[0].lactantes > 0)
-        .map(|t| t.especies[0].condicion_lactantes.unwrap())
+        .map(|t| t.especies[0].condicion_lactantes)
         .collect();
     let lactantes = xs.iter().sum::<f64>() / xs.len() as f64;
     assert!(lactantes > 0.9, "condición de las lactantes: {lactantes}");
@@ -341,39 +305,24 @@ fn con_forraje_abundante_se_rehacen_reservas_y_la_lactante_mantiene_su_condicion
 }
 
 #[test]
-fn en_equilibrio_el_apetito_por_gasto_total_evita_el_hambre() {
+fn en_equilibrio_no_hay_hambre_y_el_forraje_queda_en_k_medios() {
     // Revisión 1 §1–§2: con la respuesta funcional, el equilibrio llega cuando cada uno asimila lo
     // que gasta. Con el apetito referido al gasto total, eso incluye criar: el forraje queda en K/2
-    // y no hay muertes por hambre. Con el apetito del incremento 1 (k_ap · B · PAL), criar deja a
-    // las madres en déficit y la población se regula muriendo de hambre (nota de revisión §8).
-    let correr = |gasto_total: bool| {
-        let mut c = cfg_base();
-        c.especies.truncate(1);
-        c.energetica.apetito_gasto_total = gasto_total;
-        c.habitat.zonas[0].celdas = 1;
-        c.habitat.zonas[0].area_km2 = 50.0;
-        c.run.total_ticks = 365 * 40;
-        c.run.metrics_every = 365;
-        run_biologia(&c).unwrap()
-    };
-    let hambre = |d: &BioDoc| {
-        d.anios[20..]
-            .iter()
-            .map(|a| a.especies[0].muertes_inanicion)
-            .sum::<u64>()
-    };
-    let (con, sin) = (correr(true), correr(false));
-    assert_eq!(
-        hambre(&con),
-        0,
-        "con el gasto total no debería haber hambre en equilibrio"
-    );
-    assert!(
-        hambre(&sin) > 100,
-        "sin él, la población se regula con hambre: {}",
-        hambre(&sin)
-    );
-    let t = &con.ticks.last().unwrap().especies[0];
+    // y no hay muertes por hambre. Con el apetito del incremento 1 (k_ap · B · PAL), criar dejaba a
+    // las madres en déficit y la población se regulaba muriendo de hambre (nota de revisión §8.3).
+    let mut c = cfg_base();
+    c.especies.truncate(1);
+    c.habitat.zonas[0].celdas = 1;
+    c.habitat.zonas[0].area_km2 = 50.0;
+    c.run.total_ticks = 365 * 40;
+    c.run.metrics_every = 365;
+    let doc = run_biologia(&c).unwrap();
+    let hambre: u64 = doc.anios[20..]
+        .iter()
+        .map(|a| a.especies[0].muertes_inanicion)
+        .sum();
+    assert_eq!(hambre, 0, "no debería haber hambre en equilibrio");
+    let t = &doc.ticks.last().unwrap().especies[0];
     let v = t.forraje_kg / t.forraje_max_kg;
     assert!((v - 0.5).abs() < 0.05, "V/K = {v}");
 }
@@ -385,47 +334,33 @@ fn en_la_sequia_las_hembras_no_colapsan() {
     // quedan hembras (un 30 % de los adultos), mueren más las crías que los adultos y la población
     // vuelve a crecer, despacio: tarda unos 25 años (nota de revisión §8.4). La sequía llega con la
     // población ya regulada.
-    let correr = |revision: bool| {
-        let mut c = cfg_base();
-        c.especies.truncate(1);
-        if !revision {
-            incremento1(&mut c);
-            c.forraje.respuesta_funcional = true; // el reparto que regula (si no, colapsa sin sequía)
-        }
-        c.habitat.zonas[0].celdas = 4;
-        c.habitat.zonas[0].area_km2 = 50.0;
-        c.habitat.sequia = Some(SequiaCfg {
-            inicio_dia: 365 * 15,
-            duracion_dias: 365,
-            factor: 0.5,
-        });
-        c.run.total_ticks = 365 * 40;
-        c.run.metrics_every = 365;
-        run_biologia(&c).unwrap()
-    };
-    let (con, sin) = (correr(true), correr(false));
+    let mut c = cfg_base();
+    c.especies.truncate(1);
+    c.habitat.zonas[0].celdas = 4;
+    c.habitat.zonas[0].area_km2 = 50.0;
+    c.habitat.sequia = Some(SequiaCfg {
+        inicio_dia: 365 * 15,
+        duracion_dias: 365,
+        factor: 0.5,
+    });
+    c.run.total_ticks = 365 * 40;
+    c.run.metrics_every = 365;
+    let doc = run_biologia(&c).unwrap();
     // Proporción de hembras entre los adultos (clases de edad de la madurez en adelante).
-    let hembras_adultas = |d: &BioDoc, anio: usize| {
-        let a = &d.anios[anio].especies[0];
-        let e = &d.run.especies[0];
-        let desde = e.a_rep_dias.div_ceil(e.delta_a_dias) as usize;
-        let h: u64 = a.piramide_hembras[desde..].iter().sum();
-        let m: u64 = a.piramide_machos[desde..].iter().sum();
-        h as f64 / (h + m).max(1) as f64
-    };
-    let (fc, fs) = (hembras_adultas(&con, 16), hembras_adultas(&sin, 16));
-    println!("hembras adultas tras la sequía: {fc:.2} con la revisión, {fs:.2} sin ella");
-    assert!(
-        fc > 0.25,
-        "con la revisión, hembras adultas tras la sequía: {fc}"
-    );
-    assert!(fc > fs + 0.15, "{fc} frente a {fs} sin la revisión");
+    let a = &doc.anios[16].especies[0];
+    let e = &doc.run.especies[0];
+    let desde = e.a_rep_dias.div_ceil(e.delta_a_dias) as usize;
+    let h: u64 = a.piramide_hembras[desde..].iter().sum();
+    let m: u64 = a.piramide_machos[desde..].iter().sum();
+    let hembras = h as f64 / (h + m).max(1) as f64;
+    println!("hembras adultas tras la sequía: {hembras:.2}");
+    assert!(hembras > 0.25, "hembras adultas tras la sequía: {hembras}");
     // Durante la sequía mueren más las crías que los adultos.
-    let s = &con.anios[15].especies[0];
-    let (mh, mm) = (s.mortalidad_hembras.unwrap(), s.mortalidad_machos.unwrap());
+    let s = &doc.anios[15].especies[0];
+    let (mh, mm) = (s.mortalidad_hembras, s.mortalidad_machos);
     assert!(mh[0].min(mm[0]) > mh[2].max(mm[2]), "crías {mh:?} {mm:?}");
     // Recuperación: tras tocar fondo, la población vuelve a crecer.
-    let pob: Vec<f64> = con
+    let pob: Vec<f64> = doc
         .anios
         .iter()
         .map(|a| a.especies[0].poblacion_media)
@@ -460,8 +395,8 @@ fn en_la_hambruna_las_mujeres_resisten_mejor() {
         let (a, b) = (f(&doc, 10), f(&doc, 11));
         [0, 1, 2, 3].map(|g| (a[g] + b[g]) / 2.0)
     };
-    let mh = tasas(|d, i| d.anios[i].especies[0].mortalidad_hembras.unwrap());
-    let mm = tasas(|d, i| d.anios[i].especies[0].mortalidad_machos.unwrap());
+    let mh = tasas(|d, i| d.anios[i].especies[0].mortalidad_hembras);
+    let mm = tasas(|d, i| d.anios[i].especies[0].mortalidad_machos);
     println!("mortalidad en la hambruna (1/año): mujeres {mh:.3?}, hombres {mm:.3?}");
     assert!(
         mh[2] <= mm[2],
@@ -481,37 +416,22 @@ fn en_la_hambruna_las_mujeres_resisten_mejor() {
 #[test]
 fn la_fecundidad_humana_baja_con_la_edad() {
     // Revisión 1 §4: con la edad de esterilidad individual, las mujeres tienen ~6 hijos (5–7) y la
-    // fecundidad cae a partir de los 35 años; sin ella, ~10 hijos y fértiles hasta los 50.
-    let correr = |esterilidad: bool| {
-        let mut c = cfg_base();
-        c.especies.remove(0);
-        c.energetica.esterilidad_individual = esterilidad;
-        c.habitat.zonas[0].celdas = 16;
-        c.habitat.zonas[0].area_km2 = 100.0;
-        c.run.total_ticks = 365 * 60;
-        c.run.metrics_every = 365;
-        run_biologia(&c).unwrap()
-    };
-    let resumen = |d: &BioDoc| {
-        let xs: Vec<_> = d.anios[20..].iter().map(|a| &a.especies[0]).collect();
-        let tgf = xs.iter().filter_map(|x| x.tgf).sum::<f64>() / xs.len() as f64;
-        let grupos = xs[0].fecundidad_grupos.as_ref().unwrap().len();
-        let fec: Vec<f64> = (0..grupos)
-            .map(|g| {
-                xs.iter()
-                    .map(|x| x.fecundidad_grupos.as_ref().unwrap()[g])
-                    .sum::<f64>()
-            })
-            .collect();
-        (tgf, fec[8] / fec[4], fec[9] / fec[4]) // 40–44 y 45–49 frente a 20–24
-    };
-    let (con, sin) = (resumen(&correr(true)), resumen(&correr(false)));
-    println!(
-        "TGF {:.2} (sin esterilidad {:.2}); fecundidad relativa a 40–44 / 45–49: {:.2} / {:.2} (sin: {:.2} / {:.2})",
-        con.0, sin.0, con.1, con.2, sin.1, sin.2
-    );
-    assert!((5.0..=7.5).contains(&con.0), "TGF {}", con.0);
-    assert!(sin.0 > con.0 + 2.0);
-    assert!(con.1 < 0.5 && con.2 < 0.1, "la fecundidad no cae: {con:?}");
-    assert!(sin.2 > 0.5);
+    // fecundidad cae a partir de los 35 años (sin ella eran ~10 hijos, fértiles hasta los 50).
+    let mut c = cfg_base();
+    c.especies.remove(0);
+    c.habitat.zonas[0].celdas = 16;
+    c.habitat.zonas[0].area_km2 = 100.0;
+    c.run.total_ticks = 365 * 60;
+    c.run.metrics_every = 365;
+    let doc = run_biologia(&c).unwrap();
+    let xs: Vec<_> = doc.anios[20..].iter().map(|a| &a.especies[0]).collect();
+    let tgf = xs.iter().filter_map(|x| x.tgf).sum::<f64>() / xs.len() as f64;
+    let grupos = xs[0].fecundidad_grupos.len();
+    let fec: Vec<f64> = (0..grupos)
+        .map(|g| xs.iter().map(|x| x.fecundidad_grupos[g]).sum::<f64>())
+        .collect();
+    let (r40, r45) = (fec[8] / fec[4], fec[9] / fec[4]); // 40–44 y 45–49 frente a 20–24
+    println!("TGF {tgf:.2}; fecundidad relativa a 40–44 / 45–49: {r40:.2} / {r45:.2}");
+    assert!((5.0..=7.5).contains(&tgf), "TGF {tgf}");
+    assert!(r40 < 0.5 && r45 < 0.1, "la fecundidad no cae: {r40} {r45}");
 }

@@ -446,8 +446,8 @@ fn decode(bytes: &[u8], cfg: &TerrenoConfig, key: u64) -> Option<(World, GeoSumm
         w_hum: next(),
         c_p,
         desvio_lluvia,
-        // La caché guarda mundos ya envejecidos: el agotamiento está activo si la config lo pide.
-        humedad_activa: cfg.climate.agotamiento_humedad,
+        // La caché guarda mundos ya envejecidos: el agotamiento ya está activo.
+        humedad_activa: true,
         anillos: None,
         sample_count,
     };

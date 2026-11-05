@@ -86,11 +86,11 @@ pub fn build_con_orden(cfg: &BioConfig, barajado: Option<u64>) -> Result<World, 
                 let sexo = if macho { Sexo::Macho } else { Sexo::Hembra };
                 // Masa y reserva con la masa adulta y la grasa de su sexo (revisión 1 §3.4).
                 let m = e.masa_por_edad_s(sexo.i(), a);
-                // Fin de la vida reproductiva: con esterilidad individual, su a_est (rev. 1 §4).
-                let a_fin = if cfg.energetica.esterilidad_individual && !macho {
-                    e.a_est(semilla, id)
-                } else {
+                // Fin de la vida reproductiva: su edad de esterilidad (revisión 1 §4).
+                let a_fin = if macho {
                     e.a_fin_rep
+                } else {
+                    e.a_est(semilla, id)
                 };
                 nuevos.push((
                     IdBio(id),

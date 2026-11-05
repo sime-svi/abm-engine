@@ -227,21 +227,14 @@ pub(crate) fn precip_no_season(
 /// escala `d_oro` en las celdas tan finas como `d_oro` o más; en las más gruesas (o con la
 /// corrección apagada, `d_oro = 0`), la propia de la celda, como hasta el incremento 3.
 ///
-/// Con `climate.mar_plano` (nota de sombra pluviométrica §6) el aire ve el mar plano: sobre el mar
-/// no hay pendiente, y en la costa se mide desde el nivel del mar y no desde el fondo marino. La
-/// parte de la erosión (el mar no se erosiona) es la misma.
+/// El aire ve el mar plano (nota de sombra pluviométrica §6.6, hallazgo 5): sobre el mar no hay
+/// pendiente, y en la costa se mide desde el nivel del mar y no desde el fondo marino. La parte de
+/// la erosión (el mar no se erosiona) se suma igual.
 #[inline]
-pub(crate) fn oro_slope_e(world: &World, cfg: &TerrenoConfig, s: usize) -> f64 {
+pub(crate) fn oro_slope_e(world: &World, s: usize) -> f64 {
     let referencia = world
         .statgen
         .uses_oro_reference(u32::from(world.topo.level[s]));
-    if !cfg.climate.mar_plano {
-        return if referencia {
-            world.oro_e[s]
-        } else {
-            world.grad_e[s]
-        };
-    }
     if world.es_oceano(s) {
         return 0.0;
     }
@@ -263,7 +256,7 @@ pub(crate) fn precip_mean_cell(world: &World, cfg: &TerrenoConfig, s: usize) -> 
         cfg,
         world.topo.lat[s],
         world.dist_ocean_km[s],
-        oro_slope_e(world, cfg, s),
+        oro_slope_e(world, s),
     );
     if world.es_oceano(s) {
         p
@@ -276,7 +269,7 @@ pub(crate) fn precip_mean_cell(world: &World, cfg: &TerrenoConfig, s: usize) -> 
 pub fn m_oro_celda(world: &World, cfg: &TerrenoConfig, s: usize) -> f64 {
     let c = &cfg.climate;
     let we = wind_east(world.topo.lat[s].to_degrees().abs());
-    (1.0 + c.k_oro * oro_slope_e(world, cfg, s) * we).clamp(c.m_oro_min, c.m_oro_max)
+    (1.0 + c.k_oro * oro_slope_e(world, s) * we).clamp(c.m_oro_min, c.m_oro_max)
 }
 
 /// Lluvia media anual (mm/año) de una celda con el estado actual (para medidas y volcados).

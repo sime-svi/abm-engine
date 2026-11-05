@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-05 — revisión 1 de la biología de los agentes (Holling, apetito por gasto total, lactancia y dimorfismo, esterilidad)
+Última actualización: 2026-11-05 — interruptores decididos retirados (CLAUDE §5) y principio de realismo (CLAUDE §2.8)
 
 ---
 
@@ -26,9 +26,7 @@ abm/
 │   ├── [x] default.toml           # Parámetros base de simulación (forrajeo)
 │   ├── [x] agentes.toml           # Biología de los agentes (especies, energética, forraje, hábitat)
 │   ├── [x] terreno.toml           # Parámetros del planeta ([lod], [erosion], [soil]…)
-│   └── experiments/               # Configs con nombre por experimento
-│       ├── [x] agentes_incremento1.toml   # La biología sin la revisión 1 (= salida de ece0868, byte a byte)
-│       └── [x] terreno_sin_sombra.toml    # El planeta sin la nota de sombra (= salida de bb6a8c0, byte a byte)
+│   └── experiments/               # Configs con nombre por experimento (hoy vacía: las referencias son commits)
 │
 ├── crates/                        # Un paquete por responsabilidad; las flechas apuntan a abm-core
 │   ├── abm-core/                  # EL MOTOR (agnóstico al dominio; no depende de nadie)

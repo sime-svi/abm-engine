@@ -159,20 +159,14 @@ impl Especie {
         let c_w = c_w_de(masa);
         let f_grasa_max = elegir(aj.f_grasa_max, pr.f_grasa_max, r.f_grasa_max);
         // Dimorfismo (revisión 1 §3.4): masa y grasa de cada sexo, si la especie las da.
-        let (masa_sexo, f_grasa_sexo) = if en.dimorfismo {
-            (
-                [
-                    elegir(aj.masa_kg_hembra, pr.masa_kg_hembra, masa),
-                    elegir(aj.masa_kg_macho, pr.masa_kg_macho, masa),
-                ],
-                [
-                    elegir(aj.f_grasa_max_hembra, pr.f_grasa_max_hembra, f_grasa_max),
-                    elegir(aj.f_grasa_max_macho, pr.f_grasa_max_macho, f_grasa_max),
-                ],
-            )
-        } else {
-            ([masa; 2], [f_grasa_max; 2])
-        };
+        let masa_sexo = [
+            elegir(aj.masa_kg_hembra, pr.masa_kg_hembra, masa),
+            elegir(aj.masa_kg_macho, pr.masa_kg_macho, masa),
+        ];
+        let f_grasa_sexo = [
+            elegir(aj.f_grasa_max_hembra, pr.f_grasa_max_hembra, f_grasa_max),
+            elegir(aj.f_grasa_max_macho, pr.f_grasa_max_macho, f_grasa_max),
+        ];
         let c_w_sexo = masa_sexo.map(|m| if m == masa { c_w } else { c_w_de(m) });
         let k_ap = elegir(aj.k_ap, pr.k_ap, r.k_ap);
         let a_fin_rep_d = dias("a_fin_rep", &e.nombre, a_fin_rep_anios * da)?;
@@ -643,9 +637,13 @@ mod tests {
             assert!((m90 / (0.9 * m) - 1.0).abs() < 1e-3, "West {s}: {m90}");
             assert!((hum.masa_por_edad_s(s, 0) - 3.3).abs() < 1e-9);
         }
-        // Sin dimorfismo, las tablas por sexo son las de la especie (bit a bit).
+        // Sin valores por sexo, las tablas por sexo son las de la especie (bit a bit).
         let mut cfg = BioConfig::default();
-        cfg.energetica.dimorfismo = false;
+        let preset = cfg.presets.get_mut("humano").unwrap();
+        preset.masa_kg_hembra = None;
+        preset.masa_kg_macho = None;
+        preset.f_grasa_max_hembra = None;
+        preset.f_grasa_max_macho = None;
         let plano = Especie::derivar(&cfg, &cfg.especies[1]).unwrap();
         assert!(!plano.dimorfico);
         for s in 0..2 {

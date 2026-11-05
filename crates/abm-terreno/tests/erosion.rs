@@ -618,8 +618,7 @@ fn la_cache_reproduce_la_genesis_bit_a_bit() {
 fn en_un_mundo_plano_la_sombra_pluviometrica_no_cambia_nada() {
     // Nota de sombra pluviométrica §4: con la tierra llana, a nivel del mar, w = 1 y m_oro = 1 en
     // todas partes, así que la corrida es idéntica a la de sin efecto orográfico (k_oro = 0). El
-    // mar plano va en las dos: si el fondo marino contara como relieve, movería la lluvia de la
-    // costa (es lo único que distingue esta comparación de una con el código de antes de la nota).
+    // aire ve el mar plano: el fondo marino no mueve la lluvia de la costa.
     let mut cfg = cfg_geo();
     cfg.planet.h_max = 0.0; // toda la tierra a 0 m
     cfg.climate.d_oro_km = 200.0; // anillos pequeños (la propiedad no depende de d_oro)
@@ -637,8 +636,6 @@ fn en_un_mundo_plano_la_sombra_pluviometrica_no_cambia_nada() {
     );
     let mut sin = cfg.clone();
     sin.climate.k_oro = 0.0;
-    sin.climate.agotamiento_humedad = false;
-    sin.climate.conservar_lluvia = false;
     let (db, wb) = abm_terreno::run(&sin).unwrap();
     assert_eq!(da.ticks, db.ticks);
     assert_eq!(wa.topo.keys, wb.topo.keys);
