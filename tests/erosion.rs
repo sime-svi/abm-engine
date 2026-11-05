@@ -210,11 +210,7 @@ fn lod_ida_y_vuelta_conserva_erosion_y_suelo() {
     let ida_y_vuelta = |cfg: &TerrenoConfig| {
         let mut w = base.clone();
         let n = w.topo.num_cells;
-        let todo = Marks {
-            want_sub: vec![true; n],
-            may_collapse: vec![false; n],
-            verify_collapses: false,
-        };
+        let todo = Marks::forced(vec![true; n], vec![false; n]);
         // La malla de base tiene hojas a l_max: se permite un nivel más para poder subdividirlas.
         w.topo.l_max += 1;
         let r1 = lod::apply(&mut w, cfg, &todo);
@@ -231,11 +227,7 @@ fn lod_ida_y_vuelta_conserva_erosion_y_suelo() {
                     split_key(k).1 > 0 && base.topo.keys.binary_search(&parent_key(k)).is_ok()
                 })
                 .collect();
-            let nada = Marks {
-                want_sub: vec![false; m],
-                may_collapse: hija_nueva,
-                verify_collapses: false,
-            };
+            let nada = Marks::forced(vec![false; m], hija_nueva);
             let r = lod::apply(&mut w, cfg, &nada);
             relleno += r.fill_m3;
             if !r.changed() {
@@ -299,4 +291,241 @@ fn erosion_en_ejecucion_conserva_agua_y_material() {
         );
     }
     relieve_sano(&w, &cfg);
+}
+
+/// Totales físicos de un mundo: agua almacenada en tierra (m³), material erosionado/depositado
+/// acumulado `Σ e·a` (m³) y volumen de suelo en tierra `Σ z·a` (m³).
+fn totales(w: &World) -> (f64, f64, f64) {
+    let agua = abm::terreno::systems::total_store_vol(w);
+    let suelo = (0..w.topo.num_cells)
+        .filter(|&s| !w.es_oceano(s))
+        .map(|s| w.z_soil[s] * w.topo.area[s])
+        .sum();
+    (agua, vol_e(w), suelo)
+}
+
+/// Avanza `n` ticks desde `t0` con la física y la erosión en ejecución, sin LOD automático.
+fn avanzar(
+    w: &mut World,
+    cfg: &TerrenoConfig,
+    sc: &mut abm::terreno::systems::Scratch,
+    t0: u64,
+    n: u64,
+    ero: &mut erosion::ErosionReport,
+) {
+    let every = cfg.erosion.run_every;
+    let dt = every as f64 / cfg.climate.t_year * cfg.erosion.run_accel;
+    for t in t0..t0 + n {
+        let antes = abm::terreno::systems::total_store_vol(w);
+        abm::terreno::systems::step(w, cfg, sc, t, antes, &Default::default());
+        if every > 0 && t > 0 && t % every == 0 {
+            let (p, tm) = erosion::running_means(w, cfg);
+            ero.add(&erosion::step(w, cfg, dt, &p, &tm));
+        }
+    }
+}
+
+#[test]
+fn independencia_del_camino_con_dinamica() {
+    // Una misma zona (la cara 0 del cubo) recorrida de tres maneras, con la erosión actuando
+    // durante la partida: (a) fina todo el rato; (b) gruesa, luego fina y luego gruesa otra vez;
+    // (c) gruesa todo el rato. Dos comprobaciones:
+    // - Sin huella: (b), tras volver a gruesa, acaba como (c) salvo por la física de su tramo fino.
+    // - (a) frente a (b), la comparación de la revisión.
+    // Medido (2026-11-05): material y erosión coinciden al 0,02–0,3 %. El agua (+0,5 % / +3,8 %) y el
+    // suelo (−2,3 % / −2,4 %) difieren por un efecto de escala de la física, no de la malla: con más
+    // detalle hay más pendiente, así que el factor orográfico sube la lluvia y la incisión arranca más
+    // suelo. Las tolerancias dejan margen sobre esas cifras.
+    let mut cfg = cfg_geo();
+    cfg.lod.l_max = cfg.lod.l_min; // génesis en malla uniforme...
+    cfg.erosion.run_every = 10;
+    cfg.erosion.run_accel = 1e5; // ≈ 2 700 años por paso de erosión
+    let mut base = worldgen::generate(&cfg);
+    base.topo.l_max = 1; // ...y se permite un nivel más para forzar la zona fina
+    let subdividir = |w: &mut World| {
+        let n = w.topo.num_cells;
+        let cara0: Vec<bool> = (0..n).map(|s| w.topo.face(s) == 0).collect();
+        lod::apply(w, &cfg, &Marks::forced(cara0, vec![false; n]))
+    };
+    let colapsar = |w: &mut World| {
+        let n = w.topo.num_cells;
+        let finas: Vec<bool> = (0..n)
+            .map(|s| w.topo.face(s) == 0 && w.topo.level[s] > 0)
+            .collect();
+        lod::apply(w, &cfg, &Marks::forced(vec![false; n], finas))
+    };
+    let tramo = 30;
+    let correr = |plan: &str| {
+        let mut w = base.clone();
+        let mut sc = abm::terreno::systems::Scratch::new(w.topo.num_cells);
+        let mut ero = erosion::ErosionReport::default();
+        match plan {
+            "fina" => {
+                subdividir(&mut w);
+                sc.resize(w.topo.num_cells);
+                avanzar(&mut w, &cfg, &mut sc, 0, 3 * tramo, &mut ero);
+            }
+            "ida_y_vuelta" => {
+                avanzar(&mut w, &cfg, &mut sc, 0, tramo, &mut ero);
+                subdividir(&mut w);
+                sc.resize(w.topo.num_cells);
+                avanzar(&mut w, &cfg, &mut sc, tramo, tramo, &mut ero);
+                assert!(colapsar(&mut w).collapses > 0);
+                sc.resize(w.topo.num_cells);
+                avanzar(&mut w, &cfg, &mut sc, 2 * tramo, tramo, &mut ero);
+                assert_eq!(w.topo.keys, base.topo.keys, "no volvió a la malla gruesa");
+            }
+            _ => avanzar(&mut w, &cfg, &mut sc, 0, 3 * tramo, &mut ero),
+        }
+        relieve_sano(&w, &cfg);
+        let (agua, mat, suelo) = totales(&w);
+        (agua, mat, suelo, ero.eroded_m3)
+    };
+    let (a, b, c) = (correr("fina"), correr("ida_y_vuelta"), correr("gruesa"));
+    let rel = |x: f64, y: f64| (x - y).abs() / x.abs().max(y.abs()).max(1e-30);
+    let informe = |n: &str, x: (f64, f64, f64, f64), y: (f64, f64, f64, f64)| {
+        let r = (rel(x.0, y.0), rel(x.1, y.1), rel(x.2, y.2), rel(x.3, y.3));
+        println!(
+            "{n}: agua {:.2e}, Σe·a {:.2e}, suelo {:.2e}, erosionado {:.2e}",
+            r.0, r.1, r.2, r.3
+        );
+        r
+    };
+    // Sin huella: (b) frente a (c).
+    let bc = informe("(b) vs (c)", b, c);
+    assert!(bc.0 < 0.01, "huella en el agua: {:.2e}", bc.0);
+    assert!(bc.1 < 1e-3, "huella en el material: {:.2e}", bc.1);
+    assert!(bc.2 < 0.04, "huella en el suelo: {:.2e}", bc.2);
+    assert!(bc.3 < 0.01, "huella en la erosión: {:.2e}", bc.3);
+    // (a) frente a (b), la comparación de la revisión.
+    let ab = informe("(a) vs (b)", a, b);
+    assert!(ab.1 < 1e-3, "material: {:.2e}", ab.1);
+    assert!(ab.2 < 0.05, "suelo: {:.2e}", ab.2);
+    assert!(ab.3 < 0.01, "erosionado: {:.2e}", ab.3);
+    assert!(
+        ab.0 < 0.06,
+        "agua (efecto de escala de la lluvia): {:.2e}",
+        ab.0
+    );
+}
+
+#[test]
+fn acondicionamiento_conserva_el_material() {
+    // Al subdividir un relieve ya erosionado, el detalle fino trae hondonadas: se rellenan con
+    // material de su borde, así que Σ e·a no cambia (lo no compensado es solo redondeo).
+    let cfg = cfg_geo();
+    let base = worldgen::generate(&cfg);
+    let mut w = base.clone();
+    w.topo.l_max += 1;
+    let n = w.topo.num_cells;
+    let r = lod::apply(&mut w, &cfg, &Marks::forced(vec![true; n], vec![false; n]));
+    println!(
+        "movido {:.3e} m³, no compensado {:.3e} m³, lagos {} -> {}",
+        r.conditioned_m3,
+        r.fill_m3,
+        lagos(&base),
+        lagos(&w)
+    );
+    assert!(
+        r.conditioned_m3 > 0.0,
+        "no hubo hondonadas que acondicionar"
+    );
+    assert!(
+        r.fill_m3.abs() <= 1e-9 * r.conditioned_m3,
+        "se creó material: {:.3e}",
+        r.fill_m3
+    );
+    let dv = vol_e(&w) - vol_e(&base);
+    assert!(
+        dv.abs() <= 1e-9 * vol_e(&base).abs(),
+        "Σ e·a cambió {dv:.3e} m³ al subdividir"
+    );
+    relieve_sano(&w, &cfg);
+}
+
+#[test]
+fn el_tope_deja_pasar_las_mas_urgentes() {
+    // Con un criterio de humedad muy sensible casi todo pide subdividirse; el tope por revisión deja
+    // pasar solo las peticiones más urgentes, como mucho `max_sub_frac · hojas`.
+    let mut cfg = sin_erosion(cfg_geo());
+    cfg.lod.l_max = 2;
+    cfg.lod.refine_features = false;
+    cfg.lod.dh_sub = 1e30;
+    cfg.lod.dtheta_sub = 1e-3;
+    cfg.lod.max_sub_frac = 0.01;
+    let mut w = worldgen::generate(&cfg);
+    let mut sc = abm::terreno::systems::Scratch::new(w.topo.num_cells);
+    for t in 0..20 {
+        let antes = abm::terreno::systems::total_store_vol(&w);
+        abm::terreno::systems::step(&mut w, &cfg, &mut sc, t, antes, &Default::default());
+    }
+    let mut m = lod::marks(&w, &cfg);
+    let piden = m.want_sub.iter().filter(|&&x| x).count();
+    let urg = m.urgency.clone();
+    lod::cap_subdivisions(&mut m, cfg.lod.max_sub_frac);
+    let tope = (cfg.lod.max_sub_frac * w.topo.num_cells as f64).ceil() as usize;
+    let pasan: Vec<usize> = (0..w.topo.num_cells).filter(|&s| m.want_sub[s]).collect();
+    assert!(
+        piden > tope,
+        "el caso no ejercita el tope ({piden} peticiones, tope {tope})"
+    );
+    assert_eq!(pasan.len(), tope);
+    let min_pasa = pasan.iter().map(|&s| urg[s]).fold(f64::INFINITY, f64::min);
+    let max_queda = (0..w.topo.num_cells)
+        .filter(|&s| urg[s] > 0.0 && !m.want_sub[s])
+        .map(|s| urg[s])
+        .fold(0.0_f64, f64::max);
+    assert!(
+        min_pasa >= max_queda,
+        "pasó una petición menos urgente que otra rechazada"
+    );
+}
+
+#[test]
+fn la_cache_reproduce_la_genesis_bit_a_bit() {
+    // La génesis guardada en disco y vuelta a leer da exactamente la misma corrida que calcularla;
+    // la clave cambia con los parámetros de la génesis pero no con los de la corrida.
+    use abm::terreno::cache;
+    let mut cfg = cfg_geo();
+    cfg.run.total_ticks = 5;
+    let dir = std::env::temp_dir().join(format!("abm_cache_test_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    cfg.run.genesis_cache = dir.to_string_lossy().into_owned();
+
+    let (d1, w1, i1) = abm::terreno::run_with_info(&cfg).unwrap();
+    let (d2, w2, i2) = abm::terreno::run_with_info(&cfg).unwrap();
+    let mut sin = cfg.clone();
+    sin.run.genesis_cache = String::new();
+    let (d0, w0) = abm::terreno::run(&sin).unwrap();
+    assert!(
+        !i1.from_cache && i2.from_cache,
+        "la segunda corrida debía leer la caché"
+    );
+    assert_eq!(d1, d0);
+    assert_eq!(
+        d2, d0,
+        "con la génesis de la caché la corrida no es idéntica"
+    );
+    for (a, b) in [(&w0, &w1), (&w0, &w2)] {
+        assert_eq!(a.topo.keys, b.topo.keys);
+        assert_eq!(a.h, b.h);
+        assert_eq!(a.e, b.e);
+        assert_eq!(a.z_soil, b.z_soil);
+        assert_eq!(a.w, b.w);
+    }
+
+    let mut otro = cfg.clone();
+    otro.erosion.k_ero *= 2.0;
+    assert_ne!(cache::key(&cfg).unwrap(), cache::key(&otro).unwrap());
+    let mut mas_ticks = cfg.clone();
+    mas_ticks.run.total_ticks = 99;
+    assert_eq!(cache::key(&cfg).unwrap(), cache::key(&mas_ticks).unwrap());
+
+    // Un fichero dañado se ignora y se recalcula.
+    let p = cache::path(&cfg).unwrap().unwrap();
+    std::fs::write(&p, b"basura").unwrap();
+    let (d3, _, i3) = abm::terreno::run_with_info(&cfg).unwrap();
+    assert!(!i3.from_cache);
+    assert_eq!(d3, d0);
+    let _ = std::fs::remove_dir_all(&dir);
 }

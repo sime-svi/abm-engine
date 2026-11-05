@@ -8,6 +8,7 @@ seed        = 42           # semilla del RNG raíz. (seed, config) => mundo repr
 total_ticks = 365          # ticks a simular (1 año con el tick diario)
 output_path = "output"     # carpeta destino (ignorada por git)
 dump_world  = false         # true => vuelca además un snapshot por celda del mundo generado
+genesis_cache = "output/cache" # caché de la génesis ("" = sin caché): se calcula una vez por (semilla, config, código)
 
 [planet]
 r_km      = 6371.0         # radio del planeta (km)
@@ -56,7 +57,8 @@ z_ref       = 0.5          # profundidad de referencia: con más suelo, se forma
 t_ref       = 15.0         # temperatura de referencia de la meteorización (°C)
 p_ref_soil  = 1000.0       # lluvia a partir de la cual la humedad ya no acelera la meteorización (mm/año)
 z_root      = 1.5          # profundidad de raíces: más suelo no retiene más agua útil (m)
-f_rock      = 0.3          # fracción de capacidad que conserva la roca desnuda a escala de celda (calibrado)
+f_rock      = 0.3          # fracción de capacidad que conserva la roca desnuda en celdas del nivel 0 (calibrado)
+f_rock_beta = 0.5          # baja con el nivel: f_rock(L) = f_rock · 2^(−f_rock_beta·L) (30 % en L0, ~11 % en L3)
 
 [vegetation]
 theta_opt   = 0.6          # humedad óptima
@@ -78,6 +80,7 @@ dt_sub          = 4.0      # °C: ídem temperatura
 dtheta_sub      = 0.3      # ídem humedad relativa del suelo (0..1)
 h_hist          = 0.5      # histéresis: solo se colapsa por debajo de h_hist · umbral
 refine_features = true     # afinar costas, ríos y lagos
+max_sub_frac    = 0.02     # tope de subdivisiones por revisión (fracción de las celdas; 0 = sin tope)
 
 [erosion]
 # Relieve vivo (incremento 3): los ríos excavan, el sedimento rellena hondonadas, las laderas se

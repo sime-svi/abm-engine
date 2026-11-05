@@ -308,6 +308,39 @@ pub struct Marks {
     /// Verificar los colapsos con un ensayo en seco antes de aplicarlos (driver: sí; marcas forzadas
     /// de los tests de mecánica: no).
     pub verify_collapses: bool,
+    /// Urgencia de cada petición de subdivisión, para el tope por revisión: infinita para los
+    /// rasgos, y si no la mayor razón variación/umbral. Vacía en las marcas forzadas.
+    pub urgency: Vec<f64>,
+}
+
+impl Marks {
+    /// Marcas forzadas (tests de la mecánica): sin ensayo en seco ni urgencias.
+    pub fn forced(want_sub: Vec<bool>, may_collapse: Vec<bool>) -> Marks {
+        Marks {
+            want_sub,
+            may_collapse,
+            verify_collapses: false,
+            urgency: Vec::new(),
+        }
+    }
+}
+
+/// Tope de subdivisiones por revisión (protección contra el afinado desbocado): si piden
+/// subdividirse más de `frac · hojas`, se quedan las más urgentes (desempate por clave).
+pub fn cap_subdivisions(m: &mut Marks, frac: f64) {
+    let n = m.want_sub.len();
+    if frac <= 0.0 || m.urgency.len() != n {
+        return;
+    }
+    let cap = ((frac * n as f64).ceil() as usize).max(1);
+    let mut wanting: Vec<usize> = (0..n).filter(|&s| m.want_sub[s]).collect();
+    if wanting.len() <= cap {
+        return;
+    }
+    wanting.sort_by(|&a, &b| m.urgency[b].total_cmp(&m.urgency[a]).then(a.cmp(&b)));
+    for &s in &wanting[cap..] {
+        m.want_sub[s] = false;
+    }
 }
 
 /// Familia (4 hermanas hojas, en el orden de [`CHILDREN`]) cuya primera hija es la hoja `s`.
@@ -358,8 +391,23 @@ pub fn marks(world: &World, cfg: &TerrenoConfig) -> Marks {
     let exceeds =
         |v: &[f64; 3], factor: f64| v.iter().zip(thr.iter()).any(|(x, t)| *x > factor * t);
 
-    let want_sub = (0..num)
+    let want_sub: Vec<bool> = (0..num)
         .map(|s| (topo.level[s] as u32) < topo.l_max && (feature[s] || exceeds(&var[s], 1.0)))
+        .collect();
+    let urgency: Vec<f64> = (0..num)
+        .map(|s| {
+            if !want_sub[s] {
+                0.0
+            } else if feature[s] {
+                f64::INFINITY
+            } else {
+                var[s]
+                    .iter()
+                    .zip(thr.iter())
+                    .map(|(x, t)| x / t)
+                    .fold(0.0_f64, f64::max)
+            }
+        })
         .collect();
 
     // Calma con histéresis: no es rasgo, no lleva la marca hidrológica (fue río o lago: pegajosa)
@@ -384,6 +432,7 @@ pub fn marks(world: &World, cfg: &TerrenoConfig) -> Marks {
         want_sub,
         may_collapse,
         verify_collapses: true,
+        urgency,
     }
 }
 
@@ -418,8 +467,9 @@ fn mother_would_subdivide(
     let h_m = st.h + e_vol / g.area;
     let m_ocean = world.statgen.is_ocean_h(h_m);
     let t_m = t_area / area;
-    let z_m = area_mean(fam.map(|m| (world.z_soil[m], topo.area[m])));
-    let w_cap_m = st.w_cap * erosion::w_cap_factor(cfg, z_m);
+    let z_m =
+        area_mean(fam.map(|m| (world.z_soil[m], topo.area[m]))).max(erosion::soil_floor(cfg, ml));
+    let w_cap_m = st.w_cap * erosion::w_cap_factor(cfg, z_m, ml);
     let theta_m = if w_cap_m > 0.0 {
         (vw / g.area / w_cap_m).clamp(0.0, 1.0)
     } else {
@@ -467,9 +517,12 @@ pub struct LodReport {
     /// Biomasa perdida en el mar y creada en tierra nueva (densidad·m²).
     pub veg_lost: f64,
     pub veg_created: f64,
-    /// Material añadido al rellenar hondonadas artificiales de hojas nuevas (m³; incr. 3 §3,
-    /// acondicionamiento hidrológico). Término propio del balance de material.
+    /// Material que el acondicionamiento hidrológico (incr. 3 §3) no pudo compensar con las vecinas
+    /// (m³; normalmente 0). Término propio del balance de material.
     pub fill_m3: f64,
+    /// Material movido por el acondicionamiento: lo que subió en las hondonadas rellenadas y bajó en
+    /// sus vecinas (m³, informativo; no cambia el balance).
+    pub conditioned_m3: f64,
 }
 
 impl LodReport {
@@ -486,6 +539,7 @@ impl LodReport {
         self.veg_lost += o.veg_lost;
         self.veg_created += o.veg_created;
         self.fill_m3 += o.fill_m3;
+        self.conditioned_m3 += o.conditioned_m3;
     }
 
     fn add(&mut self, t: &Transfer) {
@@ -497,7 +551,8 @@ impl LodReport {
 
 /// Un paso de topología completo: marcas del driver + aplicación.
 pub fn step(world: &mut World, cfg: &TerrenoConfig) -> LodReport {
-    let m = marks(world, cfg);
+    let mut m = marks(world, cfg);
+    cap_subdivisions(&mut m, cfg.lod.max_sub_frac);
     apply(world, cfg, &m)
 }
 
@@ -514,6 +569,7 @@ pub fn refine_initial(world: &mut World, cfg: &TerrenoConfig) -> LodReport {
     let mut estatico = cfg.clone();
     estatico.lod.dt_sub = f64::INFINITY;
     estatico.lod.dtheta_sub = f64::INFINITY;
+    estatico.lod.max_sub_frac = 0.0; // la génesis debe converger: sin tope por revisión
     let max = 8 * (cfg.lod.l_max - cfg.lod.l_min) + 8;
     for _ in 0..max {
         let rep = step(world, &estatico);
@@ -737,7 +793,7 @@ impl Cols {
         self.aspect.push(st.aspect);
         self.grad_e.push(st.grad_e);
         self.grad_n.push(st.grad_n);
-        self.w_cap.push(st.w_cap * erosion::w_cap_factor(cfg, z));
+        self.w_cap.push(st.w_cap * erosion::w_cap_factor(cfg, z, l));
         self.k_perm.push(st.k_perm);
         self.fert.push(st.fert);
         self.resource.push(st.resource);
@@ -763,6 +819,45 @@ impl Cols {
         self.swe[ns] = st.swe;
         self.veg[ns] = st.veg;
     }
+}
+
+/// Baja por igual a las `donors` (sin pasar de `floor`) hasta retirar `vol` m³, o todo lo que se
+/// pueda; devuelve el volumen retirado. Como el desplazamiento es el mismo para todas (salvo las que
+/// tocan el suelo), su orden de alturas no cambia.
+fn lower_to_floor(world: &mut World, donors: &[usize], floor: f64, vol: f64) -> f64 {
+    if donors.is_empty() || vol <= 0.0 {
+        return 0.0;
+    }
+    // (holgura sobre el suelo, área, posición), de menor a mayor holgura.
+    let mut d: Vec<(f64, f64, usize)> = donors
+        .iter()
+        .map(|&j| (world.h[j] - floor, world.topo.area[j], j))
+        .collect();
+    d.sort_by(|x, y| x.0.total_cmp(&y.0).then(x.2.cmp(&y.2)));
+    // Desplazamiento δ tal que Σ a_j·min(δ, holgura_j) = vol (o la holgura máxima si no alcanza).
+    let mut delta = d.iter().fold(0.0_f64, |m, x| m.max(x.0));
+    let mut a_active: f64 = d.iter().map(|x| x.1).sum();
+    let (mut prev, mut acc) = (0.0, 0.0);
+    for &(room, a, _) in &d {
+        let seg = a_active * (room - prev);
+        if acc + seg >= vol {
+            delta = prev + (vol - acc) / a_active;
+            break;
+        }
+        acc += seg;
+        prev = room;
+        a_active -= a;
+    }
+    let mut removed = 0.0;
+    for &(room, a, j) in &d {
+        let dj = delta.min(room);
+        if dj > 0.0 {
+            world.h[j] -= dj;
+            world.e[j] -= dj;
+            removed += dj * a;
+        }
+    }
+    removed
 }
 
 /// Media ponderada por área de un intensivo; si todos los valores coinciden, ese valor exacto (así
@@ -896,7 +991,8 @@ fn rebuild(
                     clima: acc.map(|x| x / a),
                     lock: false,
                     e: e_vol / g.area,
-                    z: area_mean(members.map(|m| (old.z_soil[m], old.topo.area[m]))),
+                    z: area_mean(members.map(|m| (old.z_soil[m], old.topo.area[m])))
+                        .max(erosion::soil_floor(cfg, l)),
                 };
                 cols.push_new(old, *k, &g, nc, cfg);
                 parent_slot[fam] = ns;
@@ -988,24 +1084,84 @@ fn rebuild(
 
     // Derivados globales sobre la malla nueva (§4), marca hidrológica y biomas de las hojas nuevas.
     hydro::recompute(world, cfg);
-    // Acondicionamiento hidrológico (incr. 3 §3): con relieve vivo, el detalle fino de una hoja nueva
-    // no está erosionado y sus hondonadas son un artefacto de bajar de escala (y un colapso puede
-    // dejar encerrada a una vecina). Un cambio de malla no puede crear hondonadas: una hoja solo
-    // queda en depresión si su origen lo estaba; si no, se rellena hasta la cota de derrame (como
-    // habría hecho el sedimento) y el volumen se apunta en `fill_m3`. Sin relieve vivo no se toca
-    // nada (incremento 2).
-    if cfg.erosion.enabled() {
-        let mut filled = false;
+    // Acondicionamiento hidrológico (incr. 3 §3). Una vez que el relieve ha sido erosionado, el
+    // detalle fino de una hoja nueva no lo está y sus hondonadas son un artefacto de bajar de escala
+    // (y un colapso puede dejar encerrada a una vecina). Regla: un cambio de malla no puede crear
+    // hondonadas; una hoja solo queda en depresión si su origen lo estaba. Cada grupo conexo de
+    // hondonadas nuevas se rellena hacia su cota de derrame, y ese material se toma de su borde (las
+    // vecinas de tierra por encima de la cota, bajadas por igual sin pasar de ella): se conserva
+    // exactamente y no aparecen hondonadas nuevas, porque toda vecina rebajada sigue tocando al grupo
+    // rellenado. Si el borde no alcanza, el grupo se rellena solo en la proporción que el borde puede
+    // pagar (queda como un lago poco hondo): nunca se crea material. `fill_m3` recoge solo el redondeo.
+    // Antes de erosionar (relieve en bruto) no se toca nada: esas hondonadas las rellena el propio
+    // sedimento de la génesis. Sin relieve vivo, tampoco (incremento 2).
+    if cfg.erosion.enabled() && world.e.iter().any(|&x| x != 0.0) {
+        let mut is_target = vec![false; n_new];
+        let mut any = false;
         for (s, &dep_antes) in origin_dep.iter().enumerate() {
             if !dep_antes && !world.es_oceano(s) && world.h[s] < world.filled_h[s] {
-                let d = world.filled_h[s] - world.h[s];
-                world.h[s] += d;
-                world.e[s] += d;
-                rep.fill_m3 += d * world.topo.area[s];
-                filled = true;
+                is_target[s] = true;
+                any = true;
             }
         }
-        if filled {
+        if any {
+            let mut seen = vec![false; n_new];
+            for start in 0..n_new {
+                if !is_target[start] || seen[start] {
+                    continue;
+                }
+                // Grupo conexo de hondonadas nuevas (en orden de posición: determinista).
+                let mut group = vec![start];
+                seen[start] = true;
+                let mut k = 0;
+                while k < group.len() {
+                    let c = group[k];
+                    k += 1;
+                    for &b in world.topo.neighbors(c) {
+                        let b = b as usize;
+                        if is_target[b] && !seen[b] {
+                            seen[b] = true;
+                            group.push(b);
+                        }
+                    }
+                }
+                group.sort_unstable();
+                let floor = group
+                    .iter()
+                    .fold(f64::NEG_INFINITY, |m, &c| m.max(world.filled_h[c]));
+                let mut donors: Vec<usize> = group
+                    .iter()
+                    .flat_map(|&c| world.topo.neighbors(c).iter().map(|&b| b as usize))
+                    .filter(|&b| !is_target[b] && !world.es_oceano(b) && world.h[b] > floor)
+                    .collect();
+                donors.sort_unstable();
+                donors.dedup();
+                // Lo que pide el grupo y lo que puede pagar su borde.
+                let need: f64 = group
+                    .iter()
+                    .map(|&c| (world.filled_h[c] - world.h[c]).max(0.0) * world.topo.area[c])
+                    .sum();
+                let room: f64 = donors
+                    .iter()
+                    .map(|&j| (world.h[j] - floor) * world.topo.area[j])
+                    .sum();
+                if need <= 0.0 || room <= 0.0 {
+                    continue;
+                }
+                let scale = (room / need).min(1.0);
+                let mut raised = 0.0;
+                for &c in &group {
+                    let d = (world.filled_h[c] - world.h[c]).max(0.0) * scale;
+                    if d > 0.0 {
+                        world.h[c] += d;
+                        world.e[c] += d;
+                        raised += d * world.topo.area[c];
+                    }
+                }
+                let removed = lower_to_floor(world, &donors, floor, raised);
+                rep.conditioned_m3 += raised;
+                rep.fill_m3 += raised - removed;
+            }
             hydro::recompute_after_erosion(world, cfg);
         }
     }

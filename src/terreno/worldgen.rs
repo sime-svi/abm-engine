@@ -132,13 +132,14 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
     // agua al mar.
     // El relleno de hondonadas artificiales del refinado inicial (acondicionamiento, incr. 3 §3)
     // también entra en el balance de material de la génesis.
-    let pre_fill = if cfg.lod.enabled() {
-        lod::refine_initial(&mut world, cfg).fill_m3
+    let pre = if cfg.lod.enabled() {
+        lod::refine_initial(&mut world, cfg)
     } else {
-        0.0
+        lod::LodReport::default()
     };
     let mut geo = erosion::genesis(&mut world, cfg);
-    geo.lod_fill_m3 += pre_fill;
+    geo.lod_fill_m3 += pre.fill_m3;
+    geo.lod_conditioned_m3 += pre.conditioned_m3;
     if cfg.lod.enabled() || cfg.erosion.geo_steps > 0 {
         set_initial_state(&mut world, cfg);
     }

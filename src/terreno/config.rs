@@ -31,6 +31,9 @@ pub struct RunCfg {
     pub output_path: String,
     /// Vuelca además un snapshot por celda del mundo generado (para inspección).
     pub dump_world: bool,
+    /// Carpeta de la caché de la génesis ("" = sin caché). La génesis depende solo de la semilla, la
+    /// config y la versión del código: se calcula una vez y se reutiliza.
+    pub genesis_cache: String,
 }
 
 impl Default for RunCfg {
@@ -41,6 +44,7 @@ impl Default for RunCfg {
             total_ticks: 365,
             output_path: "output".to_string(),
             dump_world: false,
+            genesis_cache: String::new(),
         }
     }
 }
@@ -163,9 +167,12 @@ pub struct SoilCfg {
     pub p_ref_soil: f64,
     /// Profundidad de raíces (m): más suelo (o sedimento) no retiene más agua útil.
     pub z_root: f64,
-    /// Fracción de la capacidad de campo que conserva la roca desnuda a escala de celda (grietas,
-    /// suelo disperso en vaguadas): una celda de decenas de km nunca es solo roca.
+    /// Fracción de la capacidad de campo que conserva la roca desnuda en las celdas del nivel 0
+    /// (grietas, suelo disperso en vaguadas): una celda de decenas de km nunca es solo roca.
     pub f_rock: f64,
+    /// Ritmo al que baja esa fracción con el nivel: `f_rock(L) = f_rock · 2^(−f_rock_beta·L)`. A
+    /// escala de 1 km un acantilado sí es solo roca.
+    pub f_rock_beta: f64,
 }
 
 impl Default for SoilCfg {
@@ -185,6 +192,7 @@ impl Default for SoilCfg {
             p_ref_soil: 1000.0,
             z_root: 1.5,
             f_rock: 0.3,
+            f_rock_beta: 0.5,
         }
     }
 }
@@ -238,6 +246,9 @@ pub struct LodCfg {
     pub h_hist: f64,
     /// Refinar los rasgos geográficos: costa, ríos y lagos.
     pub refine_features: bool,
+    /// Tope de subdivisiones que pide el driver en cada revisión, como fracción de las hojas
+    /// (0 = sin tope). No se aplica al refinado inicial de la génesis, que debe converger.
+    pub max_sub_frac: f64,
 }
 
 impl Default for LodCfg {
@@ -251,6 +262,7 @@ impl Default for LodCfg {
             dtheta_sub: 0.3,
             h_hist: 0.5,
             refine_features: true,
+            max_sub_frac: 0.02,
         }
     }
 }
@@ -407,10 +419,13 @@ impl TerrenoConfig {
         }
         // Con el suelo intacto (z = z_init) la capacidad debe ser la de la textura: z_init dentro
         // de [f_rock·z_init, z_root].
-        if !(s.z_root >= s.z_init && s.f_rock > 0.0 && s.f_rock <= 1.0) {
+        if !(s.z_root >= s.z_init && s.f_rock > 0.0 && s.f_rock <= 1.0 && s.f_rock_beta >= 0.0) {
             return Err(invalid(
-                "se requiere soil.z_root >= soil.z_init y 0 < soil.f_rock <= 1",
+                "se requiere soil.z_root >= soil.z_init, 0 < soil.f_rock <= 1 y soil.f_rock_beta >= 0",
             ));
+        }
+        if !(0.0..=1.0).contains(&self.lod.max_sub_frac) {
+            return Err(invalid("se requiere 0 <= lod.max_sub_frac <= 1"));
         }
         if self.planet.h_max <= self.planet.h_min {
             return Err(invalid("planet.h_max debe ser > planet.h_min"));

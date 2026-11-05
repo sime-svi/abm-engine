@@ -7,6 +7,8 @@
 //!
 //! Esquema v3 (incremento 3): profundidad media del suelo, balance de material de cada paso de
 //! erosión (erosionado, depositado, al mar, residual) y resumen de la génesis geológica.
+//!
+//! Esquema v4: acondicionamiento hidrológico del paso de topología (material movido y no compensado).
 
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +20,7 @@ use crate::terreno::world::{Biome, Surface, World};
 pub const N_BANDS: usize = 6;
 
 /// Versión del esquema del documento de salida.
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 /// Área por bioma (m²), con nombre estable para claves de salida.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -50,6 +52,8 @@ pub struct TerrenoTickMetrics {
     pub lod_subdivisions: u64,
     pub lod_collapses: u64,
     pub lod_to_ocean_m3: f64,
+    pub lod_conditioned_m3: f64,
+    pub lod_fill_m3: f64,
     /// Paso de erosión del tick (0 si no lo hubo): material arrancado, depositado, al mar y residual.
     pub eroded_m3: f64,
     pub deposited_m3: f64,
@@ -199,6 +203,8 @@ pub fn compute(world: &World, acct: &TickAccount, t: u64) -> TerrenoTickMetrics 
         lod_subdivisions: acct.lod_subdivisions,
         lod_collapses: acct.lod_collapses,
         lod_to_ocean_m3: acct.lod_to_ocean_vol,
+        lod_conditioned_m3: acct.lod_conditioned_m3,
+        lod_fill_m3: acct.lod_fill_m3,
         eroded_m3: acct.erosion.eroded_m3,
         deposited_m3: acct.erosion.deposited_m3,
         sediment_to_ocean_m3: acct.erosion.to_ocean_m3,

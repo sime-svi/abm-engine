@@ -13,7 +13,11 @@ fn main() -> Result<()> {
     let cfg = abm::terreno::TerrenoConfig::load(&config_path)
         .with_context(|| format!("al cargar la configuración '{config_path}'"))?;
 
-    let (doc, world) = abm::terreno::run(&cfg).context("al ejecutar la simulación de terreno")?;
+    // El reloj de pared solo mide el rendimiento para informar (CLAUDE §6: nunca decide nada).
+    let inicio = std::time::Instant::now();
+    let (doc, world, info) =
+        abm::terreno::run_with_info(&cfg).context("al ejecutar la simulación de terreno")?;
+    let segundos = inicio.elapsed().as_secs_f64();
 
     // Volcado de métricas por tick a JSON.
     std::fs::create_dir_all(&cfg.run.output_path).context("al crear la carpeta de salida")?;
@@ -30,6 +34,19 @@ fn main() -> Result<()> {
         println!("  Mundo    -> {dump_path}");
     }
 
+    if !cfg.run.genesis_cache.is_empty() {
+        let origen = if info.from_cache {
+            "leída de la caché"
+        } else {
+            "calculada y guardada en la caché"
+        };
+        println!(
+            "  Génesis {origen} ({}). Tiempo total: {segundos:.1} s.",
+            cfg.run.genesis_cache
+        );
+    } else {
+        println!("  Tiempo total: {segundos:.1} s.");
+    }
     let g = &doc.run.genesis;
     if g.erosion.steps > 0 {
         println!(

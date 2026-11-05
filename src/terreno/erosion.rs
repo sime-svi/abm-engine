@@ -60,8 +60,10 @@ pub struct ReliefSnapshot {
 pub struct GeoSummary {
     pub years: f64,
     pub erosion: ErosionReport,
-    /// Material añadido por el acondicionamiento de hojas nuevas en los refinados de la génesis.
+    /// Material que el acondicionamiento de los refinados de la génesis no pudo compensar con las
+    /// vecinas (normalmente 0), y material que movió (informativo).
     pub lod_fill_m3: f64,
+    pub lod_conditioned_m3: f64,
     pub before: ReliefSnapshot,
     pub after: ReliefSnapshot,
 }
@@ -290,10 +292,11 @@ pub fn step(
         if ocean[s] {
             continue;
         }
+        let floor = soil_floor(cfg, world.topo.level[s] as u32);
         let mut z = world.z_soil[s];
-        z = (z - eps[s]).max(0.0);
+        z = (z - eps[s]).max(floor);
         z += dep[s];
-        z = (z + diff[s]).max(0.0);
+        z = (z + diff[s]).max(floor);
         let f_clima = (t_bar[s].max(0.0) / sc.t_ref) * (p_bar[s] * 1000.0 / sc.p_ref_soil).min(1.0);
         z += sc.k_weath * f_clima * (-z / sc.z_ref).exp() * dt_years;
         world.z_soil[s] = z;
@@ -306,20 +309,37 @@ pub fn step(
     rep
 }
 
-/// Factor de capacidad de campo de un suelo de profundidad `z`: `clamp(z/z_init, f_rock,
-/// z_root/z_init)` (§7). Solo retiene agua útil la zona de raíces, y la roca desnuda conserva una
-/// fracción a escala de celda. Con `z = z_init` vale exactamente 1.
+/// Profundidad mínima de suelo de una celda de nivel `level` (§7): `z_init · f_rock(L)` con
+/// `f_rock(L) = f_rock · 2^(−β·L)`. Representa las bolsas de suelo (grietas, vaguadas) que una
+/// celda grande siempre contiene: a 200 km nunca es solo roca; a 1 km, un acantilado sí. Como es una
+/// profundidad (no un factor de capacidad), al subdividir las hijas la heredan y la capacidad total
+/// no cambia; al colapsar, la madre vuelve a su mínimo si sus hijas quedaron por debajo.
 #[inline]
-pub fn w_cap_factor(cfg: &TerrenoConfig, z: f64) -> f64 {
+pub fn soil_floor(cfg: &TerrenoConfig, level: u32) -> f64 {
     let s = &cfg.soil;
-    (z / s.z_init).clamp(s.f_rock, s.z_root / s.z_init)
+    s.z_init * s.f_rock * (-s.f_rock_beta * level as f64).exp2()
+}
+
+/// Factor de capacidad de campo de un suelo de profundidad `z` en una celda de nivel `level`:
+/// `clamp(z, suelo_mínimo(L), z_root) / z_init` (§7). Solo retiene agua útil la zona de raíces.
+/// Con `z = z_init` vale exactamente 1.
+#[inline]
+pub fn w_cap_factor(cfg: &TerrenoConfig, z: f64, level: u32) -> f64 {
+    let s = &cfg.soil;
+    (z / s.z_init).clamp(soil_floor(cfg, level) / s.z_init, s.z_root / s.z_init)
 }
 
 /// Capacidad de campo actual: `W_cap = W_cap0 · factor(z)` (§7). Con `z = z_init` es exactamente
 /// la de la textura (incr. 2).
 pub fn refresh_w_cap(world: &mut World, cfg: &TerrenoConfig) {
-    for ((wc, &wc0), &z) in world.w_cap.iter_mut().zip(&world.w_cap0).zip(&world.z_soil) {
-        *wc = wc0 * w_cap_factor(cfg, z);
+    for (((wc, &wc0), &z), &l) in world
+        .w_cap
+        .iter_mut()
+        .zip(&world.w_cap0)
+        .zip(&world.z_soil)
+        .zip(&world.topo.level)
+    {
+        *wc = wc0 * w_cap_factor(cfg, z, l as u32);
     }
 }
 
@@ -387,7 +407,9 @@ pub fn genesis(world: &mut World, cfg: &TerrenoConfig) -> GeoSummary {
         world.hydro_lock.iter_mut().for_each(|x| *x = false);
         lod::update_hydro_lock(world);
         if cfg.lod.enabled() {
-            summary.lod_fill_m3 += lod::refine_initial(world, cfg).fill_m3;
+            let rep = lod::refine_initial(world, cfg);
+            summary.lod_fill_m3 += rep.fill_m3;
+            summary.lod_conditioned_m3 += rep.conditioned_m3;
         }
     }
     summary.years = ec.geo_steps as f64 * ec.geo_dt_years;

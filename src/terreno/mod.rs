@@ -7,6 +7,7 @@
 //! `docs/design/terreno/incremento-{1,2,3}-diseno.md`. Entrada: `(semilla, config)`. Salida:
 //! métricas por tick + (opcional) snapshot por celda del mundo.
 
+pub mod cache;
 pub mod config;
 pub mod erosion;
 pub mod geometry;
@@ -32,8 +33,28 @@ use crate::error::SimError;
 /// (incremento 2 §9): si `t > 0` y `t` es múltiplo de `n_lod`, paso de topología; después los
 /// sistemas del incremento 1.
 pub fn run(cfg: &TerrenoConfig) -> Result<(TerrenoDoc, World), SimError> {
+    run_with_info(cfg).map(|(doc, world, _)| (doc, world))
+}
+
+/// Cómo se obtuvo la génesis. No forma parte de la salida: la salida es idéntica se use o no la
+/// caché.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GenesisInfo {
+    /// La génesis se leyó de la caché de disco (`run.genesis_cache`).
+    pub from_cache: bool,
+}
+
+/// Como [`run`], e informa además de si la génesis salió de la caché.
+pub fn run_with_info(cfg: &TerrenoConfig) -> Result<(TerrenoDoc, World, GenesisInfo), SimError> {
     cfg.validate()?;
-    let (mut world, genesis) = worldgen::generate_with_report(cfg);
+    let ((mut world, genesis), from_cache) = match cache::load(cfg)? {
+        Some(cached) => (cached, true),
+        None => {
+            let generated = worldgen::generate_with_report(cfg);
+            cache::save(cfg, &generated.0, &generated.1)?;
+            (generated, false)
+        }
+    };
     let mut scratch = systems::Scratch::new(world.topo.num_cells);
     let mut ticks = Vec::with_capacity(cfg.run.total_ticks as usize);
     let initial_cells = world.topo.num_cells as u64;
@@ -80,7 +101,7 @@ pub fn run(cfg: &TerrenoConfig) -> Result<(TerrenoDoc, World), SimError> {
         },
         ticks,
     };
-    Ok((doc, world))
+    Ok((doc, world, GenesisInfo { from_cache }))
 }
 
 /// Snapshot por celda del mundo generado (para inspección/depuración).

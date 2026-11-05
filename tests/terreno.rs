@@ -309,20 +309,12 @@ fn lod_ida_y_vuelta_devuelve_el_estado() {
     let vol0 = total_store_vol(&world);
     let n = world.topo.num_cells;
 
-    let todo = Marks {
-        want_sub: vec![true; n],
-        may_collapse: vec![false; n],
-        verify_collapses: false,
-    };
+    let todo = Marks::forced(vec![true; n], vec![false; n]);
     let ida = lod::apply(&mut world, &cfg, &todo);
     assert_eq!(ida.subdivisions as usize, n);
     assert!(world.topo.is_balanced());
     let m = world.topo.num_cells;
-    let nada = Marks {
-        want_sub: vec![false; m],
-        may_collapse: vec![true; m],
-        verify_collapses: false,
-    };
+    let nada = Marks::forced(vec![false; m], vec![true; m]);
     let vuelta = lod::apply(&mut world, &cfg, &nada);
     assert_eq!(vuelta.collapses as usize, n);
     let final_ = estado(&world);

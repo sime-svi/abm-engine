@@ -122,7 +122,7 @@ Hasta ahora las montañas y los valles del planeta eran fijos: salían de la sem
 
 ### El problema que resuelve
 
-Con la malla fina del incremento 2 aparecían **unos 9 700 lagos falsos**: hondonadas del ruido que en un planeta real se habrían rellenado hace mucho. Para los futuros agentes eso habría sido un desastre, porque el agua es infranqueable y cuenta como fuente de agua. Tras la génesis geológica quedan **30**.
+Con la malla fina del incremento 2 aparecían **unos 9 700 lagos falsos**: hondonadas del ruido que en un planeta real se habrían rellenado hace mucho. Para los futuros agentes eso habría sido un desastre, porque el agua es infranqueable y cuenta como fuente de agua. Tras la génesis geológica quedan **unos 50**, del orden de los lagos grandes de la Tierra.
 
 ### Cómo se ejecuta
 
@@ -131,11 +131,11 @@ cargo run --release --bin terreno    # génesis geológica + un año → output/
 cargo test --test erosion            # tests del relieve vivo
 ```
 
-Ahora tarda unos 38 s en modo optimizado, porque la génesis simula un millón de años. Todo se regula en `config/terreno.toml`, en las secciones `[erosion]` y `[soil]`. Con `geo_steps = 0` y `run_every = 0` vuelves exactamente al relieve fijo del incremento 2.
+La primera ejecución tarda unos 37 s en modo optimizado, porque la génesis simula un millón de años. Luego la génesis se guarda en `output/cache` y las siguientes tardan unos **8 s**. La caché se rehace sola si cambias la semilla, cualquier parámetro o el código. Todo se regula en `config/terreno.toml`, en las secciones `[erosion]` y `[soil]`. Con `geo_steps = 0` y `run_every = 0` vuelves exactamente al relieve fijo del incremento 2.
 
 ### Resultados
 
-- **Lagos falsos:** de 9 681 a 30.
+- **Lagos falsos:** de 9 681 a unos 50.
 - **Relieve:** la tierra queda de media 85 m más baja (de 491 a 406 m) y la fracción de tierra apenas cambia (de 39,3 % a 39,0 %). Siguen saliendo los 9 biomas.
 - **Clima:** el planeta se calienta 0,2 °C de media, porque con la tierra más baja hace menos frío.
 - **Durante la simulación** la erosión sigue a su ritmo real: unos 18 000 millones de m³ de sedimento al año en todo el planeta. Es del mismo orden que lo que llevan al mar los ríos de la Tierra de verdad.
@@ -147,5 +147,14 @@ Ahora tarda unos 38 s en modo optimizado, porque la génesis simula un millón d
 - **El suelo necesitaba dos límites.** Con la primera fórmula, la roca desnuda no guardaba nada de agua y los lagos rellenados de sedimento guardaban cantidades absurdas. Esa diferencia de humedad entre vecinas hacía que la malla se afinara sin parar (14 500 subdivisiones de golpe). Se limitó a lo físico: solo retiene agua útil la zona de raíces (1,5 m) y la roca conserva algo (30 %), porque una celda de decenas de kilómetros nunca es solo roca.
 - **Al afinar la malla durante la simulación volvían a salir lagos falsos.** El detalle fino nuevo no está erosionado. Ahora un cambio de malla no puede crear hondonadas: si aparece una donde no la había, se rellena como lo habría hecho el sedimento, y ese volumen se apunta aparte en el balance.
 - **Con la erosión apagada, el resultado es idéntico al del incremento 2**, comprobado valor a valor contra el programa antiguo.
+
+### Revisión y ajustes (05-11-2026)
+
+Una revisión externa propuso tres ajustes antes de seguir. Se aplicaron los tres, con dos matices que salieron al medir:
+- **El relleno de hondonadas ya no crea material.** Lo que sube en una hondonada lo pierden sus vecinas del borde, que bajan todas lo mismo y nunca por debajo del nivel de desagüe. Así tampoco aparecen hondonadas nuevas en el borde. Si el borde no tiene suficiente, la hondonada se queda como un lago poco hondo. Las cuentas cuadran hasta el redondeo del ordenador.
+- **El suelo mínimo depende del tamaño de la celda.** Una celda de 200 km siempre conserva bolsas de suelo (30 %); una de 26 km, menos (11 %); a 1 km un acantilado puede ser solo roca. *Matiz:* expresado como "capacidad mínima", al afinar la malla se perdía agua que no volvía al juntar las celdas; expresado como **profundidad mínima de suelo**, que las celdas hijas heredan, ese problema desaparece.
+- **Prueba de "independencia del camino":** una misma zona (un sexto del planeta) se simula fina todo el rato, gruesa→fina→gruesa y gruesa todo el rato. El material y la erosión coinciden al 0,3 %. *Matiz:* cuando una zona está fina **llueve algo más** (+4 % si lo está todo el rato). Con más detalle se ven pendientes más fuertes, y las montañas aumentan la lluvia más de lo que la reducen. No es un fallo de la malla: es un efecto de escala de la física, que ya estaba en el incremento 2. Corregirlo cambiaría resultados anteriores, así que queda como decisión pendiente.
+- **Ya estaban:** la histéresis (solo se juntan celdas cuando la diferencia baja de la mitad del umbral), que la formación de suelo baje con la profundidad, y que el agua que no cabe al afinar se vaya al mar contabilizada.
+- **Nuevos:** un **tope** de subdivisiones por revisión (el 2 % de las celdas, las más urgentes primero) y la **caché** de la génesis.
 
 Lo que **queda para los siguientes incrementos**: los lagos de verdad (que se llenan, se vacían y se desbordan), el agua repartida entre varias celdas de bajada, la fertilidad que cambia con el tiempo y el registro de eventos (incremento 4); y que la malla se afine también donde haya agentes, cuando existan.

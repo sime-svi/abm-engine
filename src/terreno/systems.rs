@@ -62,6 +62,9 @@ pub struct TickAccount {
     /// Subdivisiones y colapsos del paso de topología del tick (0 si no lo hubo).
     pub lod_subdivisions: u64,
     pub lod_collapses: u64,
+    /// Acondicionamiento del paso de topología: material movido y lo no compensado (m³).
+    pub lod_conditioned_m3: f64,
+    pub lod_fill_m3: f64,
     /// Paso de erosión del tick (vacío si no lo hubo; incr. 3 §9). No mueve agua.
     pub erosion: ErosionReport,
 }
@@ -172,6 +175,8 @@ pub fn step(
         discharge_max,
         lod_subdivisions: lod.subdivisions,
         lod_collapses: lod.collapses,
+        lod_conditioned_m3: lod.conditioned_m3,
+        lod_fill_m3: lod.fill_m3,
         erosion: ErosionReport::default(),
     }
 }

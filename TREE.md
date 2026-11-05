@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-05 — terreno incremento 3 (relieve vivo: erosión, sedimento y suelo) implementado
+Última actualización: 2026-11-05 — terreno incremento 3 (relieve vivo) + ajustes de la revisión (relleno exacto, caché de la génesis)
 
 ---
 
@@ -19,6 +19,7 @@ abm/
 ├── [x] README.md                  # Puesta en marcha para humanos
 ├── [~] Cargo.toml                 # Hoy paquete único `abm`; será el workspace de crates
 ├── [x] rust-toolchain.toml        # Fija la versión de Rust (reproducibilidad)
+├── [x] build.rs                   # Huella del código del terreno (clave de la caché de la génesis)
 ├── [x] .gitignore                 # Ignora /target, /output, infra/.env
 │
 ├── config/
@@ -112,7 +113,7 @@ una génesis geológica de un millón de años). El terreno es un binario aparte
 
 ```
 abm/
-├── [x] Cargo.toml · rust-toolchain.toml · .gitignore
+├── [x] Cargo.toml · rust-toolchain.toml · build.rs · .gitignore
 ├── config/[x] default.toml · terreno.toml (con [lod])
 ├── docs/design/[x]                           # una carpeta por fase (CLAUDE §8.1):
 │      inicial/ (README + minimal-model) · persistencia/ (README + design)
@@ -133,7 +134,8 @@ abm/
              world (SoA + Topology multinivel con vecindad CSR) · hydro (priority-flood, drenaje,
              ríos/lagos, distancia al mar) · lod (vecindad multinivel, reparto conservativo, driver,
              equilibrio 2:1, paso de topología, acondicionamiento) · erosion (incisión implícita,
-             sedimento, difusión de ladera, suelo, génesis geológica) · worldgen (génesis +
+             sedimento, difusión de ladera, suelo, génesis geológica) · cache (génesis en disco,
+             bit a bit) · worldgen (génesis +
              refinamiento inicial) ·
              systems (clima, nieve, balance hídrico, difusión simétrica, agua superficial,
              vegetación, interfaz de agentes) · metrics (esquema v3) · mod (run + world_dump)
@@ -141,11 +143,11 @@ abm/
 
 Estado: determinista (misma semilla → mismo JSON byte a byte, verificado también entre procesos y
 entre `debug` y `release`); `cargo fmt` / `clippy -D warnings` / `test` en verde (12 unitarios +
-forrajeo 3 + terreno 14 + erosión 9; el test de BD es `#[ignore]`). Terreno: balance de agua a
-~1e-12 con LOD y erosión, balance de material de la erosión cerrado, 9 biomas emergentes, ríos y solo
-~30 lagos (la génesis geológica vacía las ~9 700 hondonadas falsas del ruido); ~193 000–199 000
-celdas con la config por defecto y la malla converge. Con la erosión apagada, salida idéntica a la
-del incremento 2.
+forrajeo 3 + terreno 14 + erosión 13; el test de BD es `#[ignore]`). Terreno: balance de agua a
+~1e-12 con LOD y erosión, balance de material cerrado (también el acondicionamiento: exacto), 9 biomas
+emergentes, ríos y ~50 lagos (la génesis geológica vacía las ~9 700 hondonadas falsas del ruido);
+~195 000–205 000 celdas con la config por defecto. Génesis en caché (`output/cache`): ~37 s la primera
+vez, ~8 s después. Con la erosión apagada, salida idéntica a la del incremento 2.
 El motor de forrajeo ya **escribe en la BD** además del JSON: el destino se elige por config
 (`[persistence] sink = "json" | "postgres" | "both"`); la conexión se toma del entorno
 (`DATABASE_URL` o `POSTGRES_*` de `infra/.env`, autocargado). Infraestructura `infra/`

@@ -449,3 +449,41 @@ Formato de entrada:
 - **Estado tras el cambio:** Incremento 3 **implementado y verificado**. Siguiente del plan: incremento
   4 (lagos dinámicos, flujo multidireccional, fertilidad dinámica, eventos) o los agentes en el
   planeta.
+
+## [2026-11-05] Revisión externa del incremento 3: relleno exacto, suelo mínimo por nivel, independencia del camino, tope y caché
+
+- **Qué:** El responsable trajo una revisión del incremento 3 ("tres ajustes antes de seguir", dos
+  protecciones y dos notas). Hecho:
+  1. **Acondicionamiento exacto.** El material del relleno sale del borde de cada grupo de hondonadas
+     (bajado por igual, sin pasar de la cota de derrame); si el borde no alcanza, se rellena en
+     proporción. Solo actúa con relieve ya erosionado. Lo no compensado es redondeo (−7,9·10⁻⁶ m³
+     sobre 2,2·10¹³ m³).
+  2. **Test de independencia del camino** con dinámica: (a) fina, (b) gruesa→fina→gruesa,
+     (c) gruesa.
+  3. **Suelo mínimo por nivel**: `z_mín(L) = z_init·f_rock·2^(−β·L)` (β = 0.5).
+  4. **Tope de subdivisiones** por revisión (`lod.max_sub_frac = 0.02`, las más urgentes primero).
+  5. **Caché de la génesis** (`run.genesis_cache`, `src/terreno/cache.rs`; huella del código en
+     `build.rs`): 36,9 s → 8,3 s, y el mundo se recupera bit a bit.
+  - Ya existían: la histéresis (`h_hist = 0.5`) y la formación de suelo decreciente con la
+    profundidad.
+- **Por qué:** Conservación exacta en cada corte (regla 1 del responsable), demostrar que la malla
+  adaptativa no deja huella, y quitar el artefacto del 30 % de roca a escala fina.
+- **Hallazgos:**
+  - **A. El ajuste 3 chocaba con la prueba 2.** Como "capacidad mínima", al subdividir se perdía agua
+    que no volvía al colapsar (refinar la cara 0 bajaba su capacidad un 10,5 %). → Reformulado como
+    **profundidad mínima de suelo** que las hijas heredan.
+  - **B. Efecto de escala de la física base.** Con la zona fina llueve +4,0 % (a) / +1,4 % (b) frente
+    a (c), por la asimetría del factor orográfico con pendientes más fuertes; la incisión arranca más
+    suelo en el tramo fino. (b) vuelve a comportarse como (c): no es huella de los operadores. Ya
+    existía en el incremento 2 (+3 % de lluvia). Arreglarlo (parametrizaciones de pendiente a escala
+    de referencia) cambiaría resultados del incremento 2 → **pendiente de decisión del responsable**.
+  - Tolerancias del test fijadas sobre lo medido: (b)/(c) agua < 1 %, material < 0,1 %, suelo < 4 %,
+    erosión < 1 %; (a)/(b) agua < 6 %, suelo < 5 %.
+- **Verificación:** `fmt` + `clippy -D warnings` limpios; `cargo test` en verde (12 + 3 + 14 +
+  erosión 13). No regresión frente al binario del incremento 2: 7 300 valores, 0 diferencias.
+  Resultados: 52 lagos tras la génesis, tierra 39,3 → 38,9 %, ~204 700 celdas al final del año,
+  agua ≤ 2,6·10⁻¹².
+- **Estado tras el cambio:** Terreno listo para recibir agentes. Próximos pasos acordados:
+  - el responsable rehace la **biología de los agentes por días** (vida, metabolismo, apetito,
+    rebrote: es su diseño);
+  - Claude divide el código en **paquetes** (CLAUDE §3).

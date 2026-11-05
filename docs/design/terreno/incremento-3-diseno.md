@@ -1,7 +1,7 @@
 # Diseño técnico — Terreno · Incremento 3: Relieve vivo (erosión, sedimento y suelo)
 
 **Sistema:** Evolución del relieve y del suelo sobre el sustrato de los incrementos 1 y 2.
-**Versión:** 1.1 (2026-11-05) — implementado. Las 4 decisiones de §14 fueron confirmadas por el responsable el 2026-11-04; la v1.1 incorpora lo aprendido al implementar (§16).
+**Versión:** 1.2 (2026-11-05) — implementado. Las 4 decisiones de §14 fueron confirmadas por el responsable el 2026-11-04; la v1.1 incorpora lo aprendido al implementar y la v1.2 los ajustes de una revisión externa (§16).
 **Documentos previos:** [`diseno_terreno_espacio_geografia.md`](./diseno_terreno_espacio_geografia.md) §6.7, §6.8, §9, §10 (visión madre) · [`incremento-1-diseno.md`](./incremento-1-diseno.md) · [`incremento-2-diseno.md`](./incremento-2-diseno.md) (LOD dinámico, ya implementado).
 **Destinatario:** Claude Code para implementación.
 **Naturaleza:** Plano teórico del incremento. Fija la matemática y las reglas de determinismo y conservación; el código queda a criterio de quien programe.
@@ -70,7 +70,15 @@ La pendiente y la orientación de la física (escorrentía, orografía) usan `�
 - La difusión (§6) solo actúa entre celdas de tierra y, bajo su condición de estabilidad, cumple el principio del máximo.
 - El depósito solo sube.
 
-**Acondicionamiento hidrológico de las hojas nuevas** (añadido en la v1.1, §16). El detalle fino que añade una subdivisión posterior (las octavas extra de `h0`) **no** está erosionado, y sus hondonadas son un artefacto de bajar de escala. Además, un colapso puede dejar encerrada a una vecina. Regla: **un cambio de malla no puede crear hondonadas**. Una hoja solo queda en depresión (`h < filled_h`) si su origen lo estaba: la madre para una hija, alguna de las hermanas para una madre, ella misma para una hoja que no cambia. Si no, se rellena hasta la cota de derrame, como habría hecho el sedimento. El volumen se apunta en `fill_m3`, un término propio del balance de material. Solo se aplica con el relieve vivo activo; sin él, todo queda como en el incremento 2.
+**Acondicionamiento hidrológico de las hojas nuevas** (v1.1; compensado exactamente desde la v1.2, §16). El detalle fino que añade una subdivisión posterior (las octavas extra de `h0`) **no** está erosionado, y sus hondonadas son un artefacto de bajar de escala. Además, un colapso puede dejar encerrada a una vecina. Regla: **un cambio de malla no puede crear hondonadas**. Una hoja solo queda en depresión (`h < filled_h`) si su origen lo estaba: la madre para una hija, alguna de las hermanas para una madre, ella misma para una hoja que no cambia.
+
+Procedimiento, por cada grupo conexo de hondonadas nuevas:
+1. Se rellena hacia la cota de derrame `S` (la máxima del grupo).
+2. Ese material se toma de su **borde**: las vecinas de tierra por encima de `S`, que se **bajan todas la misma cantidad sin pasar de `S`**. El orden de alturas entre ellas no cambia.
+3. Toda vecina rebajada sigue tocando al grupo rellenado, que desagua por `S`, así que **no aparecen hondonadas nuevas**, tampoco en el borde.
+4. Si el borde no tiene material suficiente, el grupo se rellena solo en la proporción que el borde puede pagar y queda como un lago poco hondo. **Nunca se crea material**: `fill_m3` solo recoge el redondeo.
+
+Solo se aplica con el relieve ya erosionado (`e ≠ 0`). Las hondonadas del ruido en bruto, antes de la génesis, las rellena el propio sedimento. Sin relieve vivo, todo queda como en el incremento 2.
 
 ---
 
@@ -147,16 +155,19 @@ La madre usa `θ`. Aquí se usa `P̄`, que está disponible en la génesis sin s
 - **Depósito:** se convierte en suelo: `z += d/a`.
 - **Difusión:** mueve suelo: `z += Δh_dif`, con `z ≥ 0` (si se agota, aflora la roca).
 
-**Capacidad de campo** (acotada en la v1.1, §16):
+**Capacidad de campo** (acotada en la v1.1; mínimo por nivel en la v1.2, §16):
 ```
-W_cap = W_cap0 · clamp( z / z_init , f_rock , z_root / z_init )
+W_cap = W_cap0 · clamp( z , z_mín(L) , z_root ) / z_init
+z_mín(L) = z_init · f_rock · 2^(−β·L)        (β = f_rock_beta)
 ```
+- `z_mín(L)` es una **profundidad mínima de suelo por nivel**, que representa las bolsas de suelo de las grietas y vaguadas. Con `f_rock = 0.3` y `β = 0.5` es del 30 % de `z_init` en el nivel 0 y del ~11 % en el nivel 3 (~4 % en el 6, la resolución objetivo de la madre). A 200 km una celda nunca es solo roca; a 1 km, un acantilado sí.
+- La erosión no baja `z` por debajo de `z_mín(L)`. Al subdividir, las hijas **heredan** la profundidad de la madre, que es ≥ su propio mínimo, así que la capacidad total no cambia. Al colapsar, la madre toma la media y, si queda por debajo, su mínimo.
 - `W_cap0` es el valor por textura del incremento 2 (puro). Con `z = z_init` el factor vale exactamente 1: es **idéntico, bit a bit**, al incremento 2. Equivale a la `W_cap = z·θ_fc` de la madre con `θ_fc = W_cap0/z_init`.
 - **Techo `z_root`** (profundidad de raíces): solo retiene agua útil la zona de raíces. Sin techo, los lagos rellenados con cientos de metros de sedimento daban capacidades absurdas (de hasta 136 m de agua).
-- **Suelo `f_rock`:** una celda de decenas de km nunca es solo roca, siempre quedan grietas y suelo en vaguadas. Sin este suelo, la roca desnuda (θ = 0) junto a suelo profundo disparaba el criterio de humedad del LOD por todas partes.
+- **Mínimo `z_mín(L)`:** una celda de decenas de km nunca es solo roca, siempre quedan grietas y suelo en vaguadas. Sin este mínimo, la roca desnuda (θ = 0) junto a suelo profundo disparaba el criterio de humedad del LOD por todas partes.
 
 **Consecuencias:**
-- **Roca desnuda** (`z → 0`): `W_cap → f_rock·W_cap0`. El agua escurre casi toda y la vegetación sufre. Emergen las cumbres peladas.
+- **Roca desnuda** (`z → z_mín(L)`): `W_cap → f_rock(L)·W_cap0`. El agua escurre casi toda y la vegetación sufre. Emergen las cumbres peladas.
 - **Si `W_cap` encoge** por debajo de `W`, el exceso se drena en el siguiente balance hídrico, por el mismo mecanismo del incremento 1. Se conserva y no hace falta un término nuevo.
 - **Corrección obligada del reparto del LOD** (incr. 2 §6.1). Hoy, si las hijas de tierra suman capacidad 0, todo va al mar, incluidas la nieve y la biomasa. Debe separarse: la nieve y la biomasa van a las hijas de tierra aunque `W_cap = 0`, y solo el agua del suelo que no cabe va al mar.
 
@@ -250,7 +261,14 @@ Todos son propuestas de partida, a calibrar contra los objetivos de §11.
 | `t_ref` | temperatura de referencia (°C) | 15 |
 | `p_ref_soil` | lluvia de referencia (mm/año) | 1000 |
 | `z_root` | profundidad de raíces: techo de la capacidad (m) | 1.5 |
-| `f_rock` | fracción de capacidad de la roca desnuda | 0.3 |
+| `f_rock` | suelo mínimo en el nivel 0, como fracción de `z_init` | 0.3 |
+| `f_rock_beta` | ritmo al que baja ese mínimo con el nivel (`2^(−β·L)`) | 0.5 |
+
+### Otros añadidos (v1.2)
+| Clave | Significado | Defecto |
+|---|---|---|
+| `lod.max_sub_frac` | tope de subdivisiones que pide el driver por revisión, como fracción de las hojas (las más urgentes primero; 0 = sin tope; no se aplica al refinado de la génesis) | 0.02 |
+| `run.genesis_cache` | carpeta de la caché de la génesis (`""` = sin caché) | `"output/cache"` en `config/terreno.toml` |
 
 **Comprobación de órdenes de magnitud** (`K = 1e-6`, `m = 0.5`): en un río con cuenca de 10⁴ km² y `P̄ = 0.5 m/año`, `Q ≈ 5·10⁹ m³/año`. Con pendiente 0.002, `E ≈ 1e-6 · 7·10⁴ · 0.002 ≈ 0.14 mm/año`, del orden real. En un millón de años da del orden de cien metros de valle; más donde la pendiente es mayor.
 
@@ -341,3 +359,30 @@ Todos son propuestas de partida, a calibrar contra los objetivos de §11.
 - `z` se arrastra también en el océano, sin uso, con la misma regla de copia y media que `e`. Así los operadores del LOD no tienen casos especiales.
 - La distancia al mar no se recalcula tras un paso de erosión, porque la tierra no pasa a mar (§3).
 - La erosión en ejecución corre cada `run_every = 365` ticks: en una corrida de un año no llega a actuar, la primera vez es en el tick 365.
+
+### Revisión externa (2026-11-05, v1.2)
+
+El responsable trajo una revisión del incremento con tres ajustes, dos protecciones y dos notas. Qué se hizo con cada una:
+
+| Propuesta | Qué se hizo |
+|---|---|
+| **1. El relleno de hondonadas crea material de la nada.** | Ahora es **exacto**: el material sale del borde de cada grupo de hondonadas, bajado por igual sin pasar de la cota de derrame. Si el borde no alcanza, se rellena en proporción (§3). Lo no compensado es redondeo: −7,9·10⁻⁶ m³ sobre 2,2·10¹³ m³ movidos en la génesis. Ajuste extra: antes de erosionar no se acondiciona, porque esas hondonadas las rellena el sedimento. |
+| **2. Falta la prueba de independencia del camino.** | Test `independencia_del_camino_con_dinamica`, con la cara 0 del cubo y erosión durante la partida: (a) fina siempre, (b) gruesa→fina→gruesa y (c) gruesa siempre. Medido: material y erosión coinciden al 0,02–0,3 %; agua 0,5 % (b/c) y 3,8 % (a/b); suelo 2,3–2,4 %. Ver hallazgo B. |
+| **3. La capacidad de la roca debe depender del tamaño de celda.** | Hecho, como **profundidad mínima de suelo por nivel** (§7) y no como factor de capacidad. Ver hallazgo A. |
+| Histéresis al colapsar (`g_col = 0,6·g_sub`) | **Ya existía** desde el incremento 2: `h_hist = 0.5`, más estricta. Sin cambios. |
+| Tope de subdivisiones por revisión | `lod.max_sub_frac = 0.02`, las más urgentes primero (los rasgos, y después la mayor razón variación/umbral). Test `el_tope_deja_pasar_las_mas_urgentes`. |
+| Guardar la génesis en disco | Caché `run.genesis_cache` (`src/terreno/cache.rs`). La clave incluye la huella del código (`build.rs`), así que nunca devuelve un mundo de otra versión. El mundo se recupera bit a bit (test `la_cache_reproduce_la_genesis_bit_a_bit`). Una corrida pasa de 36,9 s a **8,3 s**. |
+| ¿La formación de suelo de 0,1 mm/año es demasiado alta? | Es la tasa **sobre roca desnuda** y ya **baja con la profundidad** (`exp(−z/z_ref)`, madre §6.8). Sin cambios. |
+
+**Hallazgo A — el ajuste 3, tal como venía, chocaba con la prueba 2.** Con un mínimo de capacidad que baja con el nivel, al subdividir una celda de roca sus hijas perdían capacidad, y el agua sobrante se iba al mar. Al volver a juntarlas, esa agua ya no volvía: era una huella real de la malla. Al refinar la cara 0 un nivel, la capacidad total bajaba un 10,5 % (un 5 % por la textura y el resto por este mínimo). La solución fue expresar el mínimo como **profundidad de suelo**, que las hijas heredan. Así el refinado no destruye capacidad, y una celda fina que la erosión deja en roca sí puede quedarse casi sin suelo.
+
+**Hallazgo B — efecto de escala en la física base.** Descompuesto el balance de los tres casos de la prueba 2 (el agua cierra en todos a 10⁻¹⁶):
+- Con la zona fina **llueve más**: +4,0 % en (a) y +1,4 % en (b) frente a (c).
+- Causa: el factor orográfico. Con más detalle hay más pendiente, y su efecto es asimétrico (llega a triplicar la lluvia a barlovento, pero no la baja de 0,2 a sotavento).
+- Por la misma causa, la incisión arranca más suelo en el tramo fino.
+- Tras volver a gruesa, (b) se comporta como (c). No hay huella de los operadores del LOD, cuya ida y vuelta es exacta (§6.3): lo que queda es el efecto de la resolución mientras la zona estuvo fina.
+- Este efecto ya existía en el incremento 2: allí el LOD subía la lluvia un 3 %.
+
+Arreglarlo exige calcular las parametrizaciones que dependen de la pendiente (orografía, escorrentía, textura, incisión) a una **escala de referencia** común. Eso cambiaría los resultados del incremento 2, así que queda como decisión pendiente del responsable.
+
+**Resultados tras la revisión** (config por defecto, un año): 52 lagos tras la génesis (antes 30; ahora algunas hondonadas quedan como lagos poco hondos porque el borde no podía pagar el relleno). Tierra 39,3 % → 38,9 %. ~204 700 celdas al final del año. Balance de agua ≤ 2,6·10⁻¹². Con la erosión apagada, la salida sigue siendo **idéntica** a la del incremento 2 (7 300 valores, 0 diferencias). Tests: 12 unitarios + forrajeo 3 + terreno 14 + erosión 13.
