@@ -1,0 +1,114 @@
+# Experimento: el planeta SIN la nota de sombra pluviométrica (k_oro = 0.5, sin agotamiento de humedad,
+# sin c_P y con el fondo marino como relieve). Reproduce byte a byte la salida del commit bb6a8c0 (salvo el
+# nombre). Igual que config/terreno.toml salvo `name` y esos cuatro interruptores.
+# Configuración de la fase «terreno» (incrementos 1, 2 y 3). TODOS los parámetros viven aquí (CLAUDE §5).
+# Los defaults son los del documento madre REESCALADOS al tick diario (T_anio=365): toda tasa por
+# tick × 48/365, toda cadencia en ticks × 365/48 (diseño §7).
+
+[run]
+name        = "terreno_sin_sombra" # nombre legible => nombre del JSON de salida
+seed        = 42           # semilla del RNG raíz. (seed, config) => mundo reproducible
+total_ticks = 365          # ticks a simular (1 año con el tick diario)
+output_path = "output"     # carpeta destino (ignorada por git)
+dump_world  = false         # true => vuelca además un snapshot por celda del mundo generado
+genesis_cache = "output/cache" # caché de la génesis ("" = sin caché): se calcula una vez por (semilla, config, código)
+
+[planet]
+r_km      = 6371.0         # radio del planeta (km)
+n0        = 48             # celdas por arista de cara en L=0 (6·n0² celdas totales)
+sea_level = 0.0            # cota por debajo de la cual hay océano (m)
+h_min     = -11000.0       # elevación mínima (m)
+h_max     = 9000.0         # elevación máxima (m)
+
+[worldgen]
+noise_octaves      = 6        # octavas del ruido de elevación (detalle)
+persistence        = 0.5      # peso decreciente de cada octava
+lacunarity         = 2.0      # subida de frecuencia por octava
+base_freq          = 1.6      # frecuencia base (nº de continentes ~)
+octaves_per_level  = 1        # octavas extra por cada nivel LOD sobre l_min (detalle fino al afinar)
+land_exp           = 3.0      # exponente hipsométrico (>1 => domina la tierra baja)
+river_threshold_km2 = 80000.0 # área de drenaje mínima para ser río (km²)
+resource_density   = 0.05     # fracción de celdas de tierra con depósito de recurso
+
+[climate]
+t_equator         = 30.0   # temperatura media en el ecuador a nivel del mar (°C)
+k_lat             = 0.6     # caída de temperatura por grado de latitud (°C/°)
+lapse             = 6.5     # gradiente térmico vertical (°C/km)
+seas_amp_pole     = 25.0    # amplitud estacional máxima (en el polo) (°C)
+t_year            = 365.0   # duración del año (ticks). >= 24 (anti-aliasing)
+t_freeze          = 0.0     # umbral de congelación lluvia→nieve (°C)
+k_melt            = 0.26    # fusión de nieve por grado (mm/(°C·tick)) [2·48/365]
+p_ref             = 5.0     # precipitación de referencia (mm/tick). Calibrada (>2.6 reescalado) para selva
+k_oro             = 0.5     # sensibilidad orográfica (nota de sombra pluviométrica: 40 propuesto, 150 calibrado por objetivos; 0.5 = sin sombra)
+m_oro_min         = 0.2     # factor orográfico mínimo (sotavento seco)
+m_oro_max         = 3.0     # factor orográfico máximo (barlovento húmedo)
+moisture_length_km = 1500.0 # escala de secado tierra adentro (km)
+moisture_from_coast = true  # distancia de humedad desde la línea de costa (false = desde el centro de la celda de mar, hasta el incr. 3)
+d_oro_km          = 25.0    # escala (km) a la que la lluvia "ve" el relieve (nota de lluvia orográfica; 0 = pendiente local)
+seas_precip_amp   = 0.0     # amplitud de la modulación estacional de lluvia (0 = suave)
+# Sombra pluviométrica extensa (nota de sombra pluviométrica §3): el aire que sube una cordillera
+# suelta su vapor y no lo recupera al bajar. w = exp(-Λ/h_v), con Λ los metros de subida recientes
+# del camino del viento (hacia atrás, en pasos de d_oro, hasta el mar o l_traj_km).
+agotamiento_humedad = false # false = sin agotamiento (w = 1)
+h_v_m             = 2500.0  # subida que deja al aire con ~37 % de su vapor (m)
+l_recarga_km      = 1000.0  # distancia de recarga de humedad sobre tierra (km)
+l_traj_km         = 2000.0  # longitud máxima del camino hacia atrás (km)
+conservar_lluvia  = false   # si orografía y agotamiento desvían la lluvia total sobre tierra más de tol_lluvia, factor c_P en la génesis
+tol_lluvia        = 0.05    # desviación admitida (5 %)
+mar_plano         = false   # el aire ve el mar plano: sin efecto orográfico sobre el mar ni pendiente del fondo marino en la costa (decisión técnica)
+
+[soil]
+runoff_base = 0.10         # coeficiente base de escorrentía
+k_slope     = 0.5          # sensibilidad de la escorrentía a la pendiente
+k_sat       = 0.4          # sensibilidad de la escorrentía a la saturación
+k_et        = 0.13         # evapotranspiración por grado (mm/(°C·tick)) [1.0·48/365]
+k_lat_flow  = 0.0066       # difusión lateral de humedad [0.05·48/365]
+w_cap_min   = 50.0         # capacidad de campo mínima (mm)
+w_cap_max   = 300.0        # capacidad de campo máxima (mm)
+# Suelo vivo (incremento 3). Tasas por AÑO, no por tick.
+z_init      = 1.0          # profundidad de suelo inicial (m); con z = z_init, capacidad = la de la textura
+k_weath     = 1e-4         # meteorización máxima: roca -> suelo (m/año). Calibrado: rango real 1e-5..1e-4
+z_ref       = 0.5          # profundidad de referencia: con más suelo, se forma más despacio (m)
+t_ref       = 15.0         # temperatura de referencia de la meteorización (°C)
+p_ref_soil  = 1000.0       # lluvia a partir de la cual la humedad ya no acelera la meteorización (mm/año)
+z_root      = 1.5          # profundidad de raíces: más suelo no retiene más agua útil (m)
+f_rock      = 0.3          # fracción de capacidad que conserva la roca desnuda en celdas del nivel 0 (calibrado)
+f_rock_beta = 0.5          # baja con el nivel: f_rock(L) = f_rock · 2^(−f_rock_beta·L) (30 % en L0, ~11 % en L3)
+
+[vegetation]
+theta_opt   = 0.6          # humedad óptima
+sigma_theta = 0.25         # tolerancia de humedad
+t_opt       = 22.0         # temperatura óptima (°C)
+sigma_t     = 12.0         # tolerancia de temperatura (°C)
+k_max       = 100.0        # capacidad de carga máxima
+r_veg       = 0.026        # tasa de crecimiento vegetal (1/tick) [0.2·48/365]
+n_veg       = 30           # cadencia de vegetación (ticks) [4·365/48]
+v_init      = 1.0          # biomasa inicial de la tierra (y de la tierra nueva que descubre el LOD)
+
+[lod]
+# LOD dinámico (incremento 2): la malla se subdivide donde hay detalle y se colapsa donde no.
+l_min           = 0        # nivel base uniforme (antes planet.l_unif)
+l_max           = 3        # nivel máximo; l_max = l_min => LOD apagado (malla uniforme del incr. 1)
+n_lod           = 60       # cada cuántos ticks se revisa la malla
+dh_sub          = 500.0    # m: diferencia de altura con un vecino de tierra que pide subdividir
+dt_sub          = 4.0      # °C: ídem temperatura
+dtheta_sub      = 0.3      # ídem humedad relativa del suelo (0..1)
+h_hist          = 0.5      # histéresis: solo se colapsa por debajo de h_hist · umbral
+refine_features = true     # afinar costas, ríos y lagos
+max_sub_frac    = 0.02     # tope de subdivisiones por revisión (fracción de las celdas; 0 = sin tope)
+
+[erosion]
+# Relieve vivo (incremento 3): los ríos excavan, el sedimento rellena hondonadas, las laderas se
+# suavizan. Tasas por AÑO. Antes del tick 0 se "envejece" el planeta (génesis geológica); durante la
+# simulación la erosión sigue a ritmo real (casi imperceptible en pocos años).
+geo_steps    = 200         # pasos de la génesis geológica (0 = sin génesis)
+geo_dt_years = 5000.0      # años por paso (200 × 5000 = 1 millón de años)
+geo_rounds   = 2           # rondas erosión <-> refinado de la malla
+k_ero        = 1e-6        # erodibilidad K de la potencia de arroyo (caudal en m³/año)
+m_ero        = 0.5         # exponente del caudal (el de la pendiente es 1)
+kappa_dif    = 10.0        # difusividad de ladera efectiva (m²/año)
+run_every    = 365         # cada cuántos ticks se erosiona durante la simulación (0 = nunca)
+run_accel    = 1.0         # acelerador del tiempo geológico en la simulación (1 = realista)
+
+[persistence]
+sink = "json"              # destino de la salida (en este incremento solo JSON)

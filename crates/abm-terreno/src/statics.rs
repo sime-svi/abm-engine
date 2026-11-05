@@ -34,6 +34,9 @@ pub struct CellStatics {
     pub aspect: f64,
     pub grad_e: f64,
     pub grad_n: f64,
+    /// `∂h/∂este` del relieve que ve el aire, con el mar plano al nivel del mar (`climate.mar_plano`,
+    /// nota de sombra pluviométrica §6): las mismas diferencias centrales con `max(h, nivel_mar)`.
+    pub grad_air_e: f64,
     pub w_cap: f64,
     pub k_perm: f64,
     pub fert: f64,
@@ -239,7 +242,9 @@ impl StaticGen {
             )
         };
         let denom = 2.0 * delta * self.r_planet;
-        let gx = (at(g.east, 1.0) - at(g.east, -1.0)) / denom;
+        let (h_este, h_oeste) = (at(g.east, 1.0), at(g.east, -1.0));
+        let gx = (h_este - h_oeste) / denom;
+        let gx_air = (h_este.max(self.sea) - h_oeste.max(self.sea)) / denom;
         let gy = (at(g.north, 1.0) - at(g.north, -1.0)) / denom;
         let slope = (gx * gx + gy * gy).sqrt().atan();
         let aspect = gy.atan2(gx);
@@ -275,6 +280,7 @@ impl StaticGen {
             aspect,
             grad_e: gx,
             grad_n: gy,
+            grad_air_e: gx_air,
             w_cap,
             k_perm,
             fert,
@@ -304,25 +310,45 @@ impl StaticGen {
     /// en su base este/norte. Es función pura de la posición: en un punto del planeta da lo mismo
     /// que la zona esté en malla fina o gruesa. `(0, 0)` si la celda no usa la referencia.
     pub fn oro_gradient0(&self, g: &CellGeom, level: u32) -> (f64, f64) {
+        let (ge, gn, _) = self.oro_gradient0_air(g, level);
+        (ge, gn)
+    }
+
+    /// Como [`StaticGen::oro_gradient0`], y además la componente este del relieve que ve el aire,
+    /// con el mar plano (`max(h, nivel_mar)`, `climate.mar_plano`): `(este, norte, este_aire)`.
+    pub fn oro_gradient0_air(&self, g: &CellGeom, level: u32) -> (f64, f64, f64) {
         if !self.uses_oro_reference(level) {
-            return (0.0, 0.0);
+            return (0.0, 0.0, 0.0);
         }
-        self.oro_gradient0_at(g.dir, g.east, g.north)
+        self.oro_gradient0_full_at(g.dir, g.east, g.north)
     }
 
     /// Lo mismo en un punto cualquiera (`dir`, con su base `east`/`north`), sin mirar el nivel.
     pub fn oro_gradient0_at(&self, dir: V3, east: V3, north: V3) -> (f64, f64) {
+        let (ge, gn, _) = self.oro_gradient0_full_at(dir, east, north);
+        (ge, gn)
+    }
+
+    /// Gradiente puro del relieve de referencia en un punto y su componente este con el mar plano.
+    fn oro_gradient0_full_at(&self, dir: V3, east: V3, north: V3) -> (f64, f64, f64) {
         if self.oro_delta <= 0.0 {
-            return (0.0, 0.0);
+            return (0.0, 0.0, 0.0);
         }
         let at = |u: V3, s: f64| -> f64 {
             self.h_at(oro_offset(dir, u, s, self.oro_delta), self.oro_level)
         };
         let denom = 2.0 * self.oro_delta * self.r_planet;
+        let (h_este, h_oeste) = (at(east, 1.0), at(east, -1.0));
         (
-            (at(east, 1.0) - at(east, -1.0)) / denom,
+            (h_este - h_oeste) / denom,
             (at(north, 1.0) - at(north, -1.0)) / denom,
+            (h_este.max(self.sea) - h_oeste.max(self.sea)) / denom,
         )
+    }
+
+    /// Nivel del mar (m).
+    pub fn sea_level(&self) -> f64 {
+        self.sea
     }
 
     /// `true` si una elevación queda bajo el nivel del mar (clasificación base, §4).

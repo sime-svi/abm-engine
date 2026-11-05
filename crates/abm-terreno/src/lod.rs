@@ -728,6 +728,8 @@ struct Cols {
     oro0_n: Vec<f64>,
     oro_e: Vec<f64>,
     oro_n: Vec<f64>,
+    oro_air0_e: Vec<f64>,
+    w_hum: Vec<f64>,
 }
 
 /// Lo que una hoja nueva hereda: clima intensivo `[T, P, ΣT, ΣP]`, marca hidrológica, erosión
@@ -779,6 +781,8 @@ impl Cols {
         self.oro0_n.push(w.oro0_n[s]);
         self.oro_e.push(w.oro_e[s]);
         self.oro_n.push(w.oro_n[s]);
+        self.oro_air0_e.push(w.oro_air0_e[s]);
+        self.w_hum.push(w.w_hum[s]);
     }
 
     /// Hoja nueva: geometría y estáticos recalculados (función pura); clima, marca, erosión y suelo
@@ -822,11 +826,19 @@ impl Cols {
         self.z_soil.push(z);
         // Gradiente orográfico: parte pura (relieve de referencia, función de la posición); la de
         // la erosión se rehace tras construir la vecindad si el relieve está vivo.
-        let (oe, on) = w.statgen.oro_gradient0(g, split_key(k).1);
+        let (oe, on, oa) = w.statgen.oro_gradient0_air(g, l);
         self.oro0_e.push(oe);
         self.oro0_n.push(on);
         self.oro_e.push(oe);
         self.oro_n.push(on);
+        // Relieve que ve el aire (mar plano): a la escala de referencia o a la de la celda.
+        self.oro_air0_e.push(if w.statgen.uses_oro_reference(l) {
+            oa
+        } else {
+            st.grad_air_e
+        });
+        // Agotamiento de humedad: provisional; se rehace tras construir la malla si está activo.
+        self.w_hum.push(1.0);
     }
 
     fn set_state(&mut self, ns: usize, st: WaterState) {
@@ -1100,6 +1112,8 @@ fn rebuild(
     world.oro0_n = cols.oro0_n;
     world.oro_e = cols.oro_e;
     world.oro_n = cols.oro_n;
+    world.oro_air0_e = cols.oro_air0_e;
+    world.w_hum = cols.w_hum;
 
     // Derivados globales sobre la malla nueva (§4), marca hidrológica y biomas de las hojas nuevas.
     hydro::recompute(world, cfg);
@@ -1191,6 +1205,9 @@ fn rebuild(
         erosion::refresh_gradients(world);
         erosion::refresh_orography(world);
     }
+    // Agotamiento de humedad (nota de sombra pluviométrica §3): las hojas nuevas toman su `w` de
+    // los anillos, y el acondicionamiento puede haber cambiado el relieve de referencia.
+    crate::humedad::refrescar(world, cfg);
     for (s, &nuevo) in is_new.iter().enumerate() {
         if nuevo {
             world.biome[s] = biome_for(world, cfg, s);

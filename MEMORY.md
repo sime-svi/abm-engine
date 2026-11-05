@@ -639,3 +639,44 @@ Formato de entrada:
 - **Estado tras el cambio:** Incremento 1 de «agentes» hecho. Pendiente del responsable: D1, D16,
   destete forzoso y fecundidad humana por edad (y `k_oro` del terreno). Siguiente: incremento 2
   (cohortes y conversión individuo ↔ población).
+
+## [2026-11-05] Nota de sombra pluviométrica: k_oro calibrado, agotamiento de humedad a favor del viento y c_P
+
+- **Qué:** El responsable entregó dos notas en `docs/temp/`. Se archivaron y `docs/temp` se borró. No estaban bajo git: se movieron y se añadieron en su destino.
+  - `nota_terreno_sombra_pluviometrica.md` → `docs/design/terreno/` (esta entrada);
+  - `nota_agentes_revision_1.md` → `docs/design/agentes/` (entrada siguiente).
+
+  Rama `terreno-sombra`. Se implementó la nota con un interruptor por cambio en `[climate]`:
+  - **Parte A:** `k_oro`, por defecto **150**, calibrado por el objetivo de la nota (la nota proponía 40).
+  - **Parte A:** `conservar_lluvia` + `tol_lluvia`. Factor `c_P` fijado al acabar la génesis, solo sobre la tierra. Su referencia es la lluvia sin efecto orográfico ni agotamiento.
+  - **Parte B:** `agotamiento_humedad` + `h_v_m`, `l_recarga_km`, `l_traj_km`. Módulo nuevo `abm-terreno/src/humedad.rs`:
+    - `Λ` sobre **anillos**: paralelos y puntos cada `d_oro`, porque el viento del modelo es zonal;
+    - el relieve es el de referencia del nivel `L_oro`, el mar se toma donde ese relieve queda bajo el nivel del mar, y el tramo de la costa cuenta desde el nivel del mar;
+    - cada celda recibe `w = e^(−Λ/H_v)`: interpolado con puntos de tierra en las de nivel `L_oro` o más finas, y la media sobre la huella (8×8) en las gruesas;
+    - `w` se calcula al acabar la génesis y se rehace con cada paso de erosión y cada cambio de malla.
+  - **`mar_plano`** (decisión técnica mía): el aire ve el mar plano.
+
+  Otros cambios:
+  - caché `ABMGEN03`, que guarda `w` y `c_P`;
+  - `run.dump_climate`: el volcado añade `m_oro`, `w` y la lluvia anual;
+  - `run.lluvia` en los metadatos;
+  - `config/experiments/terreno_sin_sombra.toml` con todo apagado.
+- **Por qué:** con `k_oro = 0,5` no había sombra de lluvia. La fórmula local tampoco podía crear los desiertos de detrás de las cordilleras, que son un objetivo de la visión madre.
+- **Decisiones / problemas:**
+  - **`k_oro = 40` no llega al objetivo** (media de `m_oro` 2–3 en las laderas de barlovento de las cordilleras de más de 2 000 m). Da 1,37: a 25 km las montañas del planeta suben ~9 m/km, frente a los 40 de las reales. Barrido 40–240 con dos definiciones de ladera: 150 da 2,13–2,18. Lo decide el responsable (S1).
+  - **El agotamiento también seca el barlovento,** porque `Λ` incluye la subida de la propia ladera:
+    - en el planeta, el contraste barlovento/sotavento en latitudes medias es 2,2 (la nota esperaba 5–20);
+    - en el escenario de juguete de la nota es 7,2: pie ×3,0 y sotavento a 200–500 km ×0,42–0,54 (la nota esperaba 0,2–0,4, por la recarga con `L_recarga` = 1 000 km);
+    - sensibilidad en la nota §6.3: con `H_v = 1 500` m se cumpliría. Decisiones S2 y S3.
+  - **Sin `c_P`, el agotamiento quita el 16 % de la lluvia de la tierra;** `c_P = 1,18` la recupera.
+  - **Hallazgo: el fondo marino contaba como relieve.** Con `k_oro` grande movía más de un 10 % la lluvia del 86 % del océano (+2,7 % en total) y la de las costas. `mar_plano` lo arregla; sobre la tierra cambia +0,1 %. Decisión S4.
+  - **La lluvia al afinar** (208 → 104 km) cambia +0,58 % con todo encendido (antes +0,03 %), pero `w` es invariante (−2·10⁻⁵ en el interior): el cambio sale de la costa. De 52 a 26 km (la escala del Foco), 0,00 %. En la prueba de independencia del camino (celdas de 834/417 km) la lluvia difiere hasta un 6,7 %, porque esas celdas usan su propia pendiente. Tolerancias de los tests ajustadas y documentadas.
+- **Verificación:**
+  - **No regresión:** con los cuatro interruptores apagados, salida **idéntica byte a byte** al binario de ece0868 (JSON con erosión y sin ella, y volcado por celda), compilado en un worktree del scratchpad.
+  - **Tests nuevos:** `la_suma_se_corta_en_el_mar_y_cuenta_la_costa`, `escenario_de_juguete_de_la_nota`, `en_un_mundo_plano_la_sombra_pluviometrica_no_cambia_nada`; `la_lluvia_no_depende_de_la_resolucion` comprueba también `w`; el de la caché compara `w` y `c_P`.
+  - **Comprobaciones:** `fmt`, `clippy --workspace --all-targets -D warnings` y `cargo test --workspace` en verde (terreno 14 + 15 + 15).
+  - **Planeta frente a la referencia:**
+    - lluvia sobre tierra +0,8 %; desierto 5,60 → 5,95 %, selva 2,07 → 2,79 %, bosque templado 6,83 → 5,61 %; lagos 51 → 57;
+    - a sotavento de las cordilleras grandes en latitudes medias: lluvia 688 → 231 mm y desierto 7,6 → 15,8 %;
+    - PPN (Miami) y capacidad de carga −2,9 %.
+- **Estado tras el cambio:** sombra pluviométrica activa. Pendientes del responsable: S1–S5 (nota §6.7). Siguiente: revisión 1 de la biología de los agentes.

@@ -86,7 +86,7 @@ fn precip_band(abslat_deg: f64) -> f64 {
 }
 
 /// Componente este del viento dominante por franja (alisios −, oestes +, polar −). Norte = 0.
-fn wind_east(abslat_deg: f64) -> f64 {
+pub(crate) fn wind_east(abslat_deg: f64) -> f64 {
     if abslat_deg < 30.0 {
         -1.0
     } else if abslat_deg < 60.0 {
@@ -226,16 +226,62 @@ pub(crate) fn precip_no_season(
 /// Pendiente este que "ve" la lluvia (nota de lluvia orográfica): la del relieve de referencia a
 /// escala `d_oro` en las celdas tan finas como `d_oro` o más; en las más gruesas (o con la
 /// corrección apagada, `d_oro = 0`), la propia de la celda, como hasta el incremento 3.
+///
+/// Con `climate.mar_plano` (nota de sombra pluviométrica §6) el aire ve el mar plano: sobre el mar
+/// no hay pendiente, y en la costa se mide desde el nivel del mar y no desde el fondo marino. La
+/// parte de la erosión (el mar no se erosiona) es la misma.
 #[inline]
-pub(crate) fn oro_slope_e(world: &World, s: usize) -> f64 {
-    if world
+pub(crate) fn oro_slope_e(world: &World, cfg: &TerrenoConfig, s: usize) -> f64 {
+    let referencia = world
         .statgen
-        .uses_oro_reference(u32::from(world.topo.level[s]))
-    {
-        world.oro_e[s]
-    } else {
-        world.grad_e[s]
+        .uses_oro_reference(u32::from(world.topo.level[s]));
+    if !cfg.climate.mar_plano {
+        return if referencia {
+            world.oro_e[s]
+        } else {
+            world.grad_e[s]
+        };
     }
+    if world.es_oceano(s) {
+        return 0.0;
+    }
+    let erosion = if referencia {
+        world.oro_e[s] - world.oro0_e[s]
+    } else {
+        world.grad_e[s] - world.grad0_e[s]
+    };
+    world.oro_air0_e[s] + erosion
+}
+
+/// Precipitación media por tick (mm) de una celda, sin el factor estacional: franja · humedad ·
+/// orografía y, en tierra, el agotamiento `w` y el factor global `c_P` (nota de sombra
+/// pluviométrica). Sin agotamiento ni corrección, los dos valen 1 y la lluvia es la de antes, bit a
+/// bit.
+#[inline]
+pub(crate) fn precip_mean_cell(world: &World, cfg: &TerrenoConfig, s: usize) -> f64 {
+    let p = precip_no_season(
+        cfg,
+        world.topo.lat[s],
+        world.dist_ocean_km[s],
+        oro_slope_e(world, cfg, s),
+    );
+    if world.es_oceano(s) {
+        p
+    } else {
+        p * (world.c_p * world.w_hum[s])
+    }
+}
+
+/// Factor orográfico `m_oro` de una celda (para medidas y volcados).
+pub fn m_oro_celda(world: &World, cfg: &TerrenoConfig, s: usize) -> f64 {
+    let c = &cfg.climate;
+    let we = wind_east(world.topo.lat[s].to_degrees().abs());
+    (1.0 + c.k_oro * oro_slope_e(world, cfg, s) * we).clamp(c.m_oro_min, c.m_oro_max)
+}
+
+/// Lluvia media anual (mm/año) de una celda con el estado actual (para medidas y volcados).
+pub fn lluvia_media_anual_mm(world: &World, cfg: &TerrenoConfig, s: usize) -> f64 {
+    precip_mean_cell(world, cfg, s).max(0.0) * cfg.climate.t_year
 }
 
 /// 6.2 Clima: temperatura (latitud + altura + estación) y precipitación (franja · humedad · orografía).
@@ -253,7 +299,7 @@ fn climate(world: &mut World, cfg: &TerrenoConfig, t: u64) {
         let s = if lat_deg >= 0.0 { 1.0 } else { -1.0 };
         world.temp[id] = t_media + s * a_est * sin_p;
 
-        let p = precip_no_season(cfg, lat, world.dist_ocean_km[id], oro_slope_e(world, id));
+        let p = precip_mean_cell(world, cfg, id);
         let m_est = (1.0 + c.seas_precip_amp * s * sin_p).max(0.0);
         world.precip[id] = (p * m_est).max(0.0);
     }

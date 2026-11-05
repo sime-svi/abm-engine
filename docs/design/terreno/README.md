@@ -169,3 +169,38 @@ El responsable pidió corregir un efecto que salió en el incremento 3: con la m
 - **Y una tercera.** Sin el exceso de lluvia que lo tapaba, se ve que la erosión depende algo de la resolución (1–3 % en la prueba). Queda vigilada.
 - **Nada se rompe.** Con las dos correcciones apagadas, el programa da exactamente la misma salida que antes. Con ellas encendidas, el planeta cambia poco: llueve un 0,4 % más en total (algo más en las costas), hay un 1,6 % menos de desierto y un 4 % más de selva.
 
+
+## Nota de sombra pluviométrica (05-11-2026)
+
+El responsable pidió que la lluvia de montaña se notara de verdad. En la nota anterior salió que, con el valor que tenía `k_oro`, **las sombras de lluvia no existían**: en el 98 % de la tierra la montaña cambiaba la lluvia menos de un 1 %. La nota está en `nota_terreno_sombra_pluviometrica.md`, y su §6 cuenta lo hecho y lo medido.
+
+**Vocabulario:**
+- **Barlovento:** la cara de la montaña que mira al viento. El aire sube, se enfría y suelta su agua: llueve más.
+- **Sotavento:** la cara de detrás. El aire baja y se calienta: llueve menos.
+- **`k_oro`:** cuánto reacciona la lluvia a la pendiente que el viento tiene que subir. Es como el volumen de un altavoz: la pendiente es la música y `k_oro` dice cuánto se oye.
+
+### Qué se hizo
+
+1. **Subir `k_oro`.** La nota proponía 40 y pedía comprobarlo con un objetivo: en las laderas de barlovento de las cordilleras grandes, que llueva de 2 a 3 veces más. Con 40 solo llovía 1,4 veces más. Nuestras montañas, vistas a la escala a la que la lluvia "ve" el relieve (25 km), son unas cuatro veces más suaves que las de la Tierra. Hizo falta **150** para llegar a 2,1–2,2 veces.
+2. **El aire se seca al cruzar montañas (agotamiento de humedad).** El aire que subió una cordillera ya soltó su agua, y no la recupera al bajar: detrás llueve menos durante cientos de km, hasta que el aire vuelve a cargarse de humedad sobre el mar o, poco a poco, sobre la tierra. Cada punto de tierra mira hacia atrás por el camino del viento, de 25 en 25 km, y suma cuántos metros ha tenido que subir el aire recientemente; cuanto más ha subido, menos humedad le queda. Como el viento del modelo solo sopla hacia el este o el oeste, ese camino es el propio paralelo.
+3. **Mantener la lluvia total.** Secar el aire quita un 16 % de la lluvia de toda la tierra. La nota pide que el total no cambie más de un 5 %, así que, al acabar de generar el planeta, se calcula un factor `c_P` (aquí 1,18) que reparte esa lluvia de vuelta sobre toda la tierra.
+4. **Una corrección mía: el mar es plano para el aire.** Con un `k_oro` grande salió que el fondo del mar contaba como montaña: movía más de un 10 % la lluvia del 86 % del océano y la de las costas. El aire está en la superficie del agua, no en el fondo. Ahora, sobre el mar no hay efecto de montaña, y en la costa la pendiente se mide desde el nivel del mar. Se puede apagar.
+
+Cada cosa tiene su interruptor en `config/terreno.toml`. Con los cuatro apagados (`config/experiments/terreno_sin_sombra.toml`), el planeta sale **exactamente igual que antes**, bit a bit.
+
+### Qué cambia en el planeta
+
+- **Aparecen desiertos detrás de las montañas.** En latitudes medias, a 200–500 km detrás de las cordilleras de más de 2 000 m, la lluvia baja de 688 a 231 mm al año y el desierto pasa del 7,6 % al 15,8 % de esa zona. La pradera de esa zona casi desaparece. Es lo que buscaba la visión madre (la estepa patagónica, la Gran Cuenca de EE. UU.).
+- **En el resto llueve algo más**, porque el factor `c_P` devuelve el agua: la selva crece un 35 % (del 2,1 % al 2,8 % del planeta) y el bosque templado baja (del 6,8 % al 5,6 %).
+- **Para los futuros agentes, algo menos de comida.** La productividad de las plantas, medida con la misma fórmula que usan los agentes (el modelo Miami), baja un 2,9 % en el total del planeta, y lo mismo la población de herbívoros que podría mantener. Pasa aunque la lluvia total sea la misma: las plantas aprovechan peor el agua si unas zonas reciben de más y otras de menos.
+- **Coste:** generar el planeta tarda lo mismo (~43 s la primera vez). Con la génesis guardada, un año de simulación pasa de 8 a 10 s.
+
+### Consideraciones y hallazgos
+
+- **El contraste entre las dos caras de las cordilleras es menor de lo esperado:** en el planeta, el barlovento recibe 2,2 veces la lluvia del sotavento; la nota esperaba de 5 a 20. Hay dos motivos:
+  - el aire también se seca *mientras* sube la propia ladera, así que lo alto del barlovento ya recibe poco;
+  - detrás de las montañas el aire se recarga bastante deprisa: a 200–500 km recibe el 42–54 % de la lluvia de antes, y la nota esperaba el 20–40 %.
+
+  Con un "juguete" (una cordillera de 3 000 m dibujada a mano) sí sale un contraste de 7. Ajustar los dos parámetros del secado lo acercaría al objetivo. Lo decide el responsable, con los datos de la nota (§6.3).
+- **La lluvia no depende del zoom donde importa.** Al pasar de 52 a 26 km, que es lo que hará el Foco de los agentes, la lluvia de la zona cambia un 0,00 %. A escalas mucho más gruesas (cientos de km) la lluvia sí cambia algo más que antes con la resolución (hasta un 6,7 % en la prueba con celdas de 834 km), porque esas celdas usan su propia pendiente y ahora `k_oro` es grande.
+- **Decisiones pendientes del responsable** (nota §6.7): el valor de `k_oro` (150 calibrado, frente al 40 propuesto), los dos parámetros del secado, cómo contar la subida de la propia ladera, el mar plano y cómo se calcula `c_P`.

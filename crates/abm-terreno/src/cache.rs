@@ -19,7 +19,7 @@ use crate::error::TerrenoError;
 use crate::statics::StaticGen;
 use crate::world::{Biome, Pair, Surface, Topology, World};
 
-const MAGIC: &[u8; 8] = b"ABMGEN02";
+const MAGIC: &[u8; 8] = b"ABMGEN03";
 const FINGERPRINT: &str = env!("ABM_TERRENO_FINGERPRINT");
 
 fn fnv1a(mut h: u64, bytes: &[u8]) -> u64 {
@@ -37,6 +37,7 @@ pub fn key(cfg: &TerrenoConfig) -> Result<u64, TerrenoError> {
     c.run.total_ticks = 0;
     c.run.output_path = String::new();
     c.run.dump_world = false;
+    c.run.dump_climate = false;
     c.run.genesis_cache = String::new();
     c.persistence = PersistenceCfg::default();
     let json = serde_json::to_string(&c)?;
@@ -211,7 +212,7 @@ fn surface_from(c: u8) -> Option<Surface> {
 }
 
 /// Nº de columnas `f64` del mundo que se guardan.
-const N_F64: usize = 29;
+const N_F64: usize = 31;
 
 /// Columnas `f64` del mundo, en orden fijo (el mismo al guardar y al cargar).
 fn f64_columns(w: &World) -> [&Vec<f64>; N_F64] {
@@ -245,6 +246,8 @@ fn f64_columns(w: &World) -> [&Vec<f64>; N_F64] {
         &w.oro0_n,
         &w.oro_e,
         &w.oro_n,
+        &w.oro_air0_e,
+        &w.w_hum,
     ]
 }
 
@@ -303,6 +306,8 @@ fn encode(world: &World, geo: &GeoSummary, key: u64) -> Result<Vec<u8>, TerrenoE
             .collect::<Vec<u8>>(),
     );
     w.u64(world.sample_count);
+    w.f64(world.c_p);
+    w.f64(world.desvio_lluvia);
     Ok(w.0)
 }
 
@@ -352,6 +357,7 @@ fn decode(bytes: &[u8], cfg: &TerrenoConfig, key: u64) -> Option<(World, GeoSumm
         .collect::<Option<_>>()?;
     let hydro_lock: Vec<bool> = r.vu8()?.into_iter().map(|x| x != 0).collect();
     let sample_count = r.u64()?;
+    let (c_p, desvio_lluvia) = (r.f64()?, r.f64()?);
     if r.p != bytes.len() {
         return None;
     }
@@ -436,6 +442,13 @@ fn decode(bytes: &[u8], cfg: &TerrenoConfig, key: u64) -> Option<(World, GeoSumm
         oro0_n: next(),
         oro_e: next(),
         oro_n: next(),
+        oro_air0_e: next(),
+        w_hum: next(),
+        c_p,
+        desvio_lluvia,
+        // La caché guarda mundos ya envejecidos: el agotamiento está activo si la config lo pide.
+        humedad_activa: cfg.climate.agotamiento_humedad,
+        anillos: None,
         sample_count,
     };
     Some((world, geo))

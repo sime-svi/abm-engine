@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-05 — fase «agentes», incremento 1 (biología por días: individuos en un hábitat de prueba)
+Última actualización: 2026-11-05 — nota de sombra pluviométrica del terreno (k_oro calibrado, agotamiento de humedad, c_P)
 
 ---
 
@@ -27,7 +27,8 @@ abm/
 │   ├── [x] agentes.toml           # Biología de los agentes (especies, energética, forraje, hábitat)
 │   ├── [x] terreno.toml           # Parámetros del planeta ([lod], [erosion], [soil]…)
 │   └── experiments/               # Configs con nombre por experimento
-│       └── [x] agentes_proporcional.toml  # Propuesta D16 (consumo proporcional al stock), 60 años
+│       ├── [x] agentes_proporcional.toml  # Propuesta D16 (consumo proporcional al stock), 60 años
+│       └── [x] terreno_sin_sombra.toml    # El planeta sin la nota de sombra (= salida de bb6a8c0, byte a byte)
 │
 ├── crates/                        # Un paquete por responsabilidad; las flechas apuntan a abm-core
 │   ├── abm-core/                  # EL MOTOR (agnóstico al dominio; no depende de nadie)
@@ -64,9 +65,10 @@ abm/
 │   │   │   ├── [x] lib.rs           # run / run_with_info / world_dump
 │   │   │   ├── [x] config · error · geometry · noise · statics · world · hydro · lod
 │   │   │   ├── [x] erosion · cache · worldgen · systems · metrics
+│   │   │   └── [x] humedad.rs       # Agotamiento de humedad a favor del viento (anillos, Λ, w, c_P)
 │   │   └── tests/
-│   │       ├── [x] terreno.rs       # incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación…) + lluvia vs resolución
-│   │       └── [x] erosion.rs       # incr. 3 (material, hondonadas, camino, tope, caché…) + relieve orográfico
+│   │       ├── [x] terreno.rs       # incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación…) + lluvia y w vs resolución
+│   │       └── [x] erosion.rs       # incr. 3 (material, hondonadas, camino, tope, caché…) + relieve orográfico + mundo plano
 │   │
 │   ├── abm-metrics/               # OBSERVADORES + LOD de almacenamiento (→ core, ruleset, persistence)
 │   │   ├── [x] Cargo.toml
@@ -121,7 +123,8 @@ abm/
 │       │   ├── [x] incremento-1-diseno.md                 # Diseño del 1er incremento (IMPLEMENTADO)
 │       │   ├── [x] incremento-2-diseno.md                 # Diseño LOD dinámico v1.1 (IMPLEMENTADO)
 │       │   ├── [x] incremento-3-diseno.md                 # Diseño relieve vivo v1.2 (IMPLEMENTADO)
-│       │   └── [x] nota_terreno_lluvia_orografica.md      # Lluvia independiente de la resolución (IMPLEMENTADA, §8)
+│       │   ├── [x] nota_terreno_lluvia_orografica.md      # Lluvia independiente de la resolución (IMPLEMENTADA, §8)
+│       │   └── [x] nota_terreno_sombra_pluviometrica.md   # k_oro calibrado + agotamiento de humedad + c_P (IMPLEMENTADA, §6)
 │       ├── paquetes/              # Fase: código dividido en el workspace de paquetes
 │       │   └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)
@@ -162,7 +165,7 @@ Estado:
 - **Determinismo:** misma semilla → mismo JSON byte a byte, verificado también entre procesos y entre
   `debug` y `release`.
 - **Comprobaciones:** `cargo fmt` / `clippy --workspace -D warnings` / `cargo test` en verde
-  (unitarios: terreno 12 + biología 6 + métricas 1; forrajeo 3; biología 8; terreno 15; erosión 14;
+  (unitarios: terreno 14 + biología 6 + métricas 1; forrajeo 3; biología 8; terreno 15; erosión 15;
   el test de BD es `#[ignore]` y pasa con `--ignored`).
 - **Biología de los agentes (incremento 1):** individuos con energía en kcal, crecimiento de West,
   reproducción sexual y mortalidad de Siler calibrada (humano: e0 30,9 años; genérico: l(1) = 0,6),
@@ -172,10 +175,16 @@ Estado:
 - **Lluvia independiente de la resolución** (nota de lluvia orográfica): relieve de referencia a
   25 km para el efecto orográfico y distancia de humedad medida desde la costa. Al afinar una zona a
   la resolución real, su lluvia cambia un 0,03 % (antes +3,9 %).
+- **Sombra pluviométrica** (nota de sombra pluviométrica):
+  - `k_oro = 150`, calibrado por el objetivo de la nota;
+  - agotamiento de humedad a favor del viento (`w`), con `c_P = 1,18` para conservar la lluvia total;
+  - el aire ve el mar plano.
+
+  A sotavento de las cordilleras grandes, en latitudes medias, la lluvia baja de 688 a 231 mm y el desierto se duplica. Con todo apagado, salida idéntica a la de antes.
 - **Terreno:** balance de agua a ~1e-12 con LOD y erosión; balance de material cerrado (el
   acondicionamiento también, exacto); 9 biomas emergentes, ríos y ~50 lagos; ~195 000–205 000 celdas
   con la config por defecto.
-- **Génesis en caché** (`output/cache`): ~42 s la primera vez, ~8 s después.
+- **Génesis en caché** (`output/cache`): ~43 s la primera vez, ~10 s después.
 - **Base de datos:** el motor de forrajeo escribe en la BD además del JSON (`[persistence] sink =
   "json" | "postgres" | "both"`; conexión desde `infra/.env`).
 
@@ -189,7 +198,7 @@ metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
   destete forzoso, fecundidad humana por edad); incremento 2 (cohortes y conversión), incremento 3
   (planeta, forraje del terreno y Foco), incremento 4 (eventos y BD);
 - terreno incremento 4 (lagos dinámicos, flujo multidireccional, fertilidad dinámica, eventos);
-- decidir `k_oro`: con 0,5 no hay sombra pluviométrica (propuesta ≈ 40; nota de lluvia §8.4);
+- sombra pluviométrica: decisiones S1–S5 del responsable (valor de `k_oro`, parámetros del secado, mar plano, `c_P`; nota de sombra §6.7);
 - tablas `events` y `agent_snapshots` (LOD micro) con su sink;
 - volcar las métricas del terreno a la BD.
 

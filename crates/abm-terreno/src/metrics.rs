@@ -80,6 +80,20 @@ pub struct TerrenoRunMeta {
     pub total_ticks: u64,
     /// Génesis geológica (incr. 3 §8): años simulados, balance de material y relieve antes/después.
     pub genesis: GeoSummary,
+    /// Con el agotamiento de humedad o la conservación de la lluvia (nota de sombra pluviométrica):
+    /// cuánto se desvía la lluvia total sobre tierra y el factor `c_P` que la corrige.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lluvia: Option<LluviaMeta>,
+}
+
+/// Lluvia total sobre tierra (nota de sombra pluviométrica §2).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct LluviaMeta {
+    /// Desviación relativa de la lluvia media anual sobre tierra frente a la de referencia (sin
+    /// efecto orográfico ni agotamiento), antes de aplicar `c_P`.
+    pub desvio: f64,
+    /// Factor global aplicado a la lluvia de la tierra (1 = sin corregir).
+    pub c_p: f64,
 }
 
 /// Documento completo de salida.

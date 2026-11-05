@@ -27,7 +27,7 @@ fn main() -> Result<()> {
     println!("  Métricas -> {metrics_path}");
 
     if cfg.run.dump_world {
-        let dump = abm_terreno::world_dump(&world);
+        let dump = abm_terreno::world_dump(&world, &cfg);
         let dump_path = format!("{}/{}_world.json", cfg.run.output_path, cfg.run.name);
         let json = serde_json::to_string(&dump).context("al serializar el mundo")?;
         std::fs::write(&dump_path, json).context("al escribir el snapshot del mundo")?;
@@ -68,6 +68,13 @@ fn main() -> Result<()> {
             g.after.elev_mean_land,
             100.0 * g.before.land_fraction,
             100.0 * g.after.land_fraction
+        );
+    }
+    if let Some(l) = &doc.run.lluvia {
+        println!(
+            "  Sombra pluviométrica: la orografía y el agotamiento de humedad cambian la lluvia sobre tierra un {:+.1} %; c_P = {:.4}.",
+            100.0 * l.desvio,
+            l.c_p
         );
     }
     let last = doc.ticks.last();

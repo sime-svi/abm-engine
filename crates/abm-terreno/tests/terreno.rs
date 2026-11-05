@@ -419,11 +419,16 @@ fn lod_refina_costas_y_rios() {
 #[test]
 fn la_lluvia_no_depende_de_la_resolucion() {
     // Nota de lluvia orográfica §6: al afinar una zona, su lluvia no debe cambiar más que el ruido
-    // numérico. Con la resolución real (cara 0 de 208 a 104 km), la lluvia sobre su tierra cambia un
-    // 0,03 % con la distancia de humedad medida desde la costa, y un +3,9 % midiéndola desde el
-    // centro de la celda de mar (como hasta el incremento 3): sobraba media celda de mar en cada
-    // distancia, y al afinar la costa "se acercaba".
-    let cambio = |desde_costa: bool| -> f64 {
+    // numérico. Con la resolución real (cara 0 de 208 a 104 km), medido el 2026-11-05:
+    // - sin el agotamiento de humedad, la lluvia sobre su tierra cambia un +0,38 % con la distancia
+    //   de humedad medida desde la costa (+0,03 % con k_oro = 0,5: estas celdas son más gruesas que
+    //   d_oro y usan su propia pendiente), y un +4,2 % midiéndola desde el centro de la celda de mar
+    //   (como hasta el incremento 3: sobraba media celda de mar en cada distancia);
+    // - con el agotamiento (nota de sombra pluviométrica §3), `w` no cambia en la tierra que ya
+    //   existía (es función del relieve de referencia, no de la malla), pero la lluvia total cambia
+    //   un +0,58 %: la tierra que aparece en la costa al afinar es más húmeda que un interior ahora
+    //   más seco (nota de sombra §6.5). A la escala que usará el Foco, de 52 a 26 km, un 0,00 %.
+    let cambio = |desde_costa: bool, agotamiento: bool| -> (f64, f64) {
         let mut cfg = TerrenoConfig::default();
         cfg.run.seed = 7;
         cfg.run.genesis_cache = String::new();
@@ -431,6 +436,7 @@ fn la_lluvia_no_depende_de_la_resolucion() {
         cfg.lod.l_max = 0;
         sin_erosion(&mut cfg);
         cfg.climate.moisture_from_coast = desde_costa;
+        cfg.climate.agotamiento_humedad = agotamiento;
         let mut w = worldgen::generate(&cfg);
         let lluvia = |w: &mut World| -> f64 {
             let mut sc = abm_terreno::systems::Scratch::new(w.topo.num_cells);
@@ -442,17 +448,43 @@ fn la_lluvia_no_depende_de_la_resolucion() {
                 .sum()
         };
         let gruesa = lluvia(&mut w);
+        let antes = w.clone();
         w.topo.l_max = 1;
         let n = w.topo.num_cells;
         let cara0: Vec<bool> = (0..n).map(|s| w.topo.face(s) == 0).collect();
         lod::apply(&mut w, &cfg, &Marks::forced(cara0, vec![false; n]));
-        lluvia(&mut w) / gruesa - 1.0
+        let fina = lluvia(&mut w) / gruesa - 1.0;
+        // `w` sobre la tierra que ya existía (madres de tierra con sus cuatro hijas de tierra).
+        let (mut wa, mut wd) = (0.0, 0.0);
+        for s in (0..antes.topo.num_cells).filter(|&s| antes.topo.face(s) == 0) {
+            let k = antes.topo.keys[s];
+            let hijas: Vec<usize> = (0..4)
+                .filter_map(|q| {
+                    let (di, dj) = (q % 2, q / 2);
+                    let (c, l, i, j) = abm_terreno::geometry::split_key(k);
+                    w.topo
+                        .slot_of(abm_terreno::geometry::key(c, l + 1, 2 * i + di, 2 * j + dj))
+                })
+                .collect();
+            if !antes.es_oceano(s) && hijas.len() == 4 && hijas.iter().all(|&h| !w.es_oceano(h)) {
+                wa += antes.w_hum[s] * antes.topo.area[s];
+                wd += hijas
+                    .iter()
+                    .map(|&h| w.w_hum[h] * w.topo.area[h])
+                    .sum::<f64>();
+            }
+        }
+        (fina, wd / wa - 1.0)
     };
-    let (costa, centro) = (cambio(true), cambio(false));
+    let (costa, _) = cambio(true, false);
+    let (centro, _) = cambio(false, false);
+    let (agot, w_interior) = cambio(true, true);
     println!(
-        "lluvia de la zona al afinar: {:+.2} % (antes {:+.2} %)",
+        "lluvia de la zona al afinar: {:+.2} % (desde el centro del mar {:+.2} %; con agotamiento {:+.2} %, w del interior {:+.1e})",
         100.0 * costa,
-        100.0 * centro
+        100.0 * centro,
+        100.0 * agot,
+        w_interior
     );
     assert!(
         costa.abs() < 0.005,
@@ -461,5 +493,13 @@ fn la_lluvia_no_depende_de_la_resolucion() {
     assert!(
         centro > 0.02,
         "la prueba ya no detecta el sesgo de antes: {centro:+.2e}"
+    );
+    assert!(
+        w_interior.abs() < 1e-3,
+        "el agotamiento depende de la malla: {w_interior:+.2e}"
+    );
+    assert!(
+        agot.abs() < 0.01,
+        "con agotamiento, la lluvia depende de la resolución: {agot:+.2e}"
     );
 }

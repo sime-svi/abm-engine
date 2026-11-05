@@ -167,14 +167,17 @@ pub struct World {
     pub statgen: StaticGen,
 
     // --- Estáticos puros (función de la dirección de la celda, incr. 2 §3) ---
-    pub h0: Vec<f64>,       // elevación de nacimiento (m), del ruido
-    pub grad0_e: Vec<f64>,  // ∂h0/∂este (m/m), diferencias centrales de la función pura
-    pub grad0_n: Vec<f64>,  // ∂h0/∂norte (m/m)
-    pub w_cap0: Vec<f64>,   // capacidad de campo por textura (mm), con el suelo a z_init
-    pub oro0_e: Vec<f64>, // gradiente orográfico puro (relieve de nacimiento a escala d_oro), este
-    pub oro0_n: Vec<f64>, // ídem, norte
-    pub k_perm: Vec<f64>, // permeabilidad (0..1)
-    pub fert: Vec<f64>,   // fertilidad efectiva (0..1)
+    pub h0: Vec<f64>,      // elevación de nacimiento (m), del ruido
+    pub grad0_e: Vec<f64>, // ∂h0/∂este (m/m), diferencias centrales de la función pura
+    pub grad0_n: Vec<f64>, // ∂h0/∂norte (m/m)
+    pub w_cap0: Vec<f64>,  // capacidad de campo por textura (mm), con el suelo a z_init
+    pub oro0_e: Vec<f64>,  // gradiente orográfico puro (relieve de nacimiento a escala d_oro), este
+    pub oro0_n: Vec<f64>,  // ídem, norte
+    /// Gradiente este puro del relieve que ve el aire (mar plano), a la escala orográfica de la
+    /// celda: la de referencia `d_oro` si la usa, si no la suya (`climate.mar_plano`).
+    pub oro_air0_e: Vec<f64>,
+    pub k_perm: Vec<f64>,   // permeabilidad (0..1)
+    pub fert: Vec<f64>,     // fertilidad efectiva (0..1)
     pub resource: Vec<f64>, // recurso genérico extraíble
 
     // --- Relieve y suelo vivos (incr. 3): cambian con la erosión, despacio ---
@@ -195,6 +198,19 @@ pub struct World {
     pub drainage_area: Vec<f64>, // área de drenaje acumulada (m²)
     pub flow_order: Vec<u32>,    // posiciones en orden aguas arriba→abajo
     pub dist_ocean_km: Vec<f64>, // distancia a la fuente de humedad más cercana (km)
+
+    // --- Agotamiento de humedad (nota de sombra pluviométrica §3) ---
+    /// Fracción de humedad que le queda al aire, `w = e^(−Λ/H_v)` (1 = sin agotamiento). Se
+    /// calcula al acabar la génesis y se rehace con cada paso de erosión y cada cambio de malla.
+    pub w_hum: Vec<f64>,
+    /// Factor global de la lluvia sobre tierra (`c_P`, nota §2), fijado al acabar la génesis.
+    pub c_p: f64,
+    /// Desviación de la lluvia total sobre tierra que causa el agotamiento (antes de `c_P`).
+    pub desvio_lluvia: f64,
+    /// `true` cuando `w` está activo: tras la génesis y con `climate.agotamiento_humedad`.
+    pub humedad_activa: bool,
+    /// Anillos del camino del viento (se construyen al primer uso; no van a la caché de disco).
+    pub anillos: Option<Box<crate::humedad::Anillos>>,
 
     // --- Dinámicos (cada uno a su cadencia) ---
     pub surface: Vec<Surface>,

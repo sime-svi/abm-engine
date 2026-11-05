@@ -341,13 +341,18 @@ fn independencia_del_camino_con_dinamica() {
     // - (a) frente a (b), la comparación de la revisión.
     // Las celdas de esta prueba son enormes (834 km la gruesa, 417 km la fina): lo que difiere es
     // la física a una u otra escala, no las operaciones de la malla (exactas, ver
-    // `lod_ida_y_vuelta_conserva_erosion_y_suelo`). Medido (2026-11-05, nota de lluvia orográfica
-    // §8), (b)/(c) · (a)/(b) · (a)/(c):
-    // - lluvia sobre la tierra de la zona: 1,4 % · 2,3 % · 3,6 % (con la distancia de humedad medida
-    //   desde el centro de la celda de mar, como hasta el incremento 3: 6,2 % · 10,5 % · 16 %);
-    // - erosionado: 1,1 % · 1,9 % · 3,0 % (antes 0,2–0,3 %: el exceso de lluvia de la malla fina
-    //   compensaba que erosiona menos con la misma lluvia; la nota pide vigilarlo);
-    // - material Σe·a: 0,09 % · 0,15 %; agua: 0,15 % · 2,9 %; suelo: 2,5 % · 2,4 %.
+    // `lod_ida_y_vuelta_conserva_erosion_y_suelo`). Medido (2026-11-05), (b)/(c) · (a)/(b) · (a)/(c),
+    // con la config por defecto (nota de sombra pluviométrica §6.5):
+    // - lluvia sobre la tierra de la zona: 2,3 % · 4,5 % · 6,7 %. Sin la nota de sombra: 1,4 % ·
+    //   2,3 % · 3,6 %; con k_oro = 40: 1,0 % · 2,0 % · 3,0 %; con la distancia de humedad medida
+    //   desde el centro de la celda de mar, como hasta el incremento 3: 6,2 % · 10,5 % · 16 %. Lo sube
+    //   k_oro: estas celdas son más gruesas que d_oro y usan su propia pendiente, que cambia con la
+    //   resolución (nota de lluvia orográfica §3). A la escala que usará el Foco (de 52 a 26 km) la
+    //   lluvia de la zona cambia un 0,00 %;
+    // - erosionado: 0,17 % · 2,0 % · 2,1 % (sin la nota de sombra: 1,1 % · 1,9 % · 3,0 %; con
+    //   k_oro = 40: 0,7 % · 3,2 % · 3,9 %, lo subía el agotamiento de humedad). La nota de lluvia
+    //   orográfica pide vigilarlo;
+    // - material Σe·a: 0,01 % · 0,13 %; agua: 0,18 % · 3,0 %; suelo: 2,6 % · 2,7 %.
     // Las tolerancias dejan margen sobre esas cifras.
     let mut cfg = cfg_geo();
     cfg.lod.l_max = cfg.lod.l_min; // génesis en malla uniforme...
@@ -418,16 +423,16 @@ fn independencia_del_camino_con_dinamica() {
     assert!(bc.1 < 2e-3, "huella en el material: {:.2e}", bc.1);
     assert!(bc.2 < 0.04, "huella en el suelo: {:.2e}", bc.2);
     assert!(bc.3 < 0.02, "huella en la erosión: {:.2e}", bc.3);
-    assert!(bc.4 < 0.02, "huella en la lluvia: {:.2e}", bc.4);
+    assert!(bc.4 < 0.03, "huella en la lluvia: {:.2e}", bc.4);
     // (a) frente a (b), la comparación de la revisión, y (a) frente a (c), fina frente a gruesa.
     let ab = informe("(a) vs (b)", a, b);
     assert!(ab.0 < 0.04, "agua: {:.2e}", ab.0);
     assert!(ab.1 < 3e-3, "material: {:.2e}", ab.1);
     assert!(ab.2 < 0.05, "suelo: {:.2e}", ab.2);
-    assert!(ab.3 < 0.03, "erosionado: {:.2e}", ab.3);
-    assert!(ab.4 < 0.03, "lluvia: {:.2e}", ab.4);
+    assert!(ab.3 < 0.04, "erosionado: {:.2e}", ab.3);
+    assert!(ab.4 < 0.06, "lluvia: {:.2e}", ab.4);
     let ac = informe("(a) vs (c)", a, c);
-    assert!(ac.4 < 0.05, "lluvia, fina frente a gruesa: {:.2e}", ac.4);
+    assert!(ac.4 < 0.08, "lluvia, fina frente a gruesa: {:.2e}", ac.4);
 }
 
 #[test]
@@ -561,7 +566,9 @@ fn la_cache_reproduce_la_genesis_bit_a_bit() {
     // la clave cambia con los parámetros de la génesis pero no con los de la corrida.
     use abm_terreno::cache;
     let mut cfg = cfg_geo();
-    cfg.run.total_ticks = 5;
+    // 12 ticks: cruza un paso de LOD (n_lod = 10), así que el mundo leído de la caché tiene que
+    // reconstruir los anillos del agotamiento de humedad (no se guardan) y dar lo mismo.
+    cfg.run.total_ticks = 12;
     let dir = std::env::temp_dir().join(format!("abm_cache_test_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     cfg.run.genesis_cache = dir.to_string_lossy().into_owned();
@@ -586,7 +593,10 @@ fn la_cache_reproduce_la_genesis_bit_a_bit() {
         assert_eq!(a.e, b.e);
         assert_eq!(a.z_soil, b.z_soil);
         assert_eq!(a.w, b.w);
+        assert_eq!(a.w_hum, b.w_hum);
+        assert_eq!(a.c_p.to_bits(), b.c_p.to_bits());
     }
+    assert!(w0.humedad_activa && w0.w_hum.iter().any(|&x| x < 1.0));
 
     let mut otro = cfg.clone();
     otro.erosion.k_ero *= 2.0;
@@ -602,4 +612,35 @@ fn la_cache_reproduce_la_genesis_bit_a_bit() {
     assert!(!i3.from_cache);
     assert_eq!(d3, d0);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn en_un_mundo_plano_la_sombra_pluviometrica_no_cambia_nada() {
+    // Nota de sombra pluviométrica §4: con la tierra llana, a nivel del mar, w = 1 y m_oro = 1 en
+    // todas partes, así que la corrida es idéntica a la de sin efecto orográfico (k_oro = 0). El
+    // mar plano va en las dos: si el fondo marino contara como relieve, movería la lluvia de la
+    // costa (es lo único que distingue esta comparación de una con el código de antes de la nota).
+    let mut cfg = cfg_geo();
+    cfg.planet.h_max = 0.0; // toda la tierra a 0 m
+    cfg.climate.d_oro_km = 200.0; // anillos pequeños (la propiedad no depende de d_oro)
+    cfg.run.total_ticks = 25;
+    let (da, wa) = abm_terreno::run(&cfg).unwrap();
+    assert!(wa.humedad_activa);
+    assert!(
+        wa.w_hum.iter().all(|&x| x == 1.0),
+        "w < 1 en un mundo plano"
+    );
+    assert_eq!(wa.c_p, 1.0);
+    assert!(
+        wa.e.iter().all(|&x| x == 0.0),
+        "la erosión no debía tocar un mundo plano"
+    );
+    let mut sin = cfg.clone();
+    sin.climate.k_oro = 0.0;
+    sin.climate.agotamiento_humedad = false;
+    sin.climate.conservar_lluvia = false;
+    let (db, wb) = abm_terreno::run(&sin).unwrap();
+    assert_eq!(da.ticks, db.ticks);
+    assert_eq!(wa.topo.keys, wb.topo.keys);
+    assert_eq!(wa.precip, wb.precip);
 }

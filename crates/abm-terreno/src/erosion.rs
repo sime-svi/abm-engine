@@ -17,7 +17,7 @@ use crate::geometry::{V3, angle_between, dot, face_n, key, locate, parent_key, s
 use crate::hydro;
 use crate::lod;
 use crate::statics::oro_offset;
-use crate::systems::{oro_slope_e, precip_no_season, temp_annual_mean};
+use crate::systems::{precip_mean_cell, temp_annual_mean};
 use crate::world::{Surface, World};
 
 /// Resumen de uno o varios pasos de erosión (volúmenes en m³).
@@ -102,7 +102,7 @@ pub fn analytic_means(world: &World, cfg: &TerrenoConfig) -> (Vec<f64>, Vec<f64>
     let mut t = Vec::with_capacity(n);
     for s in 0..n {
         let lat = world.topo.lat[s];
-        let mm_tick = precip_no_season(cfg, lat, world.dist_ocean_km[s], oro_slope_e(world, s));
+        let mm_tick = precip_mean_cell(world, cfg, s);
         p.push(mm_tick.max(0.0) * t_year / 1000.0);
         t.push(temp_annual_mean(cfg, lat, world.h[s], world.es_oceano(s)));
     }
@@ -308,6 +308,9 @@ pub fn step(
     hydro::recompute_after_erosion(world, cfg);
     refresh_gradients(world);
     refresh_orography(world);
+    // Agotamiento de humedad (nota de sombra pluviométrica §3): se rehace en la cadencia de la
+    // erosión. En la génesis aún no está activo (se calcula al acabarla).
+    crate::humedad::refrescar(world, cfg);
     rep
 }
 
@@ -405,7 +408,7 @@ fn leaf_at(world: &World, d: [f64; 3]) -> Option<usize> {
 /// orden de clave: `(clave del antepasado, media)`. Es la erosión vista a la escala de referencia;
 /// como al subdividir las hijas copian `e` y al colapsar la madre toma la media, no depende de
 /// cuánto detalle haya por debajo de `l_ref`.
-fn ancestor_means(world: &World, l_ref: u32) -> Vec<(u64, f64)> {
+pub(crate) fn ancestor_means(world: &World, l_ref: u32) -> Vec<(u64, f64)> {
     let topo = &world.topo;
     let mut acc: Vec<(u64, f64, f64)> = Vec::new();
     for s in 0..topo.num_cells {
@@ -434,7 +437,7 @@ fn ancestor_means(world: &World, l_ref: u32) -> Vec<(u64, f64)> {
 
 /// Erosión acumulada `e` en un punto, vista a la escala de referencia `l_ref`: la de la hoja que lo
 /// contiene si es de nivel `≤ l_ref`; si es más fina, la media de su antepasado de nivel `l_ref`.
-fn e_ref_at(world: &World, means: &[(u64, f64)], l_ref: u32, p: [f64; 3]) -> f64 {
+pub(crate) fn e_ref_at(world: &World, means: &[(u64, f64)], l_ref: u32, p: [f64; 3]) -> f64 {
     let Some(leaf) = leaf_at(world, p) else {
         return 0.0;
     };

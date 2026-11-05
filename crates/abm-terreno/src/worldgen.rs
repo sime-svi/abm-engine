@@ -9,6 +9,7 @@
 use crate::config::TerrenoConfig;
 use crate::erosion::{self, GeoSummary};
 use crate::geometry::{face_n, key};
+use crate::humedad;
 use crate::hydro;
 use crate::lod;
 use crate::statics::StaticGen;
@@ -67,6 +68,7 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
     let mut resource = Vec::with_capacity(num);
     let mut oro0_e = Vec::with_capacity(num);
     let mut oro0_n = Vec::with_capacity(num);
+    let mut oro_air0_e = Vec::with_capacity(num);
     for s in 0..num {
         let (c, lv, i, j) = crate::geometry::split_key(topo.keys[s]);
         let g = statgen.geom(c, lv, i, j);
@@ -86,9 +88,15 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
         k_perm.push(st.k_perm);
         fert.push(st.fert);
         resource.push(st.resource);
-        let (oe, on) = statgen.oro_gradient0(&g, lv);
+        let (oe, on, oa) = statgen.oro_gradient0_air(&g, lv);
         oro0_e.push(oe);
         oro0_n.push(on);
+        // Relieve que ve el aire (mar plano): a la escala de referencia o a la de la celda.
+        oro_air0_e.push(if statgen.uses_oro_reference(lv) {
+            oa
+        } else {
+            st.grad_air_e
+        });
     }
     lod::build_neighbors(&mut topo);
 
@@ -103,6 +111,7 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
         oro_n: oro0_n.clone(),
         oro0_e,
         oro0_n,
+        oro_air0_e,
         k_perm,
         fert,
         resource,
@@ -119,6 +128,11 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
         drainage_area: Vec::new(),
         flow_order: Vec::new(),
         dist_ocean_km: Vec::new(),
+        w_hum: vec![1.0; num],
+        c_p: 1.0,
+        desvio_lluvia: 0.0,
+        humedad_activa: false,
+        anillos: None,
         surface: Vec::new(),
         w: Vec::new(),
         temp: Vec::new(),
@@ -149,6 +163,9 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
     let mut geo = erosion::genesis(&mut world, cfg);
     geo.lod_fill_m3 += pre.fill_m3;
     geo.lod_conditioned_m3 += pre.conditioned_m3;
+    // Agotamiento de humedad y factor c_P (nota de sombra pluviométrica): se calculan sobre el
+    // relieve ya envejecido y se mantienen al día durante la simulación.
+    humedad::activar(&mut world, cfg);
     if cfg.lod.enabled() || cfg.erosion.geo_steps > 0 {
         set_initial_state(&mut world, cfg);
     }

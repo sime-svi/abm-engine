@@ -12,6 +12,7 @@ pub mod config;
 pub mod erosion;
 pub mod error;
 pub mod geometry;
+pub mod humedad;
 pub mod hydro;
 pub mod lod;
 pub mod metrics;
@@ -100,6 +101,12 @@ pub fn run_with_info(
             r_km: cfg.planet.r_km,
             total_ticks: cfg.run.total_ticks,
             genesis,
+            lluvia: (cfg.climate.agotamiento_humedad || cfg.climate.conservar_lluvia).then_some(
+                metrics::LluviaMeta {
+                    desvio: world.desvio_lluvia,
+                    c_p: world.c_p,
+                },
+            ),
         },
         ticks,
     };
@@ -122,10 +129,19 @@ pub struct WorldDumpCell {
     pub veg: f64,
     pub temp: f64,
     pub precip: f64,
+    /// Con `run.dump_climate`: factor orográfico, agotamiento de humedad `w` y lluvia media anual
+    /// (mm/año) de la celda (nota de sombra pluviométrica).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub m_oro: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub w_hum: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lluvia_anual_mm: Option<f64>,
 }
 
 /// Serializa el snapshot por celda del mundo (orden de clave).
-pub fn world_dump(world: &World) -> Vec<WorldDumpCell> {
+pub fn world_dump(world: &World, cfg: &TerrenoConfig) -> Vec<WorldDumpCell> {
+    let clima = cfg.run.dump_climate;
     (0..world.topo.num_cells)
         .map(|id| WorldDumpCell {
             level: world.topo.level[id],
@@ -141,6 +157,9 @@ pub fn world_dump(world: &World) -> Vec<WorldDumpCell> {
             veg: world.veg[id],
             temp: world.temp[id],
             precip: world.precip[id],
+            m_oro: clima.then(|| systems::m_oro_celda(world, cfg, id)),
+            w_hum: clima.then(|| world.w_hum[id]),
+            lluvia_anual_mm: clima.then(|| systems::lluvia_media_anual_mm(world, cfg, id)),
         })
         .collect()
 }

@@ -31,6 +31,9 @@ pub struct RunCfg {
     pub output_path: String,
     /// Vuelca además un snapshot por celda del mundo generado (para inspección).
     pub dump_world: bool,
+    /// Añade al snapshot el clima de cada celda: factor orográfico, agotamiento de humedad y lluvia
+    /// media anual (nota de sombra pluviométrica).
+    pub dump_climate: bool,
     /// Carpeta de la caché de la génesis ("" = sin caché). La génesis depende solo de la semilla, la
     /// config y la versión del código: se calcula una vez y se reutiliza.
     pub genesis_cache: String,
@@ -44,6 +47,7 @@ impl Default for RunCfg {
             total_ticks: 365,
             output_path: "output".to_string(),
             dump_world: false,
+            dump_climate: false,
             genesis_cache: String::new(),
         }
     }
@@ -128,6 +132,28 @@ pub struct ClimateCfg {
     /// Distancia de humedad medida desde la línea de costa (`true`) o desde el centro de la celda
     /// de mar más cercana (`false`, como hasta el incremento 3; nota de lluvia orográfica §8).
     pub moisture_from_coast: bool,
+    /// Agotamiento de humedad a favor del viento (nota de sombra pluviométrica §3): el aire que
+    /// subió una cordillera soltó su vapor y no lo recupera al bajar. Factor `w = e^(−Λ/H_v)`, con
+    /// `Λ` los metros de subida recientes del camino del viento. `false` = sin agotamiento (`w = 1`).
+    pub agotamiento_humedad: bool,
+    /// `H_v` (m): subida que deja al aire con ~37 % de su vapor.
+    pub h_v_m: f64,
+    /// `L_recarga` (km): distancia de recarga de humedad sobre tierra (las subidas lejanas pesan menos).
+    pub l_recarga_km: f64,
+    /// `L_traj` (km): longitud máxima del camino del viento hacia atrás.
+    pub l_traj_km: f64,
+    /// Conservación de la lluvia total sobre tierra (nota de sombra pluviométrica §2): si la
+    /// orografía y el agotamiento la desvían más de `tol_lluvia` de la de referencia (sin efecto
+    /// orográfico ni agotamiento), se calcula en la génesis un factor global `c_P` sobre la lluvia
+    /// de la tierra que recupera el total. `false` = sin corrección (`c_P = 1`).
+    pub conservar_lluvia: bool,
+    /// Desviación admitida de la lluvia total sobre tierra antes de corregirla con `c_P`.
+    pub tol_lluvia: f64,
+    /// El aire ve el mar como una superficie plana al nivel del mar (decisión técnica, nota de sombra
+    /// pluviométrica §6): sobre el mar no hay efecto orográfico y en la costa la pendiente se mide
+    /// desde el nivel del mar, no desde el fondo marino. `false` = el fondo marino cuenta como
+    /// relieve (como hasta la nota de sombra pluviométrica).
+    pub mar_plano: bool,
 }
 
 impl Default for ClimateCfg {
@@ -143,13 +169,24 @@ impl Default for ClimateCfg {
             // Reescalado mecánico daría 2.6; se calibra a 5.0 (≈1825 mm/año en el ecuador) para que
             // emerja la selva tropical, que necesita lluvia alta. Ver README de la fase.
             p_ref: 5.0,
-            k_oro: 0.5,
+            // Nota de sombra pluviométrica §2: con 0,5 (la visión madre) el factor orográfico
+            // quedaba en 0,99–1,01 y no había sombra de lluvia. La nota propone 40 y pide calibrar
+            // por objetivos: con el relieve de este planeta, la media en las laderas de barlovento
+            // de las cordilleras de más de 2 000 m llega a 2–3 con ~150 (nota §6.2).
+            k_oro: 150.0,
             m_oro_min: 0.2,
             m_oro_max: 3.0,
             moisture_length_km: 1500.0,
             seas_precip_amp: 0.0,
             d_oro_km: 25.0,
             moisture_from_coast: true,
+            agotamiento_humedad: true,
+            h_v_m: 2500.0,
+            l_recarga_km: 1000.0,
+            l_traj_km: 2000.0,
+            conservar_lluvia: true,
+            tol_lluvia: 0.05,
+            mar_plano: true,
         }
     }
 }
@@ -406,6 +443,23 @@ impl TerrenoConfig {
         }
         if !(self.climate.d_oro_km >= 0.0 && self.climate.d_oro_km < 0.5 * self.planet.r_km) {
             return Err(invalid("se requiere 0 <= climate.d_oro_km < r_km/2"));
+        }
+        let c = &self.climate;
+        if c.agotamiento_humedad {
+            // Λ se mide sobre el relieve de referencia, en pasos de d_oro (nota de sombra §3).
+            if c.d_oro_km <= 0.0 {
+                return Err(invalid(
+                    "climate.agotamiento_humedad necesita climate.d_oro_km > 0",
+                ));
+            }
+            if !(c.h_v_m > 0.0 && c.l_recarga_km > 0.0 && c.l_traj_km >= 0.0) {
+                return Err(invalid(
+                    "se requiere climate.h_v_m > 0, l_recarga_km > 0 y l_traj_km >= 0",
+                ));
+            }
+        }
+        if !(c.tol_lluvia >= 0.0 && c.tol_lluvia.is_finite()) {
+            return Err(invalid("se requiere climate.tol_lluvia >= 0"));
         }
         let e = &self.erosion;
         if e.geo_steps > 0 && (e.geo_rounds == 0 || e.geo_rounds > e.geo_steps) {
