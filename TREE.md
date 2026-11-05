@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-04 — terreno incremento 2 (LOD dinámico) + infra en puertos 25432/23000
+Última actualización: 2026-11-05 — terreno incremento 3 (relieve vivo: erosión, sedimento y suelo) implementado
 
 ---
 
@@ -86,12 +86,13 @@ abm/
 │           ├── [x] diseno_terreno_espacio_geografia.md    # Visión completa (madre)
 │           ├── [x] incremento-1-diseno.md                 # Diseño del 1er incremento (IMPLEMENTADO)
 │           ├── [x] incremento-2-diseno.md                 # Diseño LOD dinámico v1.1 (IMPLEMENTADO)
-│           └── [x] incremento-3-diseno.md                 # Diseño relieve vivo v1.0 (DISEÑADO, a confirmar)
+│           └── [x] incremento-3-diseno.md                 # Diseño relieve vivo v1.1 (IMPLEMENTADO)
 │
 ├── tests/                         # Tests de integración (incl. determinismo)
 │   ├── [x] determinism.rs         # misma semilla → misma salida + guardias
 │   ├── [x] persistence_pg.rs      # escribe run+métricas en BD (#[ignore]; corre con --ignored)
-│   └── [x] terreno.rs             # planeta: incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación, convergencia…)
+│   ├── [x] terreno.rs             # planeta: incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación, convergencia…)
+│   └── [x] erosion.rs             # planeta: incr. 3 (relieve vivo: material, estabilidad, hondonadas, LOD…)
 │
 └── output/                        # Volcados JSON locales (IGNORADO por git)
     └── [ ] .gitkeep
@@ -99,14 +100,15 @@ abm/
 
 ---
 
-## Estado actual — motor con persistencia + terreno con LOD dinámico (2026-11-04)
+## Estado actual — motor con persistencia + terreno con LOD dinámico y relieve vivo (2026-11-05)
 
 Existe el binario `abm` (pirámide invertida): un único paquete Cargo, aún **no** el workspace de
 cinco crates. Sus módulos anticipan esa separación, de modo que el futuro refactor será básicamente
 mover carpetas. Cerradas hasta hoy las fases **«inicial»** (motor de forrajeo determinista → JSON),
 **«persistencia»** (sink a PostgreSQL/TimescaleDB + Grafana aprovisionado) y, de la fase
-**«terreno»**, los incrementos **1** (sustrato físico esférico: clima, agua, vegetación) y **2** (LOD
-dinámico: la malla se subdivide/colapsa sola). El terreno es un binario aparte, `terreno`:
+**«terreno»**, los incrementos **1** (sustrato físico esférico: clima, agua, vegetación), **2** (LOD
+dinámico: la malla se subdivide/colapsa sola) y **3** (relieve vivo: erosión, sedimento y suelo, con
+una génesis geológica de un millón de años). El terreno es un binario aparte, `terreno`:
 
 ```
 abm/
@@ -114,9 +116,9 @@ abm/
 ├── config/[x] default.toml · terreno.toml (con [lod])
 ├── docs/design/[x]                           # una carpeta por fase (CLAUDE §8.1):
 │      inicial/ (README + minimal-model) · persistencia/ (README + design)
-│      terreno/ (README + visión madre + incr. 1 e incr. 2 — IMPLEMENTADOS + incr. 3 — DISEÑADO)
+│      terreno/ (README + visión madre + diseños de los incrementos 1, 2 y 3) — IMPLEMENTADOS
 ├── infra/migrations/[x] V1__initial.sql      # simulation_runs + metrics (hypertable)
-├── tests/[x] determinism.rs · persistence_pg.rs (BD, #[ignore]) · terreno.rs
+├── tests/[x] determinism.rs · persistence_pg.rs (BD, #[ignore]) · terreno.rs · erosion.rs
 └── src/
     ├── [x] main.rs · lib.rs · config.rs · error.rs
     ├── [x] bin/terreno.rs                    # binario de la fase terreno (CLI aparte)
@@ -125,21 +127,25 @@ abm/
     │                    systems/{regrow, order, forage, reproduce, mortality, apply})
     ├── metrics/     → futuro abm-metrics     (schema, collect)
     ├── persistence/ → futuro abm-persistence (sink [trait], json_sink, pg_sink, migrations)
-    └── [x] terreno/  → sustrato físico esférico (fase «terreno», incrementos 1 y 2):
+    └── [x] terreno/  → sustrato físico esférico (fase «terreno», incrementos 1, 2 y 3):
              config · geometry (cubo esférico equiangular, claves u64, vecino por tramo) ·
              noise (Perlin 3D) · statics (estáticos = función pura de la celda) ·
              world (SoA + Topology multinivel con vecindad CSR) · hydro (priority-flood, drenaje,
              ríos/lagos, distancia al mar) · lod (vecindad multinivel, reparto conservativo, driver,
-             equilibrio 2:1, paso de topología) · worldgen (génesis + refinamiento inicial) ·
+             equilibrio 2:1, paso de topología, acondicionamiento) · erosion (incisión implícita,
+             sedimento, difusión de ladera, suelo, génesis geológica) · worldgen (génesis +
+             refinamiento inicial) ·
              systems (clima, nieve, balance hídrico, difusión simétrica, agua superficial,
-             vegetación, interfaz de agentes) · metrics (esquema v2) · mod (run + world_dump)
+             vegetación, interfaz de agentes) · metrics (esquema v3) · mod (run + world_dump)
 ```
 
 Estado: determinista (misma semilla → mismo JSON byte a byte, verificado también entre procesos y
-entre `debug` y `release`); `cargo fmt` / `clippy -D warnings` / `test` en verde (11 unitarios +
-forrajeo 3 + terreno 14; el test de BD es `#[ignore]`). Terreno: balance de agua a ~1e-12 también
-con LOD activo, 9 biomas emergentes, ríos y lagos; con la config por defecto el LOD deja ~190 000
-celdas (21,5 % de la malla fina uniforme) y la malla converge (sin parpadeo).
+entre `debug` y `release`); `cargo fmt` / `clippy -D warnings` / `test` en verde (12 unitarios +
+forrajeo 3 + terreno 14 + erosión 9; el test de BD es `#[ignore]`). Terreno: balance de agua a
+~1e-12 con LOD y erosión, balance de material de la erosión cerrado, 9 biomas emergentes, ríos y solo
+~30 lagos (la génesis geológica vacía las ~9 700 hondonadas falsas del ruido); ~193 000–199 000
+celdas con la config por defecto y la malla converge. Con la erosión apagada, salida idéntica a la
+del incremento 2.
 El motor de forrajeo ya **escribe en la BD** además del JSON: el destino se elige por config
 (`[persistence] sink = "json" | "postgres" | "both"`); la conexión se toma del entorno
 (`DATABASE_URL` o `POSTGRES_*` de `infra/.env`, autocargado). Infraestructura `infra/`
@@ -150,8 +156,8 @@ El motor de forrajeo ya **escribe en la BD** además del JSON: el destino se eli
 nacimientos y muertes continuos, gracias a la relación `g < m < apetito` (regeneración por celda <
 metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
 
-**Pendiente (fases siguientes):** terreno incremento 3 (erosión y pedogénesis, relieve vivo: diseño
-v1.0 en `docs/design/terreno/incremento-3-diseno.md`, pendiente de confirmar sus 4 decisiones);
+**Pendiente (fases siguientes):** terreno incremento 4 (lagos dinámicos, flujo multidireccional,
+fertilidad dinámica, eventos);
 refactor a los cinco crates; tablas `events` y `agent_snapshots` (LOD micro) con su sink; volcar
 las métricas del terreno a la BD; acoplar los agentes al planeta. El diseño de las tablas pendientes
 ya está en `DATABASE_SCHEMA.md`.

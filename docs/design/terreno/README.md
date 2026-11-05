@@ -105,6 +105,47 @@ Con el LOD el planeta tiene ~190 000 celdas en lugar de 13 824, así que convien
 
 Lo que **queda para los siguientes incrementos**: el relieve vivo que talla valles (erosión y pedogénesis, incr. 3), y que la malla se afine también donde haya agentes o eventos, cuando existan.
 
-## Incremento 3 — el relieve vivo (en diseño)
+## Incremento 3 — el relieve vivo
 
-Diseñado en [`incremento-3-diseno.md`](./incremento-3-diseno.md), todavía sin programar. La idea en una frase: antes de empezar la simulación se "envejece" el planeta un millón de años, de modo que los ríos excavan sus valles, el sedimento rellena las hondonadas falsas y el suelo se forma. Durante la simulación normal la erosión sigue funcionando, pero al ritmo real, casi imperceptible en unos años. Tiene cuatro decisiones pendientes de confirmar (§14 del diseño).
+### Qué logra
+
+Hasta ahora las montañas y los valles del planeta eran fijos: salían de la semilla y no cambiaban nunca. Ahora el relieve **evoluciona**:
+- **Los ríos excavan.** El agua que corre arranca material, más cuanto más caudal lleva y más empinado es el terreno. Así se forman valles.
+- **El sedimento viaja río abajo** y rellena las hondonadas que encuentra; lo que llega al mar se pierde.
+- **Las laderas se suavizan** poco a poco (el material "resbala" de lo alto a lo bajo).
+- **El suelo se forma y se pierde.** La roca se convierte en suelo, más rápido donde hace calor y llueve; la erosión se lo lleva. Donde se agota, aflora la roca, que retiene poca agua.
+
+**Vocabulario mínimo:**
+- **Génesis geológica:** antes de empezar la simulación, se "envejece" el planeta un millón de años de golpe, en pasos de 5 000 años. El mundo arranca ya tallado.
+- **Esquema implícito:** una forma de calcular la erosión que no se descontrola aunque el paso de tiempo sea enorme (miles de años). Sin él, la génesis sería inviable.
+- **Hondonada (depresión):** un hueco sin salida donde el agua se queda. Con el ruido de la semilla salían miles, y la erosión las vacía.
+
+### El problema que resuelve
+
+Con la malla fina del incremento 2 aparecían **unos 9 700 lagos falsos**: hondonadas del ruido que en un planeta real se habrían rellenado hace mucho. Para los futuros agentes eso habría sido un desastre, porque el agua es infranqueable y cuenta como fuente de agua. Tras la génesis geológica quedan **30**.
+
+### Cómo se ejecuta
+
+```
+cargo run --release --bin terreno    # génesis geológica + un año → output/terreno_terreno.json
+cargo test --test erosion            # tests del relieve vivo
+```
+
+Ahora tarda unos 38 s en modo optimizado, porque la génesis simula un millón de años. Todo se regula en `config/terreno.toml`, en las secciones `[erosion]` y `[soil]`. Con `geo_steps = 0` y `run_every = 0` vuelves exactamente al relieve fijo del incremento 2.
+
+### Resultados
+
+- **Lagos falsos:** de 9 681 a 30.
+- **Relieve:** la tierra queda de media 85 m más baja (de 491 a 406 m) y la fracción de tierra apenas cambia (de 39,3 % a 39,0 %). Siguen saliendo los 9 biomas.
+- **Clima:** el planeta se calienta 0,2 °C de media, porque con la tierra más baja hace menos frío.
+- **Durante la simulación** la erosión sigue a su ritmo real: unos 18 000 millones de m³ de sedimento al año en todo el planeta. Es del mismo orden que lo que llevan al mar los ríos de la Tierra de verdad.
+- **Material:** se puede comprobar como el agua: lo erosionado es igual a lo depositado más lo que llega al mar. Cuadra con un error de 31 m³ sobre 18 000 billones de m³.
+
+### Consideraciones y hallazgos (05-11-2026)
+
+- **Las cuatro decisiones del diseño se tomaron como se recomendaba:** génesis geológica + erosión realista; lagos dinámicos y lo demás para el incremento 4; erosión según la lluvia que recoge cada río; y el mar como sumidero del sedimento (sin deltas).
+- **El suelo necesitaba dos límites.** Con la primera fórmula, la roca desnuda no guardaba nada de agua y los lagos rellenados de sedimento guardaban cantidades absurdas. Esa diferencia de humedad entre vecinas hacía que la malla se afinara sin parar (14 500 subdivisiones de golpe). Se limitó a lo físico: solo retiene agua útil la zona de raíces (1,5 m) y la roca conserva algo (30 %), porque una celda de decenas de kilómetros nunca es solo roca.
+- **Al afinar la malla durante la simulación volvían a salir lagos falsos.** El detalle fino nuevo no está erosionado. Ahora un cambio de malla no puede crear hondonadas: si aparece una donde no la había, se rellena como lo habría hecho el sedimento, y ese volumen se apunta aparte en el balance.
+- **Con la erosión apagada, el resultado es idéntico al del incremento 2**, comprobado valor a valor contra el programa antiguo.
+
+Lo que **queda para los siguientes incrementos**: los lagos de verdad (que se llenan, se vacían y se desbordan), el agua repartida entre varias celdas de bajada, la fertilidad que cambia con el tiempo y el registro de eventos (incremento 4); y que la malla se afine también donde haya agentes, cuando existan.

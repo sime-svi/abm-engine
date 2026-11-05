@@ -325,3 +325,5 @@ Nº de hojas y **hojas por nivel**; subdivisiones y colapsos del tick; `lod_al_m
 3. **Humedades artificiales en la génesis**: la tierra nueva (nace seca) disparaba el criterio de `θ` en las pasadas iniciales → la génesis usa **solo criterios estáticos** (§9).
 
 **Desviaciones respecto al texto de §1–§12:** ninguna de fondo; los tres hallazgos ya están incorporados arriba (§8, §9). Los umbrales por defecto (§11) se mantienen tras la calibración.
+
+> **Revisado en el incremento 3 (2026-11-05).** Con el suelo dinámico (roca desnuda), el reparto de §6.1 se amplía: si las hijas de tierra suman capacidad de agua 0, la nieve y la biomasa van igualmente a ellas y solo el agua del suelo va al mar. Además, con el relieve vivo se añade el acondicionamiento hidrológico de las hojas nuevas. Ver [`incremento-3-diseno.md`](./incremento-3-diseno.md) §3 y §16.

@@ -9,10 +9,12 @@
 use std::f64::consts::FRAC_1_SQRT_2;
 
 use crate::terreno::config::TerrenoConfig;
+use crate::terreno::erosion;
 use crate::terreno::geometry::{
     MOORE8, child_key, es_diagonal, face_n, key, neighbor_addr, parent_key, split_key,
 };
 use crate::terreno::hydro;
+use crate::terreno::statics::CellGeom;
 use crate::terreno::systems::whittaker;
 use crate::terreno::world::{Biome, Pair, Surface, Topology, World};
 
@@ -218,14 +220,19 @@ pub fn split_state(
         a_t += k.area;
         cap += k.w_cap * k.area;
     }
-    if a_t <= 0.0 || cap <= 0.0 {
+    if a_t <= 0.0 {
         // Ninguna hija es tierra: el almacenamiento de la madre va al mar.
         tr.to_ocean_vol = (m.w + m.swe) / 1000.0 * mother.area;
         tr.veg_lost = m.veg * mother.area;
         return (out, tr);
     }
+    // Hay tierra: nieve y biomasa van a las hijas de tierra aunque no admitan agua del suelo (roca
+    // desnuda, `W_cap = 0`, incr. 3 §7); solo el agua del suelo que no cabe va al mar.
     let vw = m.w * mother.area; // mm·m²
-    let sat = if vw <= cap {
+    let sat = if cap <= 0.0 {
+        tr.to_ocean_vol = vw / 1000.0;
+        0.0
+    } else if vw <= cap {
         vw / cap
     } else {
         tr.to_ocean_vol = (vw - cap) / 1000.0;
@@ -395,21 +402,26 @@ fn mother_would_subdivide(
     let (ml, mi, mj) = (l - 1, i / 2, j / 2);
     let g = world.statgen.geom(c, ml, mi, mj);
     let st = world.statgen.statics(c, ml, mi, mj, &g);
-    let m_ocean = world.statgen.is_ocean_h(st.h);
 
-    // Estado anticipado de la madre: T media por área; θ del agua agregada (como en el colapso).
-    let (mut t_area, mut area, mut vw) = (0.0, 0.0, 0.0);
+    // Estado anticipado de la madre (como en el colapso): elevación h0 + e medio, T media por área,
+    // y θ del agua agregada sobre la capacidad que le daría su suelo medio.
+    let (mut t_area, mut area, mut vw, mut e_vol) = (0.0, 0.0, 0.0, 0.0);
     for &m in fam {
         let a = topo.area[m];
         t_area += world.temp[m] * a;
         area += a;
+        e_vol += world.e[m] * a;
         if !ocean[m] {
             vw += world.w[m] * a;
         }
     }
+    let h_m = st.h + e_vol / g.area;
+    let m_ocean = world.statgen.is_ocean_h(h_m);
     let t_m = t_area / area;
-    let theta_m = if st.w_cap > 0.0 {
-        (vw / g.area / st.w_cap).clamp(0.0, 1.0)
+    let z_m = area_mean(fam.map(|m| (world.z_soil[m], topo.area[m])));
+    let w_cap_m = st.w_cap * erosion::w_cap_factor(cfg, z_m);
+    let theta_m = if w_cap_m > 0.0 {
+        (vw / g.area / w_cap_m).clamp(0.0, 1.0)
     } else {
         0.0
     };
@@ -426,7 +438,7 @@ fn mother_would_subdivide(
             }
             if !m_ocean && !ocean[b] {
                 let v = [
-                    (world.h[b] - st.h).abs(),
+                    (world.h[b] - h_m).abs(),
                     (world.temp[b] - t_m).abs(),
                     (theta[b] - theta_m).abs(),
                 ];
@@ -455,12 +467,25 @@ pub struct LodReport {
     /// Biomasa perdida en el mar y creada en tierra nueva (densidad·m²).
     pub veg_lost: f64,
     pub veg_created: f64,
+    /// Material añadido al rellenar hondonadas artificiales de hojas nuevas (m³; incr. 3 §3,
+    /// acondicionamiento hidrológico). Término propio del balance de material.
+    pub fill_m3: f64,
 }
 
 impl LodReport {
     /// `true` si la topología cambió.
     pub fn changed(&self) -> bool {
         self.subdivisions + self.collapses > 0
+    }
+
+    /// Acumula otro resumen (para varias pasadas seguidas).
+    pub fn absorb(&mut self, o: &LodReport) {
+        self.subdivisions += o.subdivisions;
+        self.collapses += o.collapses;
+        self.to_ocean_vol += o.to_ocean_vol;
+        self.veg_lost += o.veg_lost;
+        self.veg_created += o.veg_created;
+        self.fill_m3 += o.fill_m3;
     }
 
     fn add(&mut self, t: &Transfer) {
@@ -477,10 +502,12 @@ pub fn step(world: &mut World, cfg: &TerrenoConfig) -> LodReport {
 }
 
 /// Refinamiento inicial de la génesis (§9): pasos de topología hasta que no haya cambios (como
-/// mucho `8·(l_max − l_min) + 8`; los ríos tardan unos pasos en asentarse). Devuelve el nº de pasos.
-pub fn refine_initial(world: &mut World, cfg: &TerrenoConfig) -> u32 {
+/// mucho `8·(l_max − l_min) + 8`; los ríos tardan unos pasos en asentarse). Devuelve el resumen
+/// acumulado de todas las pasadas.
+pub fn refine_initial(world: &mut World, cfg: &TerrenoConfig) -> LodReport {
+    let mut total = LodReport::default();
     if !cfg.lod.enabled() {
-        return 0;
+        return total;
     }
     // Solo criterios estáticos (relieve y rasgos): T y θ aún no tienen dinámica, y el reparto de
     // las pasadas daría humedades artificiales (la tierra nueva nace seca).
@@ -488,14 +515,14 @@ pub fn refine_initial(world: &mut World, cfg: &TerrenoConfig) -> u32 {
     estatico.lod.dt_sub = f64::INFINITY;
     estatico.lod.dtheta_sub = f64::INFINITY;
     let max = 8 * (cfg.lod.l_max - cfg.lod.l_min) + 8;
-    let mut passes = 0;
     for _ in 0..max {
-        passes += 1;
-        if !step(world, &estatico).changed() {
+        let rep = step(world, &estatico);
+        total.absorb(&rep);
+        if !rep.changed() {
             break;
         }
     }
-    passes
+    total
 }
 
 /// Aplica unas marcas: subdivisiones con cascada 2:1, colapsos con veto 2:1 y reconstrucción.
@@ -635,6 +662,21 @@ struct Cols {
     precip_sum: Vec<f64>,
     biome: Vec<Biome>,
     hydro_lock: Vec<bool>,
+    h0: Vec<f64>,
+    e: Vec<f64>,
+    grad0_e: Vec<f64>,
+    grad0_n: Vec<f64>,
+    w_cap0: Vec<f64>,
+    z_soil: Vec<f64>,
+}
+
+/// Lo que una hoja nueva hereda: clima intensivo `[T, P, ΣT, ΣP]`, marca hidrológica, erosión
+/// acumulada `e` (m) y profundidad de suelo `z` (m) (incr. 3 §3 y §7).
+struct NewCell {
+    clima: [f64; 4],
+    lock: bool,
+    e: f64,
+    z: f64,
 }
 
 impl Cols {
@@ -667,14 +709,21 @@ impl Cols {
         self.precip_sum.push(w.precip_sum[s]);
         self.biome.push(w.biome[s]);
         self.hydro_lock.push(w.hydro_lock[s]);
+        self.h0.push(w.h0[s]);
+        self.e.push(w.e[s]);
+        self.grad0_e.push(w.grad0_e[s]);
+        self.grad0_n.push(w.grad0_n[s]);
+        self.w_cap0.push(w.w_cap0[s]);
+        self.z_soil.push(w.z_soil[s]);
     }
 
-    /// Hoja nueva: geometría y estáticos recalculados (función pura); clima intensivo y marca
-    /// hidrológica dados; agua, nieve y biomasa a cero (los rellenan los operadores de reparto).
-    fn push_new(&mut self, w: &World, k: u64, clima: [f64; 4], lock: bool) {
+    /// Hoja nueva: geometría y estáticos recalculados (función pura); clima, marca, erosión y suelo
+    /// heredados; agua, nieve y biomasa a cero (los rellenan los operadores de reparto). El
+    /// gradiente dinámico se deja en el puro y se completa con `∇e` tras construir la vecindad.
+    fn push_new(&mut self, w: &World, k: u64, g: &CellGeom, nc: NewCell, cfg: &TerrenoConfig) {
         let (c, l, i, j) = split_key(k);
-        let g = w.statgen.geom(c, l, i, j);
-        let st = w.statgen.statics(c, l, i, j, &g);
+        let st = w.statgen.statics(c, l, i, j, g);
+        let NewCell { clima, lock, e, z } = nc;
         self.keys.push(k);
         self.level.push(l as u8);
         self.lat.push(g.lat);
@@ -683,12 +732,12 @@ impl Cols {
         self.east.push(g.east);
         self.north.push(g.north);
         self.dir.push(g.dir);
-        self.h.push(st.h);
+        self.h.push(st.h + e);
         self.slope.push(st.slope);
         self.aspect.push(st.aspect);
         self.grad_e.push(st.grad_e);
         self.grad_n.push(st.grad_n);
-        self.w_cap.push(st.w_cap);
+        self.w_cap.push(st.w_cap * erosion::w_cap_factor(cfg, z));
         self.k_perm.push(st.k_perm);
         self.fert.push(st.fert);
         self.resource.push(st.resource);
@@ -701,6 +750,12 @@ impl Cols {
         self.precip_sum.push(clima[3]);
         self.biome.push(Biome::Desierto); // se recalcula al final
         self.hydro_lock.push(lock);
+        self.h0.push(st.h);
+        self.e.push(e);
+        self.grad0_e.push(st.grad_e);
+        self.grad0_n.push(st.grad_n);
+        self.w_cap0.push(st.w_cap);
+        self.z_soil.push(z);
     }
 
     fn set_state(&mut self, ns: usize, st: WaterState) {
@@ -708,6 +763,19 @@ impl Cols {
         self.swe[ns] = st.swe;
         self.veg[ns] = st.veg;
     }
+}
+
+/// Media ponderada por área de un intensivo; si todos los valores coinciden, ese valor exacto (así
+/// el suelo intacto sigue siendo `z_init` bit a bit tras un colapso).
+fn area_mean(vals: [(f64, f64); 4]) -> f64 {
+    let first = vals[0].0;
+    if vals.iter().all(|&(v, _)| v == first) {
+        return first;
+    }
+    let (num, den) = vals
+        .iter()
+        .fold((0.0, 0.0), |(n, d), &(v, a)| (n + v * a, d + a));
+    num / den
 }
 
 /// Clima intensivo de una hoja antigua: `[T, P, ΣT, ΣP]`.
@@ -781,14 +849,30 @@ fn rebuild(
     let mut child_slots = vec![[0usize; 4]; mothers.len()];
     let mut parent_slot = vec![0usize; families.len()];
     let mut is_new = vec![false; n_new];
+    // ¿Estaba en depresión el origen de cada hoja nueva? (para el acondicionamiento, incr. 3 §3)
+    let in_dep_old = |s: usize| !old.es_oceano(s) && old.h[s] < old.filled_h[s];
+    let mut origin_dep = vec![false; n_new];
     for (ns, (k, src)) in entries.iter().enumerate() {
         match *src {
-            Src::Same(s) => cols.push_same(old, s),
+            Src::Same(s) => {
+                cols.push_same(old, s);
+                origin_dep[ns] = in_dep_old(s);
+            }
             Src::Child { mother, idx, fam } => {
-                // Las hijas heredan la marca hidrológica de la madre.
-                cols.push_new(old, *k, clima_of(old, mother), old.hydro_lock[mother]);
+                // Las hijas heredan la marca hidrológica, la erosión acumulada y el suelo de la
+                // madre (intensivos: copia, incr. 3 §3).
+                let (c, l, i, j) = split_key(*k);
+                let g = old.statgen.geom(c, l, i, j);
+                let nc = NewCell {
+                    clima: clima_of(old, mother),
+                    lock: old.hydro_lock[mother],
+                    e: old.e[mother],
+                    z: old.z_soil[mother],
+                };
+                cols.push_new(old, *k, &g, nc, cfg);
                 child_slots[fam][idx] = ns;
                 is_new[ns] = true;
+                origin_dep[ns] = in_dep_old(mother);
             }
             Src::Parent { fam } => {
                 // Intensivos climáticos: media ponderada por área de las 4 hermanas.
@@ -801,10 +885,23 @@ fn rebuild(
                     }
                     a += ar;
                 }
-                // Solo se colapsan familias sin marca: la madre nace sin ella.
-                cols.push_new(old, *k, acc.map(|x| x / a), false);
+                // Erosión: media por área que conserva el volumen `Σ e·a` exactamente; suelo:
+                // media por área (si las 4 hermanas coinciden, ese valor exacto). Solo se colapsan
+                // familias sin marca: la madre nace sin ella.
+                let (c, l, i, j) = split_key(*k);
+                let g = old.statgen.geom(c, l, i, j);
+                let members = &families[fam];
+                let e_vol: f64 = members.iter().map(|&m| old.e[m] * old.topo.area[m]).sum();
+                let nc = NewCell {
+                    clima: acc.map(|x| x / a),
+                    lock: false,
+                    e: e_vol / g.area,
+                    z: area_mean(members.map(|m| (old.z_soil[m], old.topo.area[m]))),
+                };
+                cols.push_new(old, *k, &g, nc, cfg);
                 parent_slot[fam] = ns;
                 is_new[ns] = true;
+                origin_dep[ns] = members.iter().any(|&m| in_dep_old(m));
             }
         }
     }
@@ -882,10 +979,42 @@ fn rebuild(
     world.precip_sum = cols.precip_sum;
     world.biome = cols.biome;
     world.hydro_lock = cols.hydro_lock;
+    world.h0 = cols.h0;
+    world.e = cols.e;
+    world.grad0_e = cols.grad0_e;
+    world.grad0_n = cols.grad0_n;
+    world.w_cap0 = cols.w_cap0;
+    world.z_soil = cols.z_soil;
 
     // Derivados globales sobre la malla nueva (§4), marca hidrológica y biomas de las hojas nuevas.
     hydro::recompute(world, cfg);
+    // Acondicionamiento hidrológico (incr. 3 §3): con relieve vivo, el detalle fino de una hoja nueva
+    // no está erosionado y sus hondonadas son un artefacto de bajar de escala (y un colapso puede
+    // dejar encerrada a una vecina). Un cambio de malla no puede crear hondonadas: una hoja solo
+    // queda en depresión si su origen lo estaba; si no, se rellena hasta la cota de derrame (como
+    // habría hecho el sedimento) y el volumen se apunta en `fill_m3`. Sin relieve vivo no se toca
+    // nada (incremento 2).
+    if cfg.erosion.enabled() {
+        let mut filled = false;
+        for (s, &dep_antes) in origin_dep.iter().enumerate() {
+            if !dep_antes && !world.es_oceano(s) && world.h[s] < world.filled_h[s] {
+                let d = world.filled_h[s] - world.h[s];
+                world.h[s] += d;
+                world.e[s] += d;
+                rep.fill_m3 += d * world.topo.area[s];
+                filled = true;
+            }
+        }
+        if filled {
+            hydro::recompute_after_erosion(world, cfg);
+        }
+    }
     update_hydro_lock(world);
+    // Con relieve vivo, la pendiente incluye `∇e`, que depende de los vecinos nuevos (incr. 3 §3).
+    // Sin erosión (`e ≡ 0`) no se toca nada: el resultado es el del incremento 2, bit a bit.
+    if world.e.iter().any(|&x| x != 0.0) {
+        erosion::refresh_gradients(world);
+    }
     for (s, &nuevo) in is_new.iter().enumerate() {
         if nuevo {
             world.biome[s] = biome_for(world, cfg, s);
@@ -1060,6 +1189,39 @@ mod tests {
                 "colapso no conserva"
             );
         }
+    }
+
+    #[test]
+    fn reparto_con_capacidad_cero_conserva_nieve_y_biomasa() {
+        // Hijas de tierra sin capacidad para agua del suelo (roca desnuda, incr. 3 §7): la nieve y
+        // la biomasa siguen en tierra; solo el agua del suelo va al mar.
+        let kids = [CellCap {
+            area: 1.0,
+            w_cap: 0.0,
+            ocean: false,
+        }; 4];
+        let madre = CellIn {
+            state: WaterState {
+                w: 100.0,
+                swe: 40.0,
+                veg: 7.0,
+            },
+            area: 4.0,
+            ocean: false,
+        };
+        let (h, tr) = split_state(&madre, &kids, 1.0);
+        for x in h {
+            assert_eq!(
+                x,
+                WaterState {
+                    w: 0.0,
+                    swe: 40.0,
+                    veg: 7.0
+                }
+            );
+        }
+        assert!((tr.to_ocean_vol - 100.0 / 1000.0 * 4.0).abs() < 1e-15);
+        assert_eq!(tr.veg_lost, 0.0);
     }
 
     #[test]

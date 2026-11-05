@@ -19,7 +19,14 @@ fn cfg_test() -> TerrenoConfig {
     c.run.total_ticks = 40;
     c.planet.n0 = 16; // 6·16² = 1536 celdas
     c.lod.l_max = c.lod.l_min; // incremento 1: sin LOD
+    sin_erosion(&mut c);
     c
+}
+
+/// Relieve estático (incrementos 1 y 2): sin génesis geológica ni erosión en ejecución.
+fn sin_erosion(c: &mut TerrenoConfig) {
+    c.erosion.geo_steps = 0;
+    c.erosion.run_every = 0;
 }
 
 /// Config pequeña con LOD activo (2 niveles de refinamiento y pasos de topología frecuentes).
@@ -30,6 +37,7 @@ fn cfg_lod() -> TerrenoConfig {
     c.planet.n0 = 12; // 864 celdas base
     c.lod.l_max = 2;
     c.lod.n_lod = 10;
+    sin_erosion(&mut c);
     c
 }
 

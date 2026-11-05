@@ -24,17 +24,19 @@ cargo test                                    # tests (incluye determinismo)
 
 ## Simulación del terreno (planeta)
 
-Binario aparte, `terreno`: genera un planeta esférico a partir de una semilla y simula un año de
-clima, nieve, agua del suelo, ríos y vegetación. La malla se **afina sola** donde hay detalle (costas,
-ríos, relieve abrupto) y se vuelve gruesa donde no (LOD dinámico).
+Binario aparte, `terreno`: genera un planeta esférico a partir de una semilla, lo "envejece" un
+millón de años de erosión (los ríos excavan valles y el sedimento rellena hondonadas) y simula un año
+de clima, nieve, agua del suelo, ríos y vegetación. La malla se **afina sola** donde hay detalle
+(costas, ríos, relieve abrupto) y se vuelve gruesa donde no (LOD dinámico).
 
 ```bash
 cargo run --release --bin terreno    # usa config/terreno.toml → output/terreno_terreno.json
 cargo test --test terreno            # tests de la fase
 ```
 
-Con el LOD activo conviene `--release` (~13 s por año simulado). Para la malla uniforme sin LOD,
-pon `l_max = 0` en la sección `[lod]` de `config/terreno.toml`. Explicación llana en
+Conviene `--release` (~38 s: génesis geológica + un año). Para la malla uniforme sin LOD, pon
+`l_max = 0` en `[lod]`; para el relieve fijo, `geo_steps = 0` y `run_every = 0` en `[erosion]`
+(ambos en `config/terreno.toml`). Explicación llana en
 [`docs/design/terreno/README.md`](docs/design/terreno/README.md).
 
 ## Configuración

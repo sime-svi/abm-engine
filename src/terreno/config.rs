@@ -18,6 +18,7 @@ pub struct TerrenoConfig {
     pub soil: SoilCfg,
     pub vegetation: VegCfg,
     pub lod: LodCfg,
+    pub erosion: ErosionCfg,
     pub persistence: PersistenceCfg,
 }
 
@@ -150,6 +151,21 @@ pub struct SoilCfg {
     pub k_lat_flow: f64,
     pub w_cap_min: f64,
     pub w_cap_max: f64,
+    /// Profundidad de suelo inicial (m). Con `z = z_init` la capacidad de campo es la de la textura.
+    pub z_init: f64,
+    /// Meteorización máxima (m/año): ritmo al que la roca se convierte en suelo (incr. 3 §7).
+    pub k_weath: f64,
+    /// Profundidad de referencia de la producción de suelo (m): más suelo => se forma más despacio.
+    pub z_ref: f64,
+    /// Temperatura de referencia de la meteorización (°C).
+    pub t_ref: f64,
+    /// Lluvia de referencia de la meteorización (mm/año): por encima, la humedad no acelera más.
+    pub p_ref_soil: f64,
+    /// Profundidad de raíces (m): más suelo (o sedimento) no retiene más agua útil.
+    pub z_root: f64,
+    /// Fracción de la capacidad de campo que conserva la roca desnuda a escala de celda (grietas,
+    /// suelo disperso en vaguadas): una celda de decenas de km nunca es solo roca.
+    pub f_rock: f64,
 }
 
 impl Default for SoilCfg {
@@ -162,6 +178,13 @@ impl Default for SoilCfg {
             k_lat_flow: 0.0066, // 0.05 · 48/365
             w_cap_min: 50.0,
             w_cap_max: 300.0,
+            z_init: 1.0,
+            k_weath: 1e-4,
+            z_ref: 0.5,
+            t_ref: 15.0,
+            p_ref_soil: 1000.0,
+            z_root: 1.5,
+            f_rock: 0.3,
         }
     }
 }
@@ -239,6 +262,51 @@ impl LodCfg {
     }
 }
 
+/// Relieve vivo (incremento 3, `docs/design/terreno/incremento-3-diseno.md` §2 y §12). Tasas en
+/// unidades por año (no por tick): el mismo paso sirve para la génesis geológica y la ejecución.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ErosionCfg {
+    /// Pasos de la génesis geológica antes del tick 0 (0 = sin génesis).
+    pub geo_steps: u32,
+    /// Años por paso de la génesis geológica.
+    pub geo_dt_years: f64,
+    /// Rondas erosión ↔ refinado LOD en que se reparten los pasos de la génesis.
+    pub geo_rounds: u32,
+    /// Erodibilidad `K` de la potencia de arroyo (m^(1−3m)·año^(m−1)), con el caudal en m³/año.
+    pub k_ero: f64,
+    /// Exponente del caudal `m` (el de la pendiente es `n = 1`, fijo: esquema implícito lineal).
+    pub m_ero: f64,
+    /// Difusividad de ladera efectiva (m²/año): procesos por debajo del tamaño de celda.
+    pub kappa_dif: f64,
+    /// Cada cuántos ticks se erosiona durante la simulación (0 = nunca).
+    pub run_every: u64,
+    /// Acelerador del tiempo geológico en ejecución (1 = realista).
+    pub run_accel: f64,
+}
+
+impl ErosionCfg {
+    /// `true` si el relieve está vivo (hay génesis geológica o erosión en ejecución).
+    pub fn enabled(&self) -> bool {
+        self.geo_steps > 0 || self.run_every > 0
+    }
+}
+
+impl Default for ErosionCfg {
+    fn default() -> Self {
+        Self {
+            geo_steps: 200,
+            geo_dt_years: 5000.0,
+            geo_rounds: 2,
+            k_ero: 1e-6,
+            m_ero: 0.5,
+            kappa_dif: 10.0,
+            run_every: 365,
+            run_accel: 1.0,
+        }
+    }
+}
+
 /// Destino de la salida (reutiliza el sink del motor: aquí solo JSON en este incremento).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -309,6 +377,40 @@ impl TerrenoConfig {
         }
         if self.vegetation.v_init < 0.0 {
             return Err(invalid("vegetation.v_init debe ser >= 0"));
+        }
+        // La precipitación media anual analítica de la erosión exige que el factor estacional no
+        // se recorte en cero (incr. 3 §4).
+        if !(0.0..=1.0).contains(&self.climate.seas_precip_amp) {
+            return Err(invalid("se requiere 0 <= climate.seas_precip_amp <= 1"));
+        }
+        let e = &self.erosion;
+        if e.geo_steps > 0 && (e.geo_rounds == 0 || e.geo_rounds > e.geo_steps) {
+            return Err(invalid(
+                "se requiere 1 <= erosion.geo_rounds <= erosion.geo_steps",
+            ));
+        }
+        if e.geo_dt_years <= 0.0 || e.k_ero < 0.0 || e.kappa_dif < 0.0 || e.run_accel < 0.0 {
+            return Err(invalid(
+                "se requiere erosion.geo_dt_years > 0 y k_ero, kappa_dif, run_accel >= 0",
+            ));
+        }
+        if !(e.m_ero > 0.0 && e.m_ero <= 2.0) {
+            return Err(invalid("se requiere 0 < erosion.m_ero <= 2"));
+        }
+        let s = &self.soil;
+        if !(s.z_init > 0.0 && s.z_ref > 0.0 && s.t_ref > 0.0 && s.p_ref_soil > 0.0)
+            || s.k_weath < 0.0
+        {
+            return Err(invalid(
+                "se requiere soil.z_init, z_ref, t_ref, p_ref_soil > 0 y soil.k_weath >= 0",
+            ));
+        }
+        // Con el suelo intacto (z = z_init) la capacidad debe ser la de la textura: z_init dentro
+        // de [f_rock·z_init, z_root].
+        if !(s.z_root >= s.z_init && s.f_rock > 0.0 && s.f_rock <= 1.0) {
+            return Err(invalid(
+                "se requiere soil.z_root >= soil.z_init y 0 < soil.f_rock <= 1",
+            ));
         }
         if self.planet.h_max <= self.planet.h_min {
             return Err(invalid("planet.h_max debe ser > planet.h_min"));

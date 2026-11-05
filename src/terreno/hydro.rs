@@ -41,6 +41,21 @@ impl PartialOrd for MinItem {
 
 /// Recalcula todos los derivados globales del mundo sobre su malla actual.
 pub fn recompute(world: &mut World, cfg: &TerrenoConfig) {
+    recompute_flow(world, cfg);
+    recompute_dist_ocean(world);
+    label_rivers_lakes(world, cfg);
+}
+
+/// Recalcula los derivados tras un paso de erosión (incr. 3): la red de flujo y las etiquetas. La
+/// distancia al mar no cambia, porque la erosión nunca convierte tierra en mar (incr. 3 §3).
+pub fn recompute_after_erosion(world: &mut World, cfg: &TerrenoConfig) {
+    recompute_flow(world, cfg);
+    label_rivers_lakes(world, cfg);
+}
+
+/// Pasos 1–3: clasificación base, priority-flood (receptores, `filled_h`, orden de flujo) y área de
+/// drenaje.
+fn recompute_flow(world: &mut World, _cfg: &TerrenoConfig) {
     let num = world.topo.num_cells;
 
     // --- 1) Clasificación base ---
@@ -111,8 +126,11 @@ pub fn recompute(world: &mut World, cfg: &TerrenoConfig) {
             world.drainage_area[r as usize] += world.drainage_area[id as usize];
         }
     }
+}
 
-    // --- 4) Distancia a la fuente de humedad: Dijkstra multi-fuente con distancias reales ---
+/// Paso 4: distancia a la fuente de humedad, Dijkstra multi-fuente con distancias reales.
+fn recompute_dist_ocean(world: &mut World) {
+    let num = world.topo.num_cells;
     let r_km = world.topo.r_planet / 1000.0;
     world.dist_ocean_km.clear();
     world.dist_ocean_km.resize(num, f64::INFINITY);
@@ -148,8 +166,11 @@ pub fn recompute(world: &mut World, cfg: &TerrenoConfig) {
             *d = 0.0; // mundo sin océano: humedad uniforme
         }
     }
+}
 
-    // --- 5) Clasificación final: ríos (por área de drenaje) y lagos (depresiones rellenadas) ---
+/// Paso 5: clasificación final: ríos (por área de drenaje) y lagos (depresiones rellenadas).
+fn label_rivers_lakes(world: &mut World, cfg: &TerrenoConfig) {
+    let num = world.topo.num_cells;
     let river_threshold_m2 = cfg.worldgen.river_threshold_km2 * 1e6;
     for s in 0..num {
         if matches!(world.surface[s], Surface::Oceano) {

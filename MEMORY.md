@@ -407,3 +407,45 @@ Formato de entrada:
   4. mar como sumidero de sedimento (sin deltas).
 - **Estado tras el cambio:** Incremento 3 **diseñado, no implementado**. TREE y README de la fase
   actualizados. Próximo paso: confirmar las 4 decisiones e implementar.
+
+## [2026-11-05] Implementación de la fase «terreno» — incremento 3 (relieve vivo)
+
+- **Qué:** Implementado el relieve vivo según el diseño, cuyas 4 decisiones confirmó el responsable
+  ("sí a todo"):
+  - módulo nuevo `src/terreno/erosion.rs`: incisión por potencia de arroyo implícita, sedimento que
+    rellena depresiones, difusión de ladera con subpasos y suelo dinámico;
+  - **génesis geológica** (200 pasos × 5 000 años = 1 millón de años, en 2 rondas erosión ↔ LOD);
+  - erosión en ejecución cada 365 ticks a ritmo real;
+  - `h = h0 + e` repartido por el LOD (copia/media que conserva `Σ e·a`);
+  - config `[erosion]` y nuevos parámetros de `[soil]`; esquema de salida v3;
+  - `tests/erosion.rs` (9 tests).
+- **Por qué:** Incremento 3 del plan. Elimina los ~9 700 lagos falsos del ruido (quedan 30), que
+  habrían distorsionado a los agentes.
+- **Decisiones / problemas (cazados por las corridas de calibración y los tests):**
+  - **La capacidad `W_cap ∝ z` sin límites rompía el LOD.** La roca desnuda (10 % de la tierra) daba
+    θ = 0, y los lagos rellenados, hasta 136 m de agua. El criterio θ pidió 14 510 subdivisiones
+    de golpe. → `W_cap = W_cap0·clamp(z/z_init, f_rock, z_root/z_init)`, con `z_root = 1.5 m` y
+    `f_rock = 0.3`; calibrado `k_weath = 1e-4` m/año.
+  - **El detalle fino nuevo no está erosionado.** Cada subdivisión en ejecución traía hondonadas →
+    lagos → rasgos → más afinado (805 → 5 100 lagos en un año). → **Acondicionamiento**: un cambio
+    de malla no puede crear hondonadas; se rellenan hasta el derrame y se apuntan en `fill_m3`.
+    Solo con el relieve vivo activo.
+  - **Faltaba apuntar el relleno del refinado inicial** en el balance de material: lo cazó el test
+    del balance global (1,7 % de descuadre).
+  - **El veto 2:1 es conservador** con colapsos vecinos simultáneos (necesita varias pasadas): es
+    seguro, y el test lo tiene en cuenta.
+  - Corregido `split_state`: con `W_cap = 0` la nieve y la biomasa ya no se pierden en el mar.
+- **Verificación:** `fmt` + `clippy -D warnings` limpios; `cargo test` en verde (12 unitarios +
+  forrajeo 3 + terreno 14 + erosión 9; BD ignorado y verde con `--ignored`).
+  - **No regresión:** con la erosión apagada, 0 diferencias en 7 300 valores frente al binario del
+    incremento 2.
+  - **Determinismo:** idéntico byte a byte entre procesos.
+  - **Conservación:** residual de material de la génesis de 31 m³ sobre 1,8·10¹⁶; agua ≤ 5·10⁻¹² en
+    3 años.
+  - **Resultados:** elevación media de la tierra 491 → 406 m; tierra 39,3 → 39,0 %; T +0,2 °C; 9
+    biomas; ~1,8·10¹⁰ m³/año de sedimento en ejecución (orden de la Tierra real); malla que converge
+    en 3 años.
+  - **Coste:** ~38 s y ~390 MB por génesis + año en release.
+- **Estado tras el cambio:** Incremento 3 **implementado y verificado**. Siguiente del plan: incremento
+  4 (lagos dinámicos, flujo multidireccional, fertilidad dinámica, eventos) o los agentes en el
+  planeta.

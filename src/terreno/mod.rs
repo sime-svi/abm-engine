@@ -1,12 +1,14 @@
-//! Fase «terreno» — sustrato físico esférico (incrementos 1 y 2).
+//! Fase «terreno» — sustrato físico esférico (incrementos 1, 2 y 3).
 //!
-//! Motor independiente del de forrajeo: genera un planeta (cubo esférico) y corre los sistemas
-//! rápidos (clima, nieve, agua, vegetación) de forma determinista, sobre una malla que puede
-//! **afinarse sola** donde hay detalle (LOD dinámico, incremento 2). Diseño:
-//! `docs/design/terreno/incremento-1-diseno.md` e `incremento-2-diseno.md`. Entrada:
-//! `(semilla, config)`. Salida: métricas por tick + (opcional) snapshot por celda del mundo.
+//! Motor independiente del de forrajeo: genera un planeta (cubo esférico), lo "envejece" con una
+//! génesis geológica (erosión y suelo, incremento 3) y corre los sistemas rápidos (clima, nieve,
+//! agua, vegetación) de forma determinista, sobre una malla que puede **afinarse sola** donde hay
+//! detalle (LOD dinámico, incremento 2), con el relieve aún vivo a ritmo real. Diseño:
+//! `docs/design/terreno/incremento-{1,2,3}-diseno.md`. Entrada: `(semilla, config)`. Salida:
+//! métricas por tick + (opcional) snapshot por celda del mundo.
 
 pub mod config;
+pub mod erosion;
 pub mod geometry;
 pub mod hydro;
 pub mod lod;
@@ -31,7 +33,7 @@ use crate::error::SimError;
 /// sistemas del incremento 1.
 pub fn run(cfg: &TerrenoConfig) -> Result<(TerrenoDoc, World), SimError> {
     cfg.validate()?;
-    let mut world = worldgen::generate(cfg);
+    let (mut world, genesis) = worldgen::generate_with_report(cfg);
     let mut scratch = systems::Scratch::new(world.topo.num_cells);
     let mut ticks = Vec::with_capacity(cfg.run.total_ticks as usize);
     let initial_cells = world.topo.num_cells as u64;
@@ -49,7 +51,16 @@ pub fn run(cfg: &TerrenoConfig) -> Result<(TerrenoDoc, World), SimError> {
         } else {
             lod::LodReport::default()
         };
-        let acct = systems::step(&mut world, cfg, &mut scratch, t, store_before, &lod_report);
+        let mut acct = systems::step(&mut world, cfg, &mut scratch, t, store_before, &lod_report);
+        // Erosión en ejecución (incr. 3 §9), al final del tick: no mueve agua (el exceso de agua
+        // sobre una capacidad menor se drena en el tick siguiente).
+        let every = cfg.erosion.run_every;
+        if every > 0 && t > 0 && t.is_multiple_of(every) {
+            let dt_years = every as f64 / cfg.climate.t_year * cfg.erosion.run_accel;
+            let (p, tm) = erosion::running_means(&world, cfg);
+            acct.erosion = erosion::step(&mut world, cfg, dt_years, &p, &tm);
+            lod::update_hydro_lock(&mut world);
+        }
         ticks.push(metrics::compute(&world, &acct, t));
     }
 
@@ -65,6 +76,7 @@ pub fn run(cfg: &TerrenoConfig) -> Result<(TerrenoDoc, World), SimError> {
             num_cells: initial_cells,
             r_km: cfg.planet.r_km,
             total_ticks: cfg.run.total_ticks,
+            genesis,
         },
         ticks,
     };
@@ -79,6 +91,8 @@ pub struct WorldDumpCell {
     pub lon_deg: f64,
     pub area_km2: f64,
     pub h: f64,
+    pub erosion_m: f64,
+    pub soil_m: f64,
     pub surface: world::Surface,
     pub biome: world::Biome,
     pub theta: f64,
@@ -96,6 +110,8 @@ pub fn world_dump(world: &World) -> Vec<WorldDumpCell> {
             lon_deg: world.topo.lon[id].to_degrees(),
             area_km2: world.topo.area[id] / 1e6,
             h: world.h[id],
+            erosion_m: world.e[id],
+            soil_m: world.z_soil[id],
             surface: world.surface[id],
             biome: world.biome[id],
             theta: world.theta(id),

@@ -4,9 +4,13 @@
 //! Esquema v2 (incremento 2): nº de hojas y hojas por nivel, actividad del LOD (subdivisiones,
 //! colapsos, agua enviada al mar por el reparto), área de tierra, y longitud de ríos con el lado
 //! real de cada celda.
+//!
+//! Esquema v3 (incremento 3): profundidad media del suelo, balance de material de cada paso de
+//! erosión (erosionado, depositado, al mar, residual) y resumen de la génesis geológica.
 
 use serde::{Deserialize, Serialize};
 
+use crate::terreno::erosion::GeoSummary;
 use crate::terreno::systems::TickAccount;
 use crate::terreno::world::{Biome, Surface, World};
 
@@ -14,7 +18,7 @@ use crate::terreno::world::{Biome, Surface, World};
 pub const N_BANDS: usize = 6;
 
 /// Versión del esquema del documento de salida.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// Área por bioma (m²), con nombre estable para claves de salida.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -35,6 +39,7 @@ pub struct TerrenoTickMetrics {
     pub precip_total_m3: f64,
     pub theta_mean: f64,
     pub elev_mean_land: f64,
+    pub soil_depth_mean_m: f64,
     pub land_area_m2: f64,
     pub snow_cover_m2: f64,
     pub river_cells: u64,
@@ -45,6 +50,11 @@ pub struct TerrenoTickMetrics {
     pub lod_subdivisions: u64,
     pub lod_collapses: u64,
     pub lod_to_ocean_m3: f64,
+    /// Paso de erosión del tick (0 si no lo hubo): material arrancado, depositado, al mar y residual.
+    pub eroded_m3: f64,
+    pub deposited_m3: f64,
+    pub sediment_to_ocean_m3: f64,
+    pub sediment_residual_m3: f64,
     pub water_residual_m3: f64,
     pub water_residual_rel: f64,
     pub biome_area: Vec<BiomeArea>,
@@ -64,6 +74,8 @@ pub struct TerrenoRunMeta {
     pub num_cells: u64,
     pub r_km: f64,
     pub total_ticks: u64,
+    /// Génesis geológica (incr. 3 §8): años simulados, balance de material y relieve antes/después.
+    pub genesis: GeoSummary,
 }
 
 /// Documento completo de salida.
@@ -108,6 +120,7 @@ pub fn compute(world: &World, acct: &TickAccount, t: u64) -> TerrenoTickMetrics 
     let mut theta_area = 0.0;
     let mut land_area = 0.0;
     let mut elev_area = 0.0;
+    let mut soil_area = 0.0;
     let mut snow_cover = 0.0;
     let mut river_cells = 0u64;
     let mut lake_cells = 0u64;
@@ -119,6 +132,7 @@ pub fn compute(world: &World, acct: &TickAccount, t: u64) -> TerrenoTickMetrics 
         if !matches!(world.surface[id], Surface::Oceano) {
             theta_area += world.theta(id) * a;
             elev_area += world.h[id] * a;
+            soil_area += world.z_soil[id] * a;
             land_area += a;
             if world.swe[id] > 0.0 {
                 snow_cover += a;
@@ -141,6 +155,11 @@ pub fn compute(world: &World, acct: &TickAccount, t: u64) -> TerrenoTickMetrics 
     };
     let elev_mean_land = if land_area > 0.0 {
         elev_area / land_area
+    } else {
+        0.0
+    };
+    let soil_depth_mean_m = if land_area > 0.0 {
+        soil_area / land_area
     } else {
         0.0
     };
@@ -170,6 +189,7 @@ pub fn compute(world: &World, acct: &TickAccount, t: u64) -> TerrenoTickMetrics 
         precip_total_m3: precip_total,
         theta_mean,
         elev_mean_land,
+        soil_depth_mean_m,
         land_area_m2: land_area,
         snow_cover_m2: snow_cover,
         river_cells,
@@ -179,6 +199,10 @@ pub fn compute(world: &World, acct: &TickAccount, t: u64) -> TerrenoTickMetrics 
         lod_subdivisions: acct.lod_subdivisions,
         lod_collapses: acct.lod_collapses,
         lod_to_ocean_m3: acct.lod_to_ocean_vol,
+        eroded_m3: acct.erosion.eroded_m3,
+        deposited_m3: acct.erosion.deposited_m3,
+        sediment_to_ocean_m3: acct.erosion.to_ocean_m3,
+        sediment_residual_m3: acct.erosion.residual_m3,
         water_residual_m3: residual,
         water_residual_rel,
         biome_area,

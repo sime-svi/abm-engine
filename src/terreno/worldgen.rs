@@ -3,10 +3,11 @@
 //!
 //! Cadena: malla uniforme del nivel base `l_min` → estáticos (función pura de cada celda, generador
 //! de [`StaticGen`]) → vecindad → derivados globales (priority-flood, drenaje, ríos/lagos, distancia
-//! al mar) → **refinamiento inicial** del LOD (si está activo) → estado dinámico inicial sobre la
-//! malla final. El relieve es **estático** (sin erosión ni pedogénesis).
+//! al mar) → **refinamiento inicial** del LOD (si está activo) → **génesis geológica** (erosión y
+//! suelo durante ~1 millón de años, incr. 3 §8) → estado dinámico inicial sobre la malla final.
 
 use crate::terreno::config::TerrenoConfig;
+use crate::terreno::erosion::{self, GeoSummary};
 use crate::terreno::geometry::{face_n, key};
 use crate::terreno::hydro;
 use crate::terreno::lod;
@@ -15,6 +16,11 @@ use crate::terreno::world::{Biome, Surface, Topology, World};
 
 /// Genera el mundo completo a partir de la configuración.
 pub fn generate(cfg: &TerrenoConfig) -> World {
+    generate_with_report(cfg).0
+}
+
+/// Genera el mundo y devuelve también el resumen de la génesis geológica.
+pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
     let statgen = StaticGen::new(cfg);
     let l = cfg.lod.l_min;
     let n = face_n(cfg.planet.n0, l);
@@ -84,15 +90,21 @@ pub fn generate(cfg: &TerrenoConfig) -> World {
     let mut world = World {
         topo,
         statgen,
+        h0: h.clone(),
+        grad0_e: grad_e.clone(),
+        grad0_n: grad_n.clone(),
+        w_cap0: w_cap.clone(),
+        k_perm,
+        fert,
+        resource,
+        e: vec![0.0; num],
+        z_soil: vec![cfg.soil.z_init; num],
         h,
         slope,
         aspect,
         grad_e,
         grad_n,
         w_cap,
-        k_perm,
-        fert,
-        resource,
         filled_h: Vec::new(),
         receiver: Vec::new(),
         drainage_area: Vec::new(),
@@ -115,13 +127,22 @@ pub fn generate(cfg: &TerrenoConfig) -> World {
     lod::update_hydro_lock(&mut world);
     set_initial_state(&mut world, cfg);
 
-    // Refinamiento inicial (solo criterios estáticos: T y θ aún son uniformes) y estado inicial
-    // sobre la malla final: la génesis no transfiere agua al mar.
-    if cfg.lod.enabled() {
-        lod::refine_initial(&mut world, cfg);
+    // Refinamiento inicial (solo criterios estáticos: T y θ aún son uniformes), génesis geológica
+    // (erosión y suelo, incr. 3 §8) y estado inicial sobre la malla final: la génesis no transfiere
+    // agua al mar.
+    // El relleno de hondonadas artificiales del refinado inicial (acondicionamiento, incr. 3 §3)
+    // también entra en el balance de material de la génesis.
+    let pre_fill = if cfg.lod.enabled() {
+        lod::refine_initial(&mut world, cfg).fill_m3
+    } else {
+        0.0
+    };
+    let mut geo = erosion::genesis(&mut world, cfg);
+    geo.lod_fill_m3 += pre_fill;
+    if cfg.lod.enabled() || cfg.erosion.geo_steps > 0 {
         set_initial_state(&mut world, cfg);
     }
-    world
+    (world, geo)
 }
 
 /// Estado dinámico inicial (incremento 1): suelo a media capacidad y biomasa semilla en tierra;

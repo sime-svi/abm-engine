@@ -30,6 +30,29 @@ fn main() -> Result<()> {
         println!("  Mundo    -> {dump_path}");
     }
 
+    let g = &doc.run.genesis;
+    if g.erosion.steps > 0 {
+        println!(
+            "  Génesis geológica: {} pasos ({:.0} años). Erosionado {:.3e} m³, depositado {:.3e} m³, al mar {:.3e} m³ (residual {:.1e}).",
+            g.erosion.steps,
+            g.years,
+            g.erosion.eroded_m3,
+            g.erosion.deposited_m3,
+            g.erosion.to_ocean_m3,
+            g.erosion.residual_m3
+        );
+        println!(
+            "    Lagos {} -> {} celdas; ríos {} -> {}; elevación media de la tierra {:.0} -> {:.0} m; tierra {:.1} % -> {:.1} %.",
+            g.before.lake_cells,
+            g.after.lake_cells,
+            g.before.river_cells,
+            g.after.river_cells,
+            g.before.elev_mean_land,
+            g.after.elev_mean_land,
+            100.0 * g.before.land_fraction,
+            100.0 * g.after.land_fraction
+        );
+    }
     let last = doc.ticks.last();
     println!(
         "Simulación de terreno '{}' completada: {} celdas tras la génesis (niveles {}..={}), {} ticks.",

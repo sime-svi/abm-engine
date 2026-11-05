@@ -1,4 +1,4 @@
-# Configuración de la fase «terreno» (incrementos 1 y 2). TODOS los parámetros viven aquí (CLAUDE §5).
+# Configuración de la fase «terreno» (incrementos 1, 2 y 3). TODOS los parámetros viven aquí (CLAUDE §5).
 # Los defaults son los del documento madre REESCALADOS al tick diario (T_anio=365): toda tasa por
 # tick × 48/365, toda cadencia en ticks × 365/48 (diseño §7).
 
@@ -49,6 +49,14 @@ k_et        = 0.13         # evapotranspiración por grado (mm/(°C·tick)) [1.0
 k_lat_flow  = 0.0066       # difusión lateral de humedad [0.05·48/365]
 w_cap_min   = 50.0         # capacidad de campo mínima (mm)
 w_cap_max   = 300.0        # capacidad de campo máxima (mm)
+# Suelo vivo (incremento 3). Tasas por AÑO, no por tick.
+z_init      = 1.0          # profundidad de suelo inicial (m); con z = z_init, capacidad = la de la textura
+k_weath     = 1e-4         # meteorización máxima: roca -> suelo (m/año). Calibrado: rango real 1e-5..1e-4
+z_ref       = 0.5          # profundidad de referencia: con más suelo, se forma más despacio (m)
+t_ref       = 15.0         # temperatura de referencia de la meteorización (°C)
+p_ref_soil  = 1000.0       # lluvia a partir de la cual la humedad ya no acelera la meteorización (mm/año)
+z_root      = 1.5          # profundidad de raíces: más suelo no retiene más agua útil (m)
+f_rock      = 0.3          # fracción de capacidad que conserva la roca desnuda a escala de celda (calibrado)
 
 [vegetation]
 theta_opt   = 0.6          # humedad óptima
@@ -70,6 +78,19 @@ dt_sub          = 4.0      # °C: ídem temperatura
 dtheta_sub      = 0.3      # ídem humedad relativa del suelo (0..1)
 h_hist          = 0.5      # histéresis: solo se colapsa por debajo de h_hist · umbral
 refine_features = true     # afinar costas, ríos y lagos
+
+[erosion]
+# Relieve vivo (incremento 3): los ríos excavan, el sedimento rellena hondonadas, las laderas se
+# suavizan. Tasas por AÑO. Antes del tick 0 se "envejece" el planeta (génesis geológica); durante la
+# simulación la erosión sigue a ritmo real (casi imperceptible en pocos años).
+geo_steps    = 200         # pasos de la génesis geológica (0 = sin génesis)
+geo_dt_years = 5000.0      # años por paso (200 × 5000 = 1 millón de años)
+geo_rounds   = 2           # rondas erosión <-> refinado de la malla
+k_ero        = 1e-6        # erodibilidad K de la potencia de arroyo (caudal en m³/año)
+m_ero        = 0.5         # exponente del caudal (el de la pendiente es 1)
+kappa_dif    = 10.0        # difusividad de ladera efectiva (m²/año)
+run_every    = 365         # cada cuántos ticks se erosiona durante la simulación (0 = nunca)
+run_accel    = 1.0         # acelerador del tiempo geológico en la simulación (1 = realista)
 
 [persistence]
 sink = "json"              # destino de la salida (en este incremento solo JSON)

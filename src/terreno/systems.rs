@@ -9,6 +9,7 @@
 use std::f64::consts::PI;
 
 use crate::terreno::config::TerrenoConfig;
+use crate::terreno::erosion::ErosionReport;
 use crate::terreno::lod::LodReport;
 use crate::terreno::world::{Biome, Surface, World};
 
@@ -61,6 +62,8 @@ pub struct TickAccount {
     /// Subdivisiones y colapsos del paso de topología del tick (0 si no lo hubo).
     pub lod_subdivisions: u64,
     pub lod_collapses: u64,
+    /// Paso de erosión del tick (vacío si no lo hubo; incr. 3 §9). No mueve agua.
+    pub erosion: ErosionReport,
 }
 
 impl TickAccount {
@@ -169,6 +172,7 @@ pub fn step(
         discharge_max,
         lod_subdivisions: lod.subdivisions,
         lod_collapses: lod.collapses,
+        erosion: ErosionReport::default(),
     }
 }
 
@@ -183,31 +187,55 @@ pub fn total_store_vol(world: &World) -> f64 {
     v
 }
 
+/// Temperatura media anual (°C) de una celda: latitud + altura (sin el término estacional, que
+/// promedia a cero en un año). La usan el clima del tick y la erosión (incr. 3 §7).
+pub(crate) fn temp_annual_mean(cfg: &TerrenoConfig, lat_rad: f64, h: f64, ocean: bool) -> f64 {
+    let c = &cfg.climate;
+    let abslat = lat_rad.to_degrees().abs();
+    let land_h = if ocean {
+        0.0
+    } else {
+        ((h - cfg.planet.sea_level) / 1000.0).max(0.0)
+    };
+    c.t_equator - c.k_lat * abslat - c.lapse * land_h
+}
+
+/// Precipitación por tick (mm) sin el factor estacional: franja · humedad · orografía. Como el factor
+/// estacional promedia a 1 (si `seas_precip_amp ≤ 1`), es también la media del año (incr. 3 §4).
+pub(crate) fn precip_no_season(
+    cfg: &TerrenoConfig,
+    lat_rad: f64,
+    dist_km: f64,
+    grad_e: f64,
+) -> f64 {
+    let c = &cfg.climate;
+    let abslat = lat_rad.to_degrees().abs();
+    let p_base = c.p_ref * precip_band(abslat);
+    let m_water = (-dist_km / c.moisture_length_km).exp();
+    let we = wind_east(abslat);
+    let grad_dot = grad_e * we; // viento norte = 0
+    let m_oro = (1.0 + c.k_oro * grad_dot).clamp(c.m_oro_min, c.m_oro_max);
+    p_base * m_water * m_oro
+}
+
 /// 6.2 Clima: temperatura (latitud + altura + estación) y precipitación (franja · humedad · orografía).
 fn climate(world: &mut World, cfg: &TerrenoConfig, t: u64) {
     let c = &cfg.climate;
     let phase = 2.0 * PI * t as f64 / c.t_year;
     let (sin_p, _) = phase.sin_cos();
     for id in 0..world.topo.num_cells {
-        let lat_deg = world.topo.lat[id].to_degrees();
+        let lat = world.topo.lat[id];
+        let lat_deg = lat.to_degrees();
         let abslat = lat_deg.abs();
-        let land_h = if matches!(world.surface[id], Surface::Oceano) {
-            0.0
-        } else {
-            ((world.h[id] - cfg.planet.sea_level) / 1000.0).max(0.0)
-        };
-        let t_media = c.t_equator - c.k_lat * abslat - c.lapse * land_h;
+        let ocean = matches!(world.surface[id], Surface::Oceano);
+        let t_media = temp_annual_mean(cfg, lat, world.h[id], ocean);
         let a_est = c.seas_amp_pole * (abslat / 90.0);
         let s = if lat_deg >= 0.0 { 1.0 } else { -1.0 };
         world.temp[id] = t_media + s * a_est * sin_p;
 
-        let p_base = c.p_ref * precip_band(abslat);
-        let m_water = (-world.dist_ocean_km[id] / c.moisture_length_km).exp();
-        let we = wind_east(abslat);
-        let grad_dot = world.grad_e[id] * we; // viento norte = 0
-        let m_oro = (1.0 + c.k_oro * grad_dot).clamp(c.m_oro_min, c.m_oro_max);
+        let p = precip_no_season(cfg, lat, world.dist_ocean_km[id], world.grad_e[id]);
         let m_est = (1.0 + c.seas_precip_amp * s * sin_p).max(0.0);
-        world.precip[id] = (p_base * m_water * m_oro * m_est).max(0.0);
+        world.precip[id] = (p * m_est).max(0.0);
     }
 }
 

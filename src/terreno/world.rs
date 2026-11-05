@@ -166,16 +166,24 @@ pub struct World {
     /// Generador de estáticos (función pura de la dirección de cada celda, incremento 2 §3).
     pub statgen: StaticGen,
 
-    // --- Estáticos (función pura de la dirección de la celda; el relieve no cambia) ---
-    pub h: Vec<f64>,        // elevación (m)
-    pub slope: Vec<f64>,    // pendiente S (rad)
-    pub aspect: Vec<f64>,   // orientación (rad; reservado, uso futuro)
-    pub grad_e: Vec<f64>,   // ∂h/∂este (m/m)
-    pub grad_n: Vec<f64>,   // ∂h/∂norte (m/m)
-    pub w_cap: Vec<f64>,    // capacidad de campo (mm)
+    // --- Estáticos puros (función de la dirección de la celda, incr. 2 §3) ---
+    pub h0: Vec<f64>,       // elevación de nacimiento (m), del ruido
+    pub grad0_e: Vec<f64>,  // ∂h0/∂este (m/m), diferencias centrales de la función pura
+    pub grad0_n: Vec<f64>,  // ∂h0/∂norte (m/m)
+    pub w_cap0: Vec<f64>,   // capacidad de campo por textura (mm), con el suelo a z_init
     pub k_perm: Vec<f64>,   // permeabilidad (0..1)
     pub fert: Vec<f64>,     // fertilidad efectiva (0..1)
     pub resource: Vec<f64>, // recurso genérico extraíble
+
+    // --- Relieve y suelo vivos (incr. 3): cambian con la erosión, despacio ---
+    pub e: Vec<f64>,      // erosión (−) / depósito (+) acumulados (m); h = h0 + e
+    pub z_soil: Vec<f64>, // profundidad de suelo (m)
+    pub h: Vec<f64>,      // elevación actual (m) = h0 + e
+    pub slope: Vec<f64>,  // pendiente S de h (rad)
+    pub aspect: Vec<f64>, // orientación de h (rad; reservado, uso futuro)
+    pub grad_e: Vec<f64>, // ∂h/∂este (m/m) = ∂h0/∂este + ∂e/∂este
+    pub grad_n: Vec<f64>, // ∂h/∂norte (m/m)
+    pub w_cap: Vec<f64>,  // capacidad de campo actual (mm) = w_cap0 · z_soil / z_init
 
     // --- Derivados globales (se recalculan tras cada cambio de topología, incremento 2 §4) ---
     pub filled_h: Vec<f64>,      // elevación tras rellenar depresiones (m)
