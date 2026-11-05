@@ -98,6 +98,9 @@ abm/
 │           ├── [x] determinism.rs   # misma semilla → misma salida + guardias
 │           └── [x] persistence_pg.rs # escribe run+métricas en BD (#[ignore]; corre con --ignored)
 │
+├── herramientas/                  # Herramientas fuera del motor
+│   └── [x] no_regresion.sh        # No regresión byte a byte frente a un commit anterior (worktree temporal)
+│
 ├── infra/
 │   ├── [x] docker-compose.yml     # Postgres/TimescaleDB (host :25432) + Grafana (host :23000), subred fija
 │   ├── [x] .env                   # Credenciales y puertos (IGNORADO por git)

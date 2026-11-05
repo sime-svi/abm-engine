@@ -265,7 +265,7 @@ Implementado para **individuos**. La versión de poblaciones de cada cambio qued
 
 ### 8.2 No regresión y pruebas
 
-**No regresión.** Con todos los interruptores apagados (`agentes_incremento1.toml`), los 30 años por defecto dan una salida **idéntica byte a byte** a la del binario de ece0868, compilado en un worktree. Tras la optimización de R6, la salida con todo encendido es idéntica a la de antes.
+**No regresión.** Con todos los interruptores apagados (`agentes_incremento1.toml`), los 30 años por defecto dan una salida **idéntica byte a byte** a la del binario de ece0868, compilado en un worktree. Se repite con `herramientas/no_regresion.sh ece0868 agentes config/agentes.toml config/experiments/agentes_incremento1.toml`. Tras la optimización de R6, la salida con todo encendido es idéntica a la de antes.
 
 **Tests unitarios nuevos:**
 - `el_dimorfismo_da_las_cifras_de_la_nota`: 1 433 / 2 579 / 126 000 kcal y 48,8 días de ayuno en las mujeres; 1 584 / 2 851 / 86 400 kcal y 30,3 días en los hombres. Sin dimorfismo, las tablas por sexo son las de la especie, bit a bit.

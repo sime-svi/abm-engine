@@ -711,3 +711,14 @@ Formato de entrada:
   - **Tests:** 2 unitarios nuevos y 7 de simulación nuevos o reescritos. `fmt`, `clippy --workspace --all-targets -D warnings` y `cargo test --workspace` en verde (biología: 8 unitarios + 15 de simulación, 45 s en debug).
   - **Medidas:** campaña de 30 corridas (cada cambio solo, todos, todos menos uno, sequías, biomas, equivalencia, liquen, barrido de `μ_est`), en la nota §8.
 - **Estado tras el cambio:** biología con la revisión 1. Siguiente: decisiones A1–A7; después, el incremento 2 (poblaciones).
+
+## [2026-11-05] Herramienta de no regresión (primer paso de los 5 puntos de escalabilidad)
+
+- **Qué:** `herramientas/no_regresion.sh REF BINARIO CONFIG_REF CONFIG_ACTUAL`:
+  - compila el binario del commit `REF` en un worktree temporal;
+  - ejecuta cada binario en su propia carpeta (sin mezclar `output/` ni cachés);
+  - compara los JSON byte a byte, salvo el nombre de la corrida, y sale con 0 si coinciden y con 1 si no.
+
+  Probada con las dos notas del día (`ece0868` agentes, `bb6a8c0` terreno): idénticas. Con la config encendida, detecta la diferencia.
+- **Por qué:** el responsable preguntó si el método escalará con ~100 sistemas y pidió soluciones para los cinco puntos que salieron: interruptores permanentes, no regresión, interacciones entre sistemas, herramientas de medida y rendimiento. Esta es la parte que no necesita decisión suya: la comprobación manual de hoy, ya repetible en un solo comando.
+- **Estado:** el resto de los cinco puntos queda propuesto al responsable. Retirar los interruptores tras cada decisión y crear una batería de escenarios de referencia tocan las convenciones de CLAUDE.md y necesitan su confirmación.

@@ -233,6 +233,8 @@ En el resto de la franja, con T5 llueve 864 mm (803 en la referencia) y el desie
 - el JSON, con erosión y sin ella;
 - el volcado por celda.
 
+Se repite con `herramientas/no_regresion.sh bb6a8c0 terreno config/terreno.toml config/experiments/terreno_sin_sombra.toml`.
+
 **Mundo plano.** Test `en_un_mundo_plano_la_sombra_pluviometrica_no_cambia_nada`, con toda la tierra a 0 m:
 - `w = 1` y `c_P = 1` exactos;
 - la corrida es idéntica a la de `k_oro = 0`.
