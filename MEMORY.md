@@ -580,3 +580,62 @@ Formato de entrada:
   - Nueva salida de referencia: lluvia +0,40 %, desierto −1,6 %, selva +3,9 %.
 - **Estado tras el cambio:** Terreno con la lluvia independiente de la resolución. Pendiente del
   responsable: `k_oro`. Siguiente: biología de los agentes (incremento 1).
+
+## [2026-11-05] Fase «agentes», incremento 1: la biología por días con individuos en un hábitat de prueba
+
+- **Qué:** El responsable entregó el diseño `diseno_biologia_agentes.md` (v1.0), ahora en
+  `docs/design/agentes/`. Se partió en cuatro incrementos y se hizo el 1, con su diseño técnico
+  (`incremento-1-diseno.md`) y el README llano de la fase. Código nuevo:
+  - `abm-ruleset/src/biologia/`:
+    - especie por masa con leyes de escala y preset humano (Kleiber, West, Siler, leche, `N_max`);
+    - azar por contador `H(semilla, id, tick, propósito, índice)` y `SumaExacta` (punto fijo `i128`);
+    - componentes del individuo y hábitat de prueba (zonas de clima constante, PPN de Miami, forraje
+      logístico por celda y especie);
+    - sistemas T4 y A3–A9 (forraje, demanda y reparto justo, energética, crecimiento, reproducción
+      sexual con aborto/parto/destete, mortalidad con inanición/edad máxima/Siler/orfandad,
+      envejecimiento, escrituras), génesis y orden del tick.
+  - `abm-metrics/src/biologia.rs`: recuentos por registro, balance de energía, tablas de vida del
+    periodo (e0), TGF, intervalo entre partos y pirámides anuales.
+  - `abm-persistence/src/schema_bio.rs`: `BioDoc`.
+  - `abm-runner`: `run_biologia(_con_orden)`, binario `agentes`, `tests/biologia.rs`.
+  - `config/agentes.toml` y `config/experiments/agentes_proporcional.toml`.
+
+  El modelo de forrajeo antiguo sigue intacto.
+- **Por qué:** Con 1 tick = 1 día, la biología antigua (vida de 200 ticks, metabolismo 2, apetito 4,
+  rebrote 1) no tenía sentido. Pirámide invertida: la biología se valida sola antes de tocar el
+  planeta.
+- **Decisiones / problemas:**
+  - **D1 (a confirmar):** el apetito `Ap = k_ap·B·PAL` se lee en energía asimilable,
+    `d = min(Ap, E_max − E + G)/ε`. Al pie de la letra (forraje bruto), con `ε·k_ap = 1` el genérico
+    no podría crecer, criar ni rehacer reservas, y la regla `k_ap > 1` del diseño no se cumpliría.
+  - **Calibración de Siler** (la dejaba "a calibrar"):
+    - humano: Gurven y Kaplan (2007) con `β3 = 0,085` → e0 30,9 años, l(15) 0,564, moda adulta 69;
+    - genérico: tasas relativas a `a_max` (escalan con la masa), l(1) = 0,600 y mortalidad adulta
+      0,104–0,120.
+  - Otras interpretaciones D2–D15 en el diseño del incremento (gasto de crecimiento decidido al
+    principio del tick, leche de la madre, reserva negativa del que muere de hambre, `N_max` con el
+    gasto adulto, edades iniciales ∝ l(a), etc.).
+  - **Hallazgo A (importante):** con el reparto del diseño (§6.4, todo el stock accesible), la
+    población crece bien alimentada, supera `N_max`, agota el forraje y colapsa. El herbívoro se
+    extingue en 13 años con clima constante.
+  - **Propuesta D16** (`forraje.respuesta = "proporcional"`, demanda × `V/K`): la población se regula
+    sola en ~1,2·`N_max` (las crías gastan menos que el adulto). La densidad sigue a la productividad
+    en 4 biomas, y la equivalencia energética entre 10 y 300 kg sale con cociente 1,004 (Damuth). **Por
+    defecto se mantiene el diseño (`"total"`) hasta que decida el responsable.**
+  - **Hallazgo B:** las hambrunas matan sobre todo a las hembras (de 5 452 quedan 2, frente a 3 159
+    machos, con una sequía del 50 % durante un año), y la población no se recupera. No hay
+    "destete forzoso" equivalente al aborto. En equilibrio, 56 % de machos. Propuesta para el
+    responsable.
+  - La fecundidad humana sale de ~10 hijos por mujer (real 5–6): falta que baje con la edad antes de
+    los 50.
+- **Verificación:**
+  - `fmt`, `clippy --workspace --all-targets -D warnings` y `cargo test` en verde: biología 6
+    unitarios + 8 de simulación, métricas 1, y el resto sin cambios.
+  - Balance de energía cerrado a ~2·10⁻⁶ kcal por registro.
+  - Salida idéntica entre procesos y entre debug y release, también con la población creada en otro
+    orden.
+  - Tabla de vida simulada de una cohorte de 2 000 dentro del error de muestreo.
+  - 30 años con ~10 000 individuos, ~4 s.
+- **Estado tras el cambio:** Incremento 1 de «agentes» hecho. Pendiente del responsable: D1, D16,
+  destete forzoso y fecundidad humana por edad (y `k_oro` del terreno). Siguiente: incremento 2
+  (cohortes y conversión individuo ↔ población).

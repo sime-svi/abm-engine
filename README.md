@@ -41,12 +41,29 @@ uniforme sin LOD, pon
 (ambos en `config/terreno.toml`). Explicación llana en
 [`docs/design/terreno/README.md`](docs/design/terreno/README.md).
 
+## Biología de los agentes (por días)
+
+Binario aparte, `agentes`: la biología rediseñada por el responsable con cifras reales (1 tick = 1
+día, energía en kcal, especies definidas por su masa, reproducción sexual, mortalidad de Siler).
+Incremento 1: individuos en un hábitat de prueba con clima constante, sin planeta todavía.
+
+```bash
+cargo run --release --bin agentes                                                  # config/agentes.toml (diseño tal cual)
+cargo run --release --bin agentes -- config/experiments/agentes_proporcional.toml  # propuesta D16
+cargo test -p abm-runner --test biologia                                           # tests de simulación
+```
+
+Escribe `output/<nombre>_agentes.json` (30 años en ~4 s). Explicación llana y hallazgos en
+[`docs/design/agentes/README.md`](docs/design/agentes/README.md).
+
 ## Configuración
 
 **Todos** los parámetros viven en `config/*.toml` (nada hardcodeado): tamaño de la cuadrícula, nº de
 agentes, semilla, metabolismo, reproducción, destino de la salida, etc. Se dirigen experimentos
 cambiando la config, no el código. Puntos de partida: [`config/default.toml`](config/default.toml)
-(forrajeo) y [`config/terreno.toml`](config/terreno.toml) (planeta).
+(forrajeo), [`config/agentes.toml`](config/agentes.toml) (biología de los agentes) y
+[`config/terreno.toml`](config/terreno.toml) (planeta). Los experimentos con nombre van en
+`config/experiments/`.
 
 ## Persistencia en base de datos + Grafana
 
@@ -70,11 +87,11 @@ hacia el motor (`CLAUDE.md` §3).
 ```
 crates/
   abm-core/         # el motor: tick y bucle de tiempo, RNG sembrado, planificador de un solo hilo
-  abm-ruleset/      # las reglas del modelo de forrajeo (agentes, cuadrícula, sistemas del tick)
+  abm-ruleset/      # las reglas: el forrajeo original y la biología de los agentes (`biologia/`)
   abm-terreno/      # el planeta: esfera con LOD, clima, agua, vegetación, erosión y suelo
-  abm-metrics/      # observadores: métricas agregadas por tick
-  abm-persistence/  # la salida: esquema de métricas, JSON y PostgreSQL
-  abm-runner/       # los binarios `abm` y `terreno`
+  abm-metrics/      # observadores: métricas agregadas por tick (forrajeo y biología)
+  abm-persistence/  # la salida: esquemas de métricas, JSON y PostgreSQL
+  abm-runner/       # los binarios `abm`, `agentes` y `terreno`
 config/         # parámetros de simulación (.toml)
 docs/design/    # diseño + explicación llana, una carpeta por fase
 infra/          # Docker (PostgreSQL/TimescaleDB + Grafana), migraciones y provisioning

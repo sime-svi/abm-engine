@@ -1,7 +1,7 @@
 //! `abm-runner` — monta y ejecuta las simulaciones (CLAUDE §3): lee la config, junta motor
 //! (`abm-core`) + reglas (`abm-ruleset`) + métricas (`abm-metrics`) + persistencia
-//! (`abm-persistence`) y corre el bucle de ticks. Sus binarios son `abm` (el motor de forrajeo) y
-//! `terreno` (el planeta, `abm-terreno`).
+//! (`abm-persistence`) y corre el bucle de ticks. Sus binarios son `abm` (el motor de forrajeo),
+//! `agentes` (la biología de los agentes por días) y `terreno` (el planeta, `abm-terreno`).
 
 use abm_persistence::Sink;
 use abm_persistence::json_sink::JsonSink;
@@ -12,6 +12,8 @@ use thiserror::Error;
 pub use abm_core::ConfigError;
 pub use abm_persistence::PersistenceError;
 pub use abm_persistence::schema::{MetricsDoc, RunMeta, TickMetrics};
+pub use abm_persistence::schema_bio::BioDoc;
+pub use abm_ruleset::biologia::BioConfig;
 pub use abm_ruleset::config::{self, Config};
 
 /// Errores al montar o persistir una simulación.
@@ -60,6 +62,41 @@ pub fn run_simulation(cfg: &Config) -> Result<MetricsDoc, SimError> {
         },
         ticks,
     })
+}
+
+/// Ejecuta una corrida de la biología de los agentes (`config/agentes.toml`) y devuelve su
+/// documento de métricas.
+pub fn run_biologia(cfg: &BioConfig) -> Result<BioDoc, SimError> {
+    Ok(run_biologia_con_orden(cfg, None)?.0)
+}
+
+/// Igual que `run_biologia`, devolviendo también el mundo final, y con la población inicial creada
+/// en un orden barajado si se pide (prueba de independencia del orden de proceso).
+pub fn run_biologia_con_orden(
+    cfg: &BioConfig,
+    barajado: Option<u64>,
+) -> Result<(BioDoc, World), SimError> {
+    let mut world = abm_ruleset::biologia::genesis::build_con_orden(cfg, barajado)?;
+    let registro = abm_metrics::biologia::RegistroBio::nuevo(
+        cfg,
+        &mut world,
+        env!("CARGO_PKG_VERSION"),
+        abm_ruleset::VERSION,
+    );
+    world.insert_resource(registro);
+    let mut schedule = abm_core::schedule::deterministic();
+    schedule.add_systems(
+        (
+            abm_ruleset::biologia::schedule::bio_systems(),
+            abm_metrics::biologia::collect_bio, // M. métricas del tick
+        )
+            .chain(),
+    );
+    abm_core::time::run_ticks(&mut world, &mut schedule, cfg.run.total_ticks);
+    let doc = world
+        .resource::<abm_metrics::biologia::RegistroBio>()
+        .documento();
+    Ok((doc, world))
 }
 
 /// Datos de la ejecución que se registran en la base de datos junto a sus métricas.

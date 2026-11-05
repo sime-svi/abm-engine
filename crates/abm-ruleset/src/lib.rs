@@ -1,7 +1,10 @@
-//! `abm-ruleset` — las reglas del modelo de forrajeo (CLAUDE §3): componentes del dominio,
-//! cuadrícula, parámetros, sistemas (un archivo por comportamiento), génesis del mundo y el orden de
-//! los sistemas en el tick (que *es* el modelo). Depende de `abm-core`, nunca al revés.
+//! `abm-ruleset` — las reglas (CLAUDE §3): componentes del dominio, parámetros, sistemas, génesis
+//! del mundo y el orden de los sistemas en el tick (que *es* el modelo). Depende de `abm-core`,
+//! nunca al revés. Contiene dos modelos:
+//! - el **forrajeo** original (cuadrícula, `config/default.toml`), en la raíz del paquete;
+//! - la **biología** de los agentes por días (`biologia`, `config/agentes.toml`).
 
+pub mod biologia;
 pub mod buffers;
 pub mod components;
 pub mod config;

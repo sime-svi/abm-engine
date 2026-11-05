@@ -7,6 +7,7 @@ pub mod json_sink;
 pub mod migrations;
 pub mod pg_sink;
 pub mod schema;
+pub mod schema_bio;
 pub mod sink;
 
 use std::path::{Path, PathBuf};

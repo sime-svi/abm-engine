@@ -2,4 +2,5 @@
 //! qué se registra y cada cuánto (`metrics_every`). Lee los componentes del modelo y escribe en el
 //! destino de la persistencia.
 
+pub mod biologia;
 pub mod collect;

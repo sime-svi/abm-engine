@@ -16,6 +16,10 @@ path = "src/main.rs"
 name = "terreno"
 path = "src/bin/terreno.rs"
 
+[[bin]]
+name = "agentes"
+path = "src/bin/agentes.rs"
+
 [dependencies]
 abm-core.workspace = true
 abm-ruleset.workspace = true

@@ -1,0 +1,124 @@
+# Biología de los agentes por días — incremento 1 (individuos en un hábitat de prueba).
+# Diseño: docs/design/agentes/diseno_biologia_agentes.md · incremento: docs/design/agentes/incremento-1-diseno.md
+# 1 tick = 1 día. Energía en kcal. Masas en kg. Tasas "por año" se pasan a días dividiendo por dias_anio.
+
+[run]
+name          = "agentes"
+seed          = 42
+total_ticks   = 10950      # 30 años
+metrics_every = 30         # un registro cada 30 días (los recuentos se acumulan entre registros)
+output_path   = "output"
+
+[tiempo]
+dias_anio = 365            # debe coincidir con climate.t_year del terreno
+
+# Especie de referencia (herbívoro de 70 kg) y exponentes de escala: Q(M) = Q_ref · (M/M_ref)^b (§5.1)
+[referencia]
+masa_kg        = 70.0
+b0             = 70.0      # constante de Kleiber (kcal/(día·kg^0,75))
+pal            = 2.5       # gasto real / basal
+a_max_anios    = 25.0
+b_a_max        = 0.20      # Calder (la teoría metabólica predice 0,25)
+a_crec90_anios = 1.5       # edad al 90 % de la masa adulta
+b_a_crec90     = 0.25
+a_rep_anios    = 1.5       # madurez reproductiva
+b_a_rep        = 0.25
+d_gest_dias    = 200.0
+b_d_gest       = 0.25
+d_destete_dias = 120.0
+b_d_destete    = 0.25
+delta_a_dias   = 365.0     # anchura de clase de edad (pirámide, tablas de vida; cohortes en el incr. 2)
+b_delta_a      = 0.25
+camada         = 1.0       # crías por parto (media; la parte fraccionaria es un Bernoulli)
+f_neo          = 0.06      # masa al nacer / masa adulta
+f_grasa_max    = 0.15      # fracción máxima de masa en grasa
+k_ap           = 2.0       # apetito / gasto (en energía asimilable: decisión D1, a confirmar)
+eps            = 0.5       # eficiencia digestiva del forraje
+f_com          = 0.004     # fracción de la PPN accesible a la especie (Damuth)
+p_conc         = 0.03      # prob. diaria de concepción (hembra disponible, con macho, en buena condición)
+rho_par        = 0.1       # machos maduros por hembra disponible (modo población, incr. 2)
+c_dup          = 0.08      # tiempo de duplicación de la mortalidad senescente / a_max
+rho_sexo       = 0.5       # proporción de machos al nacer
+p_huerf        = 1.0       # prob. de que muera una cría lactante huérfana
+# Siler relativo a a_max (α·a_max, β·a_max), calibrado para la referencia (incr. 1 §4):
+# l(1 año) = 0,6; mortalidad adulta 0,1/año; senescencia = fondo a 0,48·a_max; β1·d_destete ≈ 2,83.
+siler_a1_rel   = 85.83
+siler_b1_rel   = 215.2
+siler_a2_rel   = 2.634
+siler_a3_rel   = 0.04116
+
+[energetica]
+rho_grasa  = 9000.0        # kcal por kg de grasa
+eta        = 0.85          # eficiencia de almacenar el sobrante
+c_crec     = 3000.0        # coste de crear tejido (kcal/kg; rango 2000-6000)
+r_crec_min = 0.2           # condición mínima (E/E_max) para crecer
+k_gest     = 0.2           # sobrecoste diario de la gestación / basal adulto
+eps_leche  = 0.8           # eficiencia de convertir reservas en leche
+r_0        = 0.5           # reserva inicial de la cría / su E_max
+r_min      = 0.3           # condición mínima para concebir
+r_opt      = 0.6           # condición óptima para concebir
+r_abort    = 0.1           # condición bajo la cual se pierde la gestación
+b0_ecto    = 7.0           # constante metabólica de ectotermos a t_ref (orientativo)
+e_a        = 0.65          # energía de activación (eV)
+t_ref      = 20.0          # temperatura de referencia de ectotermos (°C)
+
+[forraje]
+rho_veg = 4.4              # energía bruta de la materia vegetal seca (kcal/g)
+tau_c   = 0.5              # años de producción que caben en el stock máximo
+g0_frac = 0.01             # rebrote mínimo (banco de semillas), fracción de la regeneración máxima
+# "total" = diseño §6.4 (todo el stock accesible: en celdas aisladas la población agota el forraje y colapsa)
+# "proporcional" = propuesta D16, fuera del diseño (se come en proporción a V/K: la población se regula sola)
+respuesta = "total"
+
+[poblacion]
+fraccion_inicial = 0.5     # población inicial / capacidad estimada (§6.0)
+reserva_inicial  = 0.5     # E inicial / E_max
+edades_iniciales = "estable"   # "estable" (∝ supervivencia) o "cero" (cohorte de recién nacidos)
+# n_inicial_por_celda = 100    # opcional: nº fijo por celda y especie
+
+# Preset "humano" (§5.2): sustituye a lo derivado por alometría. Siler de Gurven y Kaplan (2007).
+[presets.humano]
+masa_kg         = 60.0
+pal             = 1.8
+f_grasa_max     = 0.20
+a_max_anios     = 110.0
+a_crec90_anios  = 16.0
+a_rep_anios     = 19.0
+a_fin_rep_anios = 50.0
+d_gest_dias     = 270.0
+d_destete_dias  = 900.0
+f_neo           = 0.055
+camada          = 1.0
+eps             = 0.85
+f_com           = 1.1e-4
+p_conc          = 0.007
+rho_par         = 1.0
+rho_sexo        = 0.512
+p_huerf         = 0.5
+siler_a1        = 0.422
+siler_b1        = 1.131
+siler_a2        = 0.013
+siler_a3        = 1.47e-4
+beta3           = 0.085
+
+[[especies]]
+nombre = "herbivoro_70kg"
+ajustes = { masa_kg = 70.0 }
+
+[[especies]]
+nombre = "humano"
+preset = "humano"
+
+# Hábitat de prueba: zonas de clima constante (PPN por el modelo Miami). Sin vecindad: sin movimiento.
+[[habitat.zonas]]
+nombre     = "templada"
+celdas     = 16
+area_km2   = 100.0
+t_media    = 10.0
+p_media_mm = 700.0
+
+# Sequía de prueba (opcional): el rebrote se multiplica por `factor` durante la ventana.
+# [habitat.sequia]
+# inicio_dia    = 3650
+# duracion_dias = 365
+# factor        = 0.1
