@@ -19,7 +19,20 @@ pub struct TerrenoConfig {
     pub vegetation: VegCfg,
     pub lod: LodCfg,
     pub erosion: ErosionCfg,
+    pub tectonica: TectonicaCfg,
     pub persistence: PersistenceCfg,
+}
+
+/// Generador del relieve de nacimiento. Interruptor mientras se mide el relieve tectónico frente al
+/// anterior (CLAUDE §5); se retirará cuando decida el responsable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Relieve {
+    /// Ruido fractal con la curva hipsométrica `lf³` (incrementos 1 a 3).
+    #[default]
+    Ruido,
+    /// Tectónica de placas con deriva (incremento 4, `docs/design/terreno/diseno_relieve_tectonico.md`).
+    Tectonico,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,6 +50,9 @@ pub struct RunCfg {
     /// Carpeta de la caché de la génesis ("" = sin caché). La génesis depende solo de la semilla, la
     /// config y la versión del código: se calcula una vez y se reutiliza.
     pub genesis_cache: String,
+    /// Añade al diagnóstico el bloque ampliado del relieve (esquema v6) también con el relieve de
+    /// ruido, para compararlo con el tectónico (con el tectónico va siempre).
+    pub diagnostico_relieve: bool,
 }
 
 impl Default for RunCfg {
@@ -49,6 +65,7 @@ impl Default for RunCfg {
             dump_world: false,
             dump_climate: false,
             genesis_cache: String::new(),
+            diagnostico_relieve: false,
         }
     }
 }
@@ -92,6 +109,8 @@ pub struct WorldgenCfg {
     pub river_threshold_km2: f64,
     /// Densidad del recurso genérico (fracción de celdas de tierra con depósito, 0..1).
     pub resource_density: f64,
+    /// Generador del relieve: `"ruido"` (incrementos 1 a 3) o `"tectonico"` (incremento 4).
+    pub relieve: Relieve,
 }
 
 impl Default for WorldgenCfg {
@@ -105,7 +124,179 @@ impl Default for WorldgenCfg {
             land_exp: 3.0,
             river_threshold_km2: 80_000.0,
             resource_density: 0.05,
+            relieve: Relieve::Ruido,
         }
+    }
+}
+
+/// Relieve tectónico (incremento 4): deriva de placas durante cientos de millones de años antes de
+/// la génesis geológica. Diseño: `docs/design/terreno/diseno_relieve_tectonico.md` (del responsable)
+/// y `incremento-4-diseno.md` (técnico). Valores físicos medidos por defecto (CLAUDE §2.8).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct TectonicaCfg {
+    // --- Planeta y agua (§5.1) ---
+    /// Capa global de agua: volumen del océano actual / superficie del planeta (m). Sin el agua del
+    /// hielo mientras no haya casquetes (decisión del responsable).
+    pub gel_m: f64,
+    /// Fracción de la superficie con corteza continental al empezar la deriva. El valor final es un
+    /// resultado a validar, no un objetivo (decisión del responsable).
+    pub f_cont: f64,
+    // --- Corteza e isostasia (§5.2) ---
+    pub rho_c: f64,
+    pub rho_m: f64,
+    /// Densidad de la corteza oceánica (kg/m³): flotación de los arcos sobre fondo oceánico.
+    pub rho_oc: f64,
+    /// Densidad del agua de mar (kg/m³): la parte sumergida de una columna flota con agua encima.
+    pub rho_w: f64,
+    /// Densidad del sedimento compactado de los márgenes (kg/m³).
+    pub rho_s: f64,
+    pub h_oc_km: f64,
+    pub h0_km: f64,
+    pub sigma_h0_km: f64,
+    pub h_max_km: f64,
+    /// Espesor continental que queda al nivel del mar (relación empírica terrestre, §6.7).
+    pub h_nivel_km: f64,
+    pub h_cont_min_km: f64,
+    // --- Fondo oceánico (Parsons y Sclater, 1977; §5.3) ---
+    pub d_r_m: f64,
+    pub c_hs: f64,
+    pub d_inf_m: f64,
+    pub a_pl_m: f64,
+    pub tau_pl_myr: f64,
+    pub t_x_myr: f64,
+    pub d_fosa_m: f64,
+    pub w_fosa_km: f64,
+    // --- Bordes de placa (§5.4) ---
+    /// Crecimiento de corteza en los arcos (km² por km de fosa y Myr).
+    pub q_arco: f64,
+    pub d_arco_km: f64,
+    pub w_arco_km: f64,
+    /// Fracción de la corteza de la placa de abajo que engruesa a la de arriba en un choque.
+    pub eta_col: f64,
+    pub w_min_orog_km: f64,
+    pub w_margen_km: f64,
+    pub f_rift: f64,
+    // --- Dinámica de placas (§5.5) ---
+    pub f_sp: f64,
+    pub f_rp: f64,
+    pub t_sat_myr: f64,
+    /// Resistencia de colisión: fuerza por km de frente = `c_col · c_b · v_conv`, es decir, el
+    /// rozamiento basal de `c_col` km² de placa por cada km de frente. Se calibra con un choque que
+    /// frene la convergencia a ~1/3 en 10–20 Myr (India–Asia, §5.5).
+    pub c_col: f64,
+    pub kappa_cont: f64,
+    /// Velocidad media cuadrática de la litosfera (cm/año): NNR-MORVEL56, Argus et al. (2011).
+    pub v_obj_cm_anio: f64,
+    /// Cada cuántos Myr se recalibra el rozamiento basal `c_b` a `v_obj`.
+    pub recalibrar_myr: f64,
+    /// Empujón inicial: velocidad media de cada placa sorteada en este rango (cm/año).
+    pub v_inicial_min_cm_anio: f64,
+    pub v_inicial_max_cm_anio: f64,
+    /// Fracción de la velocidad relativa por debajo de la cual un borde cuenta como transformante
+    /// (sen 15°: bordes a menos de 15° del desgarre puro).
+    pub f_transformante: f64,
+    // --- Eventos de placas (§5.6) ---
+    pub n_p0: u32,
+    pub n_cratones: u32,
+    pub n_min: u32,
+    pub a_min_frac: f64,
+    pub tau_rift_myr: f64,
+    pub v_rift_cm_anio: f64,
+    pub v_sutura_cm_anio: f64,
+    pub t_sutura_myr: f64,
+    pub tau_orog_myr: f64,
+    /// Deformación de los bordes de Voronoi, de los cratones y de las líneas de rift (fracción del
+    /// radio): los bordes reales no son rectos.
+    pub deformacion: f64,
+    // --- Malla, tiempo y detalle (§5.7) ---
+    /// Nivel del cubo esférico del terreno en que corre la tectónica (2 = ~52 km con n0 = 48).
+    pub nivel_malla: u32,
+    pub dt_myr: f64,
+    pub t_deriva_myr: f64,
+    /// Tramo inicial de la deriva que no cuenta para la validación (Myr).
+    pub t_rodaje_myr: f64,
+    /// Ruido de detalle: desviación típica (m) según la altura de base, en las cotas dadas
+    /// (interpolación lineal). Continúa el espectro del relieve real (ETOPO, por escala y tipo).
+    pub detalle_cotas_m: Vec<f64>,
+    pub detalle_sigma_m: Vec<f64>,
+    /// Razón de amplitud entre octavas sucesivas del ruido de detalle (2^−H, H = exponente de Hurst).
+    pub detalle_persistencia: f64,
+    /// Radio de flexión para el rebote isostático de la erosión (km).
+    pub r_flex_km: f64,
+}
+
+impl Default for TectonicaCfg {
+    fn default() -> Self {
+        Self {
+            gel_m: 2617.0,
+            f_cont: 0.40,
+            rho_c: 2800.0,
+            rho_m: 3300.0,
+            rho_oc: 2900.0,
+            rho_w: 1030.0,
+            rho_s: 2400.0,
+            h_oc_km: 7.0,
+            h0_km: 35.0,
+            sigma_h0_km: 3.0,
+            h_max_km: 65.0,
+            h_nivel_km: 32.0,
+            h_cont_min_km: 20.0,
+            d_r_m: 2500.0,
+            c_hs: 350.0,
+            d_inf_m: 6400.0,
+            a_pl_m: 3200.0,
+            tau_pl_myr: 62.8,
+            t_x_myr: 20.0,
+            d_fosa_m: 3000.0,
+            w_fosa_km: 50.0,
+            q_arco: 40.0,
+            d_arco_km: 200.0,
+            w_arco_km: 150.0,
+            eta_col: 0.35,
+            w_min_orog_km: 150.0,
+            w_margen_km: 150.0,
+            f_rift: 0.7,
+            f_sp: 1.0,
+            f_rp: 0.2,
+            t_sat_myr: 80.0,
+            c_col: 90_000.0,
+            kappa_cont: 3.0,
+            v_obj_cm_anio: 4.39,
+            recalibrar_myr: 50.0,
+            v_inicial_min_cm_anio: 1.0,
+            v_inicial_max_cm_anio: 10.0,
+            f_transformante: 0.26,
+            n_p0: 12,
+            n_cratones: 8,
+            n_min: 8,
+            a_min_frac: 0.005,
+            tau_rift_myr: 150.0,
+            v_rift_cm_anio: 2.0,
+            v_sutura_cm_anio: 0.5,
+            t_sutura_myr: 10.0,
+            tau_orog_myr: 150.0,
+            deformacion: 0.06,
+            nivel_malla: 2,
+            dt_myr: 1.0,
+            t_deriva_myr: 500.0,
+            t_rodaje_myr: 50.0,
+            detalle_cotas_m: vec![-4000.0, -200.0, 0.0, 500.0, 2000.0, 5000.0],
+            detalle_sigma_m: vec![200.0, 150.0, 150.0, 150.0, 1000.0, 1500.0],
+            detalle_persistencia: 0.5,
+            r_flex_km: 100.0,
+        }
+    }
+}
+
+impl TectonicaCfg {
+    /// Factores de isostasia (km de altura por km de espesor): al aire `(ρ_m − ρ)/ρ_m` y bajo el
+    /// agua `(ρ_m − ρ)/(ρ_m − ρ_w)` (corrección de realismo C1, `incremento-4-diseno.md`).
+    pub fn flotacion(&self, rho: f64) -> (f64, f64) {
+        (
+            (self.rho_m - rho) / self.rho_m,
+            (self.rho_m - rho) / (self.rho_m - self.rho_w),
+        )
     }
 }
 
@@ -483,6 +674,74 @@ impl TerrenoConfig {
         }
         if self.vegetation.n_veg == 0 {
             return Err(invalid("vegetation.n_veg debe ser >= 1"));
+        }
+        if self.worldgen.relieve == Relieve::Tectonico {
+            self.tectonica.validate(self.planet.n0)?;
+        }
+        Ok(())
+    }
+}
+
+impl TectonicaCfg {
+    /// Invariantes de la config tectónica (solo se exigen con `worldgen.relieve = "tectonico"`).
+    pub fn validate(&self, n0: u32) -> Result<(), ConfigError> {
+        let invalid = |m: &str| ConfigError::Invalid(format!("tectonica: {m}"));
+        if !(self.dt_myr > 0.0 && self.t_deriva_myr >= 0.0 && self.t_rodaje_myr >= 0.0) {
+            return Err(invalid(
+                "se requiere dt_myr > 0, t_deriva_myr >= 0 y t_rodaje_myr >= 0",
+            ));
+        }
+        if self.nivel_malla > 4 || (n0 as u64) << self.nivel_malla > 1 << 12 {
+            return Err(invalid("nivel_malla demasiado fino (n0 · 2^nivel <= 4096)"));
+        }
+        if !(0.0..=1.0).contains(&self.f_cont) || !(0.0..=1.0).contains(&self.eta_col) {
+            return Err(invalid("se requiere 0 <= f_cont <= 1 y 0 <= eta_col <= 1"));
+        }
+        if !(self.rho_w < self.rho_s
+            && self.rho_s < self.rho_c
+            && self.rho_c < self.rho_m
+            && self.rho_oc < self.rho_m)
+        {
+            return Err(invalid(
+                "se requiere rho_w < rho_s < rho_c < rho_m y rho_oc < rho_m",
+            ));
+        }
+        if !(self.h_oc_km > 0.0
+            && self.h_cont_min_km > self.h_oc_km
+            && self.h0_km > 0.0
+            && self.h_max_km > self.h0_km)
+        {
+            return Err(invalid(
+                "se requiere 0 < h_oc < h_cont_min y 0 < h0 < h_max",
+            ));
+        }
+        if self.n_p0 < 2 || self.n_min < 2 || self.n_cratones > self.n_p0 {
+            return Err(invalid(
+                "se requiere n_p0 >= 2, n_min >= 2 y n_cratones <= n_p0",
+            ));
+        }
+        if !(self.v_inicial_min_cm_anio > 0.0
+            && self.v_inicial_max_cm_anio >= self.v_inicial_min_cm_anio
+            && self.v_obj_cm_anio > 0.0)
+        {
+            return Err(invalid(
+                "velocidades iniciales y objetivo deben ser > 0 (min <= max)",
+            ));
+        }
+        if self.detalle_cotas_m.len() != self.detalle_sigma_m.len()
+            || self.detalle_cotas_m.is_empty()
+            || self.detalle_cotas_m.windows(2).any(|w| w[1] <= w[0])
+            || self.detalle_sigma_m.iter().any(|&s| s < 0.0)
+        {
+            return Err(invalid(
+                "detalle_cotas_m (creciente) y detalle_sigma_m (>= 0) deben tener la misma longitud",
+            ));
+        }
+        if !(self.detalle_persistencia > 0.0 && self.detalle_persistencia < 1.0) {
+            return Err(invalid("se requiere 0 < detalle_persistencia < 1"));
+        }
+        if !(self.tau_rift_myr > 0.0 && self.tau_orog_myr > 0.0 && self.t_sat_myr > 0.0) {
+            return Err(invalid("se requiere tau_rift, tau_orog y t_sat > 0"));
         }
         Ok(())
     }

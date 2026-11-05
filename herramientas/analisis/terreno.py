@@ -58,7 +58,39 @@ def resumen_salida(doc):
         'desvio_lluvia': doc['run']['lluvia']['desvio'],
         'lluvia_total_m3': sum(x['precip_total_m3'] for x in t),
     }
-    r.update(doc.get('diagnostico') or {})
+    diag = dict(doc.get('diagnostico') or {})
+    rel = diag.pop('relieve', None)
+    r.update(diag)
+    # Relieve tectónico (esquema v6): historia de la génesis y diagnóstico ampliado del relieve.
+    t = doc['run'].get('tectonica')
+    if t:
+        r.update({
+            'tect_f_cont_final': t['f_cont_final'],
+            'tect_nivel_mar_m': t['nivel_mar_m'],
+            'tect_nivel_mar_tras_prerrodaje_m': t['nivel_mar_tras_prerrodaje_m'],
+            'tect_v_rms_media_cm_anio': t['v_rms_media_cm_anio'],
+            'tect_forsyth_uyeda_fosa': t['forsyth_uyeda_fosa'],
+            'tect_forsyth_uyeda_continente': t['forsyth_uyeda_continente'],
+            'tect_edad_media_myr': t['edades_oceano']['media_myr'],
+            'tect_edad_mediana_myr': t['edades_oceano']['mediana_myr'],
+            'tect_edad_max_myr': t['edades_oceano']['max_myr'],
+            'tect_edad_mas_200_frac': t['edades_oceano']['frac_por_10_myr'][-1],
+            'tect_placas_final': len(t['placas_final']),
+            'tect_placa_mayor_frac': t['placas_final'][0]['area_frac'] if t['placas_final'] else 0.0,
+            'tect_rifts': sum(1 for e in t['eventos'] if e['tipo'] == 'rift'),
+            'tect_suturas': sum(1 for e in t['eventos'] if e['tipo'] == 'sutura'),
+            'tect_remuestreo_rel': t['cuentas']['remuestreo_km3'] / t['cuentas']['volumen_inicial_km3'],
+        })
+    if rel:
+        pend = {int(p['sobre_m']): p for p in rel['pendientes_25km']}
+        r.update({
+            'rel_plataforma_km': rel['plataforma_anchura_km'],
+            'rel_hack_h': rel['hack_h'],
+            'rel_pendiente_media_tierra': pend[0]['media'],
+            'rel_pendiente_p50_sobre_2000': pend[2000]['p50_p75_p90_p95_p99'][0],
+            'rel_oceano_0_200_frac': rel['hipsometria_oceano_frac'][0],
+            'rel_tierra_en_depresion_frac': rel['tierra_en_depresion_frac'],
+        })
     return r
 
 

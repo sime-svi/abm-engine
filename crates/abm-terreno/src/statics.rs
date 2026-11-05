@@ -10,6 +10,7 @@
 //! - Recurso: RNG **por contador** (hash de semilla + clave del ancestro de nivel base).
 
 use std::f64::consts::FRAC_PI_2;
+use std::sync::Arc;
 
 use crate::config::TerrenoConfig;
 use crate::geometry::{V3, cell_area, center_dir, east_north, face_n, key, lat_lon};
@@ -45,7 +46,7 @@ pub struct CellStatics {
 
 /// Mezclador SplitMix64 (bien distribuido, sin estado): base del RNG por contador.
 #[inline]
-fn splitmix64(x: u64) -> u64 {
+pub(crate) fn splitmix64(x: u64) -> u64 {
     let mut z = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
@@ -90,6 +91,69 @@ pub struct StaticGen {
     /// `d_oro`) y paso angular `d_oro / R` de sus diferencias centrales. Paso 0 = desactivado.
     oro_level: u32,
     oro_delta: f64,
+    /// Relieve tectónico (incremento 4): si está, la altura sale de él y del ruido de detalle.
+    tect: Option<Arc<crate::tectonica::Tectonica>>,
+    detalle: Detalle,
+}
+
+/// Ruido de detalle del relieve tectónico (§6.8 y decisión del responsable): empieza por debajo de
+/// la malla tectónica (primera onda = 2 lados de celda tectónica) y suma una octava por cada nivel
+/// del LOD más fino que ella, con amplitud `σ(z)·p^k`. Solo entran las ondas de al menos dos lados de
+/// la celda que se evalúa: así la altura de una celda es la media de su zona, como en ETOPO.
+#[derive(Clone)]
+struct Detalle {
+    ruido: Perlin3,
+    /// Frecuencia (sobre la esfera unidad) de la primera octava.
+    f0: f64,
+    /// Nivel de la malla tectónica.
+    nivel_tect: u32,
+    persistencia: f64,
+    /// Desviación típica de una octava del ruido (para normalizar a σ = 1).
+    norma: f64,
+}
+
+impl Detalle {
+    fn new(cfg: &TerrenoConfig) -> Self {
+        let tc = &cfg.tectonica;
+        let lado_km = FRAC_PI_2 * cfg.planet.r_km / face_n(cfg.planet.n0, tc.nivel_malla) as f64;
+        let f0 = cfg.planet.r_km / (2.0 * lado_km);
+        let ruido = Perlin3::new(cfg.run.seed ^ 0xDE7A);
+        // Desviación típica de una octava, medida en una espiral de Fibonacci (determinista).
+        let n = 8192;
+        let (mut s, mut s2) = (0.0, 0.0);
+        for i in 0..n {
+            let z = 1.0 - (2.0 * i as f64 + 1.0) / n as f64;
+            let r = (1.0 - z * z).max(0.0).sqrt();
+            let phi = i as f64 * 2.399_963_229_728_653;
+            let v = ruido.get(r * phi.cos() * f0, r * phi.sin() * f0, z * f0);
+            s += v;
+            s2 += v * v;
+        }
+        let m = s / n as f64;
+        let norma = (s2 / n as f64 - m * m).max(1e-12).sqrt();
+        Self {
+            ruido,
+            f0,
+            nivel_tect: tc.nivel_malla,
+            persistencia: tc.detalle_persistencia,
+            norma,
+        }
+    }
+
+    /// Ruido de detalle (σ = 1 en la primera octava) en `d` con el detalle del nivel `l`.
+    #[inline]
+    fn en(&self, d: V3, l: u32) -> f64 {
+        if l < self.nivel_tect {
+            return 0.0;
+        }
+        let (mut amp, mut f, mut suma) = (1.0, self.f0, 0.0);
+        for _ in 0..=(l - self.nivel_tect) {
+            suma += amp * self.ruido.get(d[0] * f, d[1] * f, d[2] * f);
+            amp *= self.persistencia;
+            f *= 2.0;
+        }
+        suma / self.norma
+    }
 }
 
 /// Punto a un ángulo `delta` de `dir` en la dirección tangente `u` (`sign` = ±1): los extremos de
@@ -140,6 +204,8 @@ impl StaticGen {
             resource_density: wg.resource_density,
             oro_level: level_closest_to(cfg.planet.n0, cfg.planet.r_km, cfg.climate.d_oro_km),
             oro_delta: cfg.climate.d_oro_km / cfg.planet.r_km,
+            tect: None,
+            detalle: Detalle::new(cfg),
         };
         let n = face_n(g.n0, g.l_min);
         let (mut mn, mut mx) = (f64::INFINITY, f64::NEG_INFINITY);
@@ -155,6 +221,32 @@ impl StaticGen {
         g.raw_min = mn;
         g.raw_span = (mx - mn).max(1e-9);
         g
+    }
+
+    /// Generador con el relieve tectónico (incremento 4): la altura de nacimiento es la base
+    /// tectónica interpolada (con su fosa) más el ruido de detalle según el contexto (§6.8).
+    pub fn con_tectonica(cfg: &TerrenoConfig, t: Arc<crate::tectonica::Tectonica>) -> Self {
+        let mut g = Self::new(cfg);
+        g.tect = Some(t);
+        g
+    }
+
+    /// Estado tectónico final, si el relieve es tectónico.
+    pub fn tectonica(&self) -> Option<&Arc<crate::tectonica::Tectonica>> {
+        self.tect.as_ref()
+    }
+
+    /// Altura de la base tectónica en `d` (con la fosa y sin el ruido de detalle); `None` sin
+    /// tectónica. Sirve para distinguir las cuencas de la tectónica de los hoyos del ruido (G6).
+    pub fn h_base_at(&self, d: V3) -> Option<f64> {
+        self.tect.as_ref().map(|t| t.base_en(d).z_m)
+    }
+
+    /// Levantamiento tectónico (m/año) en `d` para el prerrodaje (§6.9a); 0 sin tectónica.
+    pub fn levantamiento_m_anio(&self, d: V3) -> f64 {
+        self.tect
+            .as_ref()
+            .map_or(0.0, |t| t.levantamiento_m_anio(d))
     }
 
     /// Nivel base uniforme.
@@ -205,7 +297,13 @@ impl StaticGen {
     /// Elevación (m) en la dirección `d` con el detalle del nivel `l`.
     #[inline]
     pub fn h_at(&self, d: V3, l: u32) -> f64 {
-        self.h_from_raw(self.raw(d, l))
+        match &self.tect {
+            Some(t) => {
+                let b = t.base_en(d);
+                b.z_m + b.sigma_m * self.detalle.en(d, l)
+            }
+            None => self.h_from_raw(self.raw(d, l)),
+        }
     }
 
     /// Geometría de la celda `(c, l, i, j)`.

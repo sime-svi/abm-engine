@@ -8,6 +8,8 @@
 
 Motor de simulación masiva basada en agentes (ABM) orientado a **comportamiento emergente**. No es un videojuego: es un entorno de cálculo puro que evalúa interacciones a escala macroscópica (geopolítica, demografía, conflictos) y microscópica (sistemas biológicos, fisiología, enfermedades), aplicando estrictamente Nivel de Detalle (LOD) computacional para evitar la explosión combinatoria.
 
+Debe poder seguirse a un único individuo (p. ej., un humano desde que nace hasta que muere) y subir de escala hasta ver toda su población, sin perder su trazabilidad. *(Confirmado por el responsable el 2026-11-05, que confirmó también que la geopolítica y los conflictos siguen dentro del alcance.)*
+
 La salida son datos: registros históricos, métricas y eventos estructurados, volcados a archivos locales (JSON) y/o a PostgreSQL para su análisis y visualización asíncrona posterior.
 
 ---
@@ -23,7 +25,10 @@ Estos principios no se negocian sin discusión explícita con el responsable del
 5. **LOD / Lazy Evaluation.** El detalle se calcula y se almacena solo cuando aporta valor. Lo que no se observa a alto detalle se resuelve con agregados estadísticos.
 6. **Desacoplamiento Core / Ruleset.** El motor (tiempo, memoria, scheduling, concurrencia) es agnóstico a las reglas. Las reglas (ecuaciones, parámetros, lógica de estados) no conocen los detalles internos del motor.
 7. **Abstracción matemática primero.** Todo comportamiento complejo se reduce a fórmulas y estados transaccionales **antes** de codificarse. El diseño matemático vive en `docs/design/` y precede a la implementación.
-8. **Realismo primero.** El objetivo es un mundo real, no cumplir cifras escritas. Si una calibración no alcanza un objetivo realista, **primero se duda de la base** (los datos de entrada, el relieve, las condiciones iniciales, la propia fórmula) y solo después de un parámetro. Nunca se fuerza un parámetro hasta un valor irreal para compensar otra irrealidad: construir sobre bases irreales y añadir capas encima acaba en un sistema irreal. Si hace falta un apaño provisional, se marca como tal y se anota la causa real que hay que corregir. *(Confirmado por el responsable el 2026-11-05.)*
+8. **Realismo primero.** El objetivo es un mundo real, no cumplir cifras escritas. Si una calibración no alcanza un objetivo realista, **primero se duda de la base** (los datos de entrada, el relieve, las condiciones iniciales, la propia fórmula) y solo después de un parámetro. Nunca se fuerza un parámetro hasta un valor irreal para compensar otra irrealidad: construir sobre bases irreales y añadir capas encima acaba en un sistema irreal. Si hace falta un apaño provisional, se marca como tal y se anota la causa real que hay que corregir. *(Confirmado por el responsable el 2026-11-05.)* Los parámetros son de tres tipos *(confirmado por el responsable el 2026-11-05)*:
+   - **(a) con valor físico medible** (densidades, `k_oro`, Kleiber): llevan su valor real; si con él no cuadra, se revisa la base;
+   - **(b) no medibles directamente** (rozamiento basal de las placas, `f_com`, `L_recarga`): se calibran contra datos observados reales, citando la observación (la velocidad de las placas, la ley de Damuth), nunca contra otra irrealidad del modelo;
+   - **(c) apaños provisionales** (`c_P`): se marcan como tales, con la causa real que hay que corregir.
 
 ---
 
@@ -119,7 +124,7 @@ Así, en cada fase conviven el **diseño técnico** (el "cómo" formal, para imp
 
 ## 10. Verificación (antes de dar por hecha una tarea)
 
-Una tarea no está completa hasta que:
+Una tarea no está completa hasta que (`herramientas/verificar.sh` pasa los puntos 1, 2 y 5 en un solo comando; con `--no-regresion REF`, también la no regresión byte a byte):
 
 1. `cargo fmt` y `cargo clippy -- -D warnings` pasan limpios.
 2. `cargo test` en verde (incluye tests de determinismo: misma semilla → misma salida).

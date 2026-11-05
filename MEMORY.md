@@ -866,3 +866,66 @@ Formato de entrada:
 
   Los mecanismos 2–4 necesitan nota de diseño antes de codificarse (CLAUDE §2.7).
 - **Pendientes obligatorios de realismo:** en TREE.md.
+
+## [2026-11-05] Relieve tectónico (incremento 4 del terreno): deriva de placas, referencia de la Tierra y primeros resultados
+
+- **Qué:** el responsable dejó `diseno_relieve_tectonico.md` en `docs/temp/`. Se archivó en `docs/design/terreno/` (no estaba bajo git: se movió y se añadió) y `docs/temp` se borró. Rama `terreno-tectonica`.
+  - **Módulo `abm-terreno/src/tectonica/`:**
+    - `malla`: nivel 2 del cubo y cuaterniones;
+    - `deriva`: placas en su propio sistema, fuerzas, huecos y solapes, arcos, choques, erosión tectónica y sedimento, rifts, suturas, absorciones y saltos de dorsal;
+    - `isostasia`: altura con el agua encima, Parsons y Sclater, fosas y nivel del mar por volumen;
+    - `historia`: eventos, métricas de cada Myr y cuentas de la corteza;
+    - `mod`: estado final e interpolación continua a las celdas del terreno.
+  - **Integración:**
+    - `StaticGen` toma la altura de la base tectónica más un ruido de detalle (G5);
+    - la génesis corre la deriva (G1–G4), acondiciona los hoyos del ruido (G6) y hace el prerrodaje con levantamiento y rebote isostático (`erosion::step_con`, partidas `uplift_m3` y `rebound_m3`);
+    - la caché pasa a `ABMGEN04` con el estado tectónico;
+    - la salida pasa al esquema v6 (`run.tectonica` y `diagnostico.relieve`), y el volcado lleva los datos de la placa.
+  - **Interruptor:** `worldgen.relieve = "tectonico" | "ruido"`; la config pone `"tectonico"` y el código, por defecto, `"ruido"` (tests rápidos). `config/experiments/terreno_relieve_ruido.toml` sirve para la no regresión.
+  - **Referencia de la Tierra:** `herramientas/analisis/referencia_tierra.py`, solo biblioteca estándar, con el lector mínimo de HDF5 `h5mini.py`. Usa ETOPO 2022, Paxman et al. (2022) v3 leído por peticiones parciales, Seton et al. (2020), Bird (2003) y Argus et al. (2011), a las resoluciones del planeta. Escribe `config/referencias/tierra_relieve.toml`.
+  - CLAUDE.md, confirmado por el responsable: §1 visión (del individuo a la población; la geopolítica y los conflictos **se quedan**), §2.8 tipos de parámetros (a/b/c) y §10 `verificar.sh`.
+- **Decisiones del responsable** (preguntas al empezar):
+  - malla tectónica en el nivel 2 (~52 km);
+  - en un choque va abajo la que subducía antes, o la de corteza más fina;
+  - empujón inicial de 1–10 cm/año y 50 Myr de rodaje;
+  - la flotación por espesor de los arcos se suma a la edad;
+  - ruido fino que continúe el espectro real, validado con ETOPO;
+  - referencia: roca rebotada sin hielo (Paxman), con el agua del océano actual;
+  - no calibrar η_col (llegará una adenda con los sumideros reales);
+  - y, en general, «siempre la opción más fiel a la realidad; si falta algo, a pendientes, en orden». Guardado como memoria.
+- **Correcciones de realismo avisadas** (el responsable pidió que le dijera lo que contradice la realidad):
+  - isostasia con agua encima bajo el nivel del mar (0,220 en vez de 0,152 por km);
+  - sedimento con su densidad (2 400 kg/m³) y su masa;
+  - `v_obj` 4,39 cm/año (NNR-MORVEL56) en vez de 5;
+  - **apuntados como pendientes:** reciclado en las fosas, acortamiento andino, microplacas, ciclo de Wilson y flexión de la litosfera.
+- **Problemas resueltos en la implementación** (`incremento-4-diseno.md` §3):
+  - borrar las celdas locales «ocultas» roía los continentes (2·10⁹ km³ de corteza «subducida» sin choque): ahora se conservan;
+  - la polaridad decidida celda a celda dejaba bordes moteados, 2–3 veces más largos, y disparaba las fuerzas: ahora la polaridad y los papeles de un choque son de cada par de placas;
+  - el empate «id menor» de los huecos hacía asimétrica la expansión: ahora un sorteo sin sesgo;
+  - la resistencia de colisión del documento (con la convergencia del paso anterior) es inestable con la fuerza de India–Asia: ahora implícita, en un sistema acoplado entre placas;
+  - el engrosamiento de un choque convertía en continental el fondo oceánico de la placa de arriba: ahora solo se apila la corteza continental;
+  - con el ruido fino calibrado aparecían miles de hoyos: acondicionamiento G6 con balance exacto.
+- **Calibraciones** (tipo b):
+  - `c_b` a la velocidad real de las placas;
+  - `c_col` = 90 000 con un escenario India–Asia: 14,4 → 4,8–5,2 cm/año, 1/3;
+  - ruido de detalle con el espectro de ETOPO: `p` = 0,77 y σ por altura respecto al dato.
+- **Resultados** (la Tierra: roca rebotada a 26 km):
+  - velocidad de las placas 4,36 cm/año (4,39);
+  - Forsyth y Uyeda: +0,46 velocidad–fosa y −0,55 velocidad–continente;
+  - océano de 3 945 m (3 667), ley de Hack 0,57 y edad mediana del fondo 60 Myr (55);
+  - **pero** la tierra emergida es del 33,1 % (28,4 %) y la altura media de la tierra de 1 459 m (671);
+  - plataformas de 0,6 km (43), fondo de más de 200 Myr un 15 % (~0,1 %) y corteza continental 0,40 → 0,334.
+  - El clima, en cascada: `c_P` 1,99, lluvia en tierra 559 mm, PPN 551 y hielo 7 %.
+- **Hallazgos** (`incremento-4-diseno.md` §6):
+  1. el nivel del mar queda 1 079 m bajo el dato: con Parsons y Sclater y edades como las de la Tierra las cuencas caben más que el océano actual, así que el «ζ ≈ 0» del diseño no sale ni en la Tierra. Faltan sedimento abisal, mesetas y márgenes, y el inicio de subducción en márgenes viejos. No se fuerza `H_nivel`;
+  2. no hay plataformas;
+  3. **el relieve real de la Tierra a 26 km da ×1,36 de lluvia de barlovento con `k_oro` = 40**: el objetivo ×2–3 no lo cumple ni la Tierra a esa escala;
+  4. el ritmo de rifts del §6.5 es ~5–10 veces menor que el de la ruptura de Pangea;
+  5. la corteza continental baja un 17 % (choques y sedimento perdido);
+  6. remuestreo de un 5 % en 500 Myr;
+  7. la Tierra a 26 km tiene el 10,4 % de la tierra en cuencas cerradas, y el planeta un 4,4 %: el planeta de ruido estaba más drenado que la Tierra.
+- **Verificación:**
+  - `herramientas/verificar.sh` en verde: fmt, clippy y **89 tests** (6 nuevos de la tectónica + 3 unitarios de malla + 4 de isostasia; 5 ignorados: 4 exploratorios y el de BD);
+  - batería: todas las métricas y presupuestos dentro (el escenario `planeta`, rehecho con 34 métricas (51 en total) y notas frente a la Tierra; 13 s con la génesis en caché, ~95 s sin ella);
+  - **no regresión:** con `worldgen.relieve = "ruido"` (`config/experiments/terreno_relieve_ruido.toml`), salida idéntica byte a byte a la de `main`; agentes, sin cambios.
+- **Estado tras el cambio:** relieve tectónico implementado y medido, por defecto en la config, con interruptor. Pendiente del responsable: la adenda de sumideros y las decisiones de `incremento-4-diseno.md` §7.

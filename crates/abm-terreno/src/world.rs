@@ -211,6 +211,8 @@ pub struct World {
     pub humedad_activa: bool,
     /// Anillos del camino del viento (se construyen al primer uso; no van a la caché de disco).
     pub anillos: Option<Box<crate::humedad::Anillos>>,
+    /// Historia geológica de la génesis tectónica (incremento 4), si el relieve es tectónico.
+    pub historia: Option<std::sync::Arc<crate::tectonica::historia::ResumenTectonica>>,
 
     // --- Dinámicos (cada uno a su cadencia) ---
     pub surface: Vec<Surface>,

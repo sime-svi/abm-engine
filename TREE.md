@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-05 — herramientas de escalabilidad (ajustes `--set`, tiempos por sistema, diagnóstico del planeta, batería de escenarios, `verificar.sh`)
+Última actualización: 2026-11-05 — relieve tectónico (incremento 4 del terreno, rama `terreno-tectonica`): deriva de placas, referencia de la Tierra, diagnóstico v6
 
 ---
 
@@ -25,8 +25,11 @@ abm/
 ├── config/
 │   ├── [x] default.toml           # Parámetros base de simulación (forrajeo)
 │   ├── [x] agentes.toml           # Biología de los agentes (especies, energética, forraje, hábitat)
-│   ├── [x] terreno.toml           # Parámetros del planeta ([lod], [erosion], [soil]…)
-│   └── experiments/               # Configs con nombre por experimento (hoy vacía: las referencias son commits)
+│   ├── [x] terreno.toml           # Parámetros del planeta ([lod], [erosion], [soil], [tectonica]…)
+│   ├── referencias/
+│   │   └── [x] tierra_relieve.toml # Tablas de la Tierra (ETOPO 2022, Paxman 2022, Seton 2020, Bird 2003) a las resoluciones del planeta
+│   └── experiments/
+│       └── [x] terreno_relieve_ruido.toml # Relieve de ruido: referencia de la no regresión mientras se mide (se borra con el interruptor)
 │
 ├── crates/                        # Un paquete por responsabilidad; las flechas apuntan a abm-core
 │   ├── abm-core/                  # EL MOTOR (agnóstico al dominio; no depende de nadie)
@@ -65,11 +68,18 @@ abm/
 │   │   │   ├── [x] lib.rs           # run / run_with_info / world_dump
 │   │   │   ├── [x] config · error · geometry · noise · statics · world · hydro · lod
 │   │   │   ├── [x] erosion · cache · worldgen · systems
-│   │   │   ├── [x] metrics.rs       # Métricas por tick + diagnóstico del planeta (esquema v5)
-│   │   │   └── [x] humedad.rs       # Agotamiento de humedad a favor del viento (anillos, Λ, w, c_P)
+│   │   │   ├── [x] metrics.rs       # Métricas por tick + diagnóstico del planeta (v5) + diagnóstico del relieve (v6)
+│   │   │   ├── [x] humedad.rs       # Agotamiento de humedad a favor del viento (anillos, Λ, w, c_P)
+│   │   │   └── tectonica/           # Relieve tectónico (incremento 4): deriva de placas → relieve de nacimiento
+│   │   │       ├── [x] mod.rs       # Génesis tectónica, estado final, interpolación a las celdas del terreno
+│   │   │       ├── [x] malla.rs     # Malla tectónica (nivel 2 del cubo) y cuaterniones
+│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, arcos, choques, erosión, sedimento, eventos
+│   │   │       ├── [x] isostasia.rs # Altura isostática (con el agua), Parsons y Sclater, fosas, nivel del mar
+│   │   │       └── [x] historia.rs  # Eventos, métricas de cada Myr y cuentas de la corteza continental
 │   │   └── tests/
 │   │       ├── [x] terreno.rs       # incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación…) + lluvia y w vs resolución + diagnóstico
-│   │       └── [x] erosion.rs       # incr. 3 (material, hondonadas, camino, tope, caché…) + relieve orográfico + mundo plano
+│   │       ├── [x] erosion.rs       # incr. 3 (material, hondonadas, camino, tope, caché…) + relieve orográfico + mundo plano
+│   │       └── [x] tectonica.rs     # incr. 4: determinismo, giro rígido, sin continentes, India–Asia, rift, caché (+ exploratorias)
 │   │
 │   ├── abm-metrics/               # OBSERVADORES + LOD de almacenamiento (→ core, ruleset, persistence)
 │   │   ├── [x] Cargo.toml
@@ -107,7 +117,9 @@ abm/
 │   ├── [x] no_regresion.sh        # No regresión byte a byte frente a un commit anterior (worktree temporal)
 │   └── analisis/
 │       ├── [x] agentes.py         # Resumen de una corrida de agentes (N/N_max, fecundidad, e0, mortalidad…)
-│       └── [x] terreno.py         # Resumen y comparación de planetas (biomas, diagnóstico, sombra pluviométrica)
+│       ├── [x] terreno.py         # Resumen y comparación de planetas (biomas, diagnóstico, tectónica, sombra pluviométrica)
+│       ├── [x] referencia_tierra.py # Tablas de la Tierra para el relieve (config/referencias/tierra_relieve.toml)
+│       └── [x] h5mini.py          # Lector mínimo de HDF5 por peticiones parciales (rejillas de Paxman et al.)
 │
 ├── infra/
 │   ├── [x] docker-compose.yml     # Postgres/TimescaleDB (host :25432) + Grafana (host :23000), subred fija
@@ -136,7 +148,9 @@ abm/
 │       │   ├── [x] incremento-3-diseno.md                 # Diseño relieve vivo v1.2 (IMPLEMENTADO)
 │       │   ├── [x] nota_terreno_lluvia_orografica.md      # Lluvia independiente de la resolución (IMPLEMENTADA, §8)
 │       │   ├── [x] nota_terreno_sombra_pluviometrica.md   # Agotamiento de humedad + c_P (IMPLEMENTADA, §6; decisiones §7)
-│       │   └── [x] propuesta_relieve_realista.md          # Diagnóstico del relieve y propuesta tectónica (PENDIENTE del responsable)
+│       │   ├── [x] propuesta_relieve_realista.md          # Diagnóstico del relieve (DECIDIDA: opción C con deriva)
+│       │   ├── [x] diseno_relieve_tectonico.md            # Diseño del responsable: relieve tectónico con deriva de placas (v1.0)
+│       │   └── [x] incremento-4-diseno.md                 # Diseño técnico, calibraciones, resultados frente a la Tierra y hallazgos (IMPLEMENTADO, en medida)
 │       ├── paquetes/              # Fase: código dividido en el workspace de paquetes
 │       │   └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)
@@ -169,7 +183,7 @@ Cerradas hasta hoy:
 - **«persistencia»**: sink a PostgreSQL/TimescaleDB + Grafana aprovisionado.
 - **«terreno»**, incrementos **1** (sustrato físico esférico: clima, agua, vegetación), **2** (LOD
   dinámico) y **3** (relieve vivo: erosión, sedimento y suelo, con una génesis geológica de un millón
-  de años en caché).
+  de años en caché). El **4** (relieve tectónico) está implementado y en medida, con interruptor.
 - **«paquetes»**: el workspace.
 
 En curso: **«agentes»** (biología por días), incremento 1 hecho (individuos en un hábitat de prueba).
@@ -178,11 +192,11 @@ Estado:
 - **Determinismo:** misma semilla → mismo JSON byte a byte, verificado también entre procesos y entre
   `debug` y `release`.
 - **Comprobaciones:** `herramientas/verificar.sh` pasa toda la lista de CLAUDE §10 en un comando:
-  - `cargo fmt`, `clippy --workspace -D warnings` y `cargo test` en verde (unitarios: núcleo 3,
-    terreno 14, biología 8, métricas 1, runner 1; forrajeo 3; biología 15; terreno 16; erosión 15; el
-    test de BD es `#[ignore]` y pasa con `--ignored`);
-  - la **batería de escenarios de referencia** (`herramientas/escenarios.toml`): 4 escenarios y 37
-    métricas con sus márgenes y presupuestos de tiempo, ~1 min;
+  - `cargo fmt`, `clippy --workspace -D warnings` y `cargo test` en verde: 89 tests (unitarios: núcleo 3,
+    terreno 21, biología 8, métricas 1, runner 1; forrajeo 3; biología 15; terreno 16; erosión 15;
+    tectónica 6 + 4 exploratorios `#[ignore]`; el test de BD es `#[ignore]` y pasa con `--ignored`);
+  - la **batería de escenarios de referencia** (`herramientas/escenarios.toml`): 4 escenarios y 51
+    métricas con sus márgenes y presupuestos de tiempo, ~1–2 min;
   - con `--no-regresion REF`, la no regresión byte a byte frente a un commit.
 - **Consultable:**
   - los binarios aceptan ajustes `--set ruta=valor` sin editar la config;
@@ -218,10 +232,23 @@ Estado:
 nacimientos y muertes continuos, gracias a la relación `g < m < apetito` (regeneración por celda <
 metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
 
+- **Relieve tectónico (incremento 4, `docs/design/terreno/incremento-4-diseno.md`):**
+  - deriva de placas de 500 Myr en la malla de nivel 2 (~52 km), ~35 s, en la caché de la génesis (`ABMGEN04`);
+  - placas a 4,36 cm/año (la Tierra 4,39), con las correlaciones de Forsyth y Uyeda; India–Asia frena a 1/3 (`c_col` calibrado);
+  - océano de 3 945 m (la Tierra 3 667), pero tierra demasiado alta (1 459 m, la Tierra 671): el mar queda 1 079 m bajo el dato;
+  - referencia de la Tierra en `config/referencias/tierra_relieve.toml`;
+  - interruptor `worldgen.relieve`: con `"ruido"`, salida idéntica byte a byte a la de `main`.
+
 **Pendiente (fases siguientes):**
-- **Pendientes obligatorios de realismo** (CLAUDE §2.8; responsable, 2026-11-05):
-  - **relieve realista** (tectónica de placas; `docs/design/terreno/propuesta_relieve_realista.md`), antes
-    de que los agentes pasen al planeta; después, calibrar la lluvia con datos de la Tierra y retirar `c_P`;
+- **Pendientes obligatorios de realismo** (CLAUDE §2.8; responsable, 2026-11-05), en orden:
+  - **relieve tectónico, lo que falta para que sea el de la Tierra** (hallazgos de `incremento-4-diseno.md` §6–§7):
+    1. adenda del responsable: sumideros reales de corteza continental (erosión por subducción, sedimento subducido) y η_col de India–Asia;
+    2. inicio de subducción en márgenes pasivos viejos (hoy sobrevive un 15 % de fondo de más de 200 Myr);
+    3. fondo oceánico real (sedimento abisal, mesetas y montes submarinos, puntos calientes) y márgenes continentales sumergidos: con 1–3, el nivel del mar debería volver al dato sin forzar `H_nivel`;
+    4. acortamiento andino, ciclo de Wilson (rifts por suturas viejas), flexión de la litosfera (cuencas de antepaís), microplacas;
+    5. reducir el remuestreo de la deriva (5 % del volumen continental en 500 Myr);
+    6. revisar el objetivo de la lluvia de barlovento (la Tierra a 25 km da ×1,36 con `k_oro` = 40); después, calibrar la lluvia con datos de la Tierra y retirar `c_P`;
+  - **casquetes polares** (relieve de hielo; con ellos, el agua total pasa a ser océano + hielo);
   - **competencia con jerarquía** entre agentes (los fuertes comen primero; en las hambrunas mueren antes
     crías y viejos);
   - **coste del celo** de los machos y estacionalidad reproductiva (P3), y dimorfismo por especie (Q2);
@@ -237,8 +264,8 @@ metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
 - biología de los agentes: incremento 2 (cohortes y conversión, con la versión de poblaciones de la
   revisión 1 y P6), incremento 3 (planeta, forraje del terreno y Foco), incremento 4 (eventos y BD);
 - terreno incremento 4 (lagos dinámicos, flujo multidireccional, fertilidad dinámica, eventos);
-- **siguiente: el relieve realista** (incremento 4 del terreno). El responsable escribe su documento de
-  diseño y lo dejará en `docs/temp/` (traspaso en la última entrada de MEMORY.md);
+- **siguiente:** la adenda del responsable sobre los sumideros de corteza y las decisiones de
+  `incremento-4-diseno.md` §7; después, retirar el interruptor del relieve;
 - tablas `events` y `agent_snapshots` (LOD micro) con su sink;
 - volcar las métricas del terreno a la BD.
 

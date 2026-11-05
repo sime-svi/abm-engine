@@ -214,3 +214,41 @@ El responsable fijó un principio nuevo para todo el proyecto (CLAUDE §2.8): **
 - **El aire tarda más en recuperar la humedad sobre tierra** (3 000 km en vez de 1 000): con eso, detrás de una cordillera de juguete llueve un 35–38 % de lo de delante, en el rango de lo real.
 - **El factor `c_P`,** que devuelve la lluvia que quita el secado, queda como **apaño provisional**. Lo realista será calibrar la lluvia con datos de la Tierra cuando el relieve sea realista.
 - **Resultado en el planeta:** detrás de las cordilleras grandes la lluvia baja de 688 a 251 mm y el desierto se duplica. La comida del planeta, medida con el modelo Miami, baja un 3,3 %.
+
+## Incremento 4: el relieve sale de la tectónica de placas (05-11-2026)
+
+**Qué es.** Hasta ahora las montañas y los océanos salían de un «ruido»: un dibujo al azar, suave, al que se daba forma con una curva. Ahora salen de su causa real, la **tectónica de placas**.
+
+La superficie del planeta está partida en **placas**: trozos rígidos de corteza que flotan sobre el manto y se mueven unos centímetros al año.
+- Donde dos placas se separan, sale lava y nace **fondo oceánico** nuevo: la **dorsal**.
+- Donde chocan, una se hunde bajo la otra (**subducción**), con una **fosa** profunda y una cadena de volcanes (un **arco**, como los Andes).
+- Si chocan dos continentes, ninguno se hunde del todo: la corteza se apila y sale una **cordillera**, y detrás una **meseta** (el Himalaya y el Tíbet).
+
+El planeta simula **500 millones de años** de esta deriva antes de empezar. En ese tiempo los continentes se rompen y se vuelven a juntar, y las cordilleras viejas se gastan.
+
+Al final, la altura de cada sitio sale de la **isostasia**, la flotación: una corteza más gruesa sobresale más, como un témpano más grande. El **nivel del mar** sale de cuánta agua hay, la del océano actual de la Tierra. Encima va un «detalle fino» con la rugosidad del relieve real, medida en los datos de la Tierra. Después llega la erosión de un millón de años que ya existía, ahora con dos cosas nuevas: las montañas activas siguen subiendo, y la roca que la erosión quita alivia la corteza, que rebota hacia arriba.
+
+**Con qué se compara.** Con la Tierra de verdad. Un programa nuevo (`herramientas/analisis/referencia_tierra.py`) descarga el relieve medido de toda la Tierra (ETOPO 2022), la roca de la Antártida y de Groenlandia sin su hielo (Paxman et al., 2022), las edades del fondo oceánico (Seton et al., 2020) y las placas reales (Bird, 2003). Calcula las mismas cifras que el planeta y a la misma resolución, y las guarda en `config/referencias/tierra_relieve.toml`.
+
+### Qué sale bien
+
+- **Las placas se comportan como las de la Tierra.**
+  - Se mueven a 4,4 cm/año de media, la velocidad medida.
+  - Las que tienen mucha fosa van deprisa y las muy continentales van despacio, como observaron Forsyth y Uyeda en 1975.
+  - Hay rifts, choques, suturas y un continente que se junta y se separa.
+- **Un choque como el de la India y Asia frena como el real:** de 14 a 5 cm/año.
+- **El océano tiene la profundidad de la Tierra** (3 945 m de media, la Tierra 3 667) y su edad mediana es de 60 Myr (la Tierra 55).
+- **Los ríos** siguen la ley de Hack de los ríos reales.
+
+### Qué no cuadra todavía (hallazgos)
+
+- **La tierra está demasiado alta:** 1 459 m de media, frente a 671 en la Tierra. Pasa porque el agua llena las cuencas oceánicas y aún sobra cuenca: el mar queda ~1 km más bajo de lo que esperaba el diseño. Hay dos causas, y ninguna es un número mal puesto:
+  - al fondo oceánico del modelo le faltan cosas que levantan el fondo real (sedimento, mesetas y montes submarinos);
+  - sobrevive fondo viejísimo que en la Tierra ya se habría hundido, porque falta el mecanismo que inicia nuevas fosas en los bordes viejos de los océanos.
+
+  Forzar un número para bajar la tierra iría contra el principio de realismo, así que se ha dejado así y anotado.
+- **No hay plataformas continentales** (la franja de mar poco hondo junto a la costa): los continentes nacen con el borde cortado.
+- **Una sorpresa sobre la lluvia de montaña.** El relieve real de la Tierra, a la escala a la que la ve nuestra lluvia (25 km), solo da ×1,4 de lluvia en las laderas de barlovento, no ×2–3. El objetivo escrito no lo cumple ni la propia Tierra; hay que revisar el objetivo o la escala de la lluvia.
+- **La corteza continental baja un 17 %** en los 500 Myr. El responsable prepara una adenda con los sumideros reales que faltan.
+
+Todo está medido en la batería de escenarios (escenario `planeta`, 34 métricas), con su nota frente a la Tierra, y explicado en `incremento-4-diseno.md`. Mientras se mide, el relieve anterior sigue disponible: `worldgen.relieve = "ruido"`.

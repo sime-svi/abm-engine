@@ -17,9 +17,12 @@ use crate::config::{PersistenceCfg, TerrenoConfig};
 use crate::erosion::GeoSummary;
 use crate::error::TerrenoError;
 use crate::statics::StaticGen;
+use crate::tectonica::Tectonica;
+use crate::tectonica::historia::ResumenTectonica;
+use crate::tectonica::malla::Malla;
 use crate::world::{Biome, Pair, Surface, Topology, World};
 
-const MAGIC: &[u8; 8] = b"ABMGEN03";
+const MAGIC: &[u8; 8] = b"ABMGEN04";
 const FINGERPRINT: &str = env!("ABM_TERRENO_FINGERPRINT");
 
 fn fnv1a(mut h: u64, bytes: &[u8]) -> u64 {
@@ -39,6 +42,7 @@ pub fn key(cfg: &TerrenoConfig) -> Result<u64, TerrenoError> {
     c.run.dump_world = false;
     c.run.dump_climate = false;
     c.run.genesis_cache = String::new();
+    c.run.diagnostico_relieve = false;
     c.persistence = PersistenceCfg::default();
     let json = serde_json::to_string(&c)?;
     let h = fnv1a(0xcbf2_9ce4_8422_2325, FINGERPRINT.as_bytes());
@@ -308,7 +312,91 @@ fn encode(world: &World, geo: &GeoSummary, key: u64) -> Result<Vec<u8>, TerrenoE
     w.u64(world.sample_count);
     w.f64(world.c_p);
     w.f64(world.desvio_lluvia);
+    // Relieve tectónico (ABMGEN04): el estado final de la deriva, para que el generador de
+    // estáticos dé la misma altura a las celdas que el LOD cree después, y la historia geológica.
+    match (world.statgen.tectonica(), &world.historia) {
+        (Some(t), Some(h)) => {
+            w.vu8(&[1]);
+            w.u32(t.malla.nivel);
+            for col in [
+                &t.z_base_m,
+                &t.s_fosa_km,
+                &t.dh_dt,
+                &t.sigma_det_m,
+                &t.h_km,
+                &t.sed_km,
+                &t.edad_oc,
+                &t.edad_orog,
+                &t.borde_dist_km,
+            ] {
+                w.vf64(col);
+            }
+            w.vu8(&t.continental.iter().map(|&x| x as u8).collect::<Vec<u8>>());
+            w.vu64(&t.placa);
+            w.vu8(&t.borde_tipo);
+            w.vu8(&t.borde_lado);
+            for x in [t.zeta_m, t.d_fosa_m, t.w_fosa_km, t.f_levantamiento] {
+                w.f64(x);
+            }
+            w.vu8(&serde_json::to_vec(h.as_ref())?);
+        }
+        _ => w.vu8(&[0]),
+    }
     Ok(w.0)
+}
+
+/// Estado tectónico guardado en la caché (la malla se reconstruye de la config).
+fn decode_tectonica(
+    r: &mut Reader,
+    cfg: &TerrenoConfig,
+) -> Option<Option<(Tectonica, ResumenTectonica)>> {
+    if r.vu8()?.first() != Some(&1) {
+        return Some(None);
+    }
+    let nivel = r.u32()?;
+    let malla = Malla::new(cfg.planet.n0, nivel, cfg.planet.r_km);
+    let mut cols: Vec<Vec<f64>> = Vec::with_capacity(9);
+    for _ in 0..9 {
+        cols.push(r.vf64()?);
+    }
+    let continental: Vec<bool> = r.vu8()?.into_iter().map(|x| x != 0).collect();
+    let placa = r.vu64()?;
+    let borde_tipo = r.vu8()?;
+    let borde_lado = r.vu8()?;
+    let (zeta_m, d_fosa_m, w_fosa_km, f_levantamiento) = (r.f64()?, r.f64()?, r.f64()?, r.f64()?);
+    let historia: ResumenTectonica = serde_json::from_slice(&r.vu8()?).ok()?;
+    let n = malla.num;
+    if cols.iter().any(|c| c.len() != n)
+        || continental.len() != n
+        || placa.len() != n
+        || borde_tipo.len() != n
+        || borde_lado.len() != n
+    {
+        return None;
+    }
+    let mut it = cols.into_iter();
+    let mut next = || it.next().unwrap_or_default();
+    let t = Tectonica {
+        malla,
+        z_base_m: next(),
+        s_fosa_km: next(),
+        dh_dt: next(),
+        sigma_det_m: next(),
+        h_km: next(),
+        sed_km: next(),
+        edad_oc: next(),
+        edad_orog: next(),
+        borde_dist_km: next(),
+        continental,
+        placa,
+        borde_tipo,
+        borde_lado,
+        zeta_m,
+        d_fosa_m,
+        w_fosa_km,
+        f_levantamiento,
+    };
+    Some(Some((t, historia)))
 }
 
 fn decode(bytes: &[u8], cfg: &TerrenoConfig, key: u64) -> Option<(World, GeoSummary)> {
@@ -358,9 +446,17 @@ fn decode(bytes: &[u8], cfg: &TerrenoConfig, key: u64) -> Option<(World, GeoSumm
     let hydro_lock: Vec<bool> = r.vu8()?.into_iter().map(|x| x != 0).collect();
     let sample_count = r.u64()?;
     let (c_p, desvio_lluvia) = (r.f64()?, r.f64()?);
+    let tect = decode_tectonica(&mut r, cfg)?;
     if r.p != bytes.len() {
         return None;
     }
+    let (statgen, historia) = match tect {
+        Some((t, h)) => (
+            StaticGen::con_tectonica(cfg, std::sync::Arc::new(t)),
+            Some(std::sync::Arc::new(h)),
+        ),
+        None => (StaticGen::new(cfg), None),
+    };
 
     // Coherencia de tamaños antes de construir nada.
     let per_cell = [
@@ -407,7 +503,7 @@ fn decode(bytes: &[u8], cfg: &TerrenoConfig, key: u64) -> Option<(World, GeoSumm
             nb,
             pairs,
         },
-        statgen: StaticGen::new(cfg),
+        statgen,
         h0: next(),
         grad0_e: next(),
         grad0_n: next(),
@@ -449,6 +545,7 @@ fn decode(bytes: &[u8], cfg: &TerrenoConfig, key: u64) -> Option<(World, GeoSumm
         // La caché guarda mundos ya envejecidos: el agotamiento ya está activo.
         humedad_activa: true,
         anillos: None,
+        historia,
         sample_count,
     };
     Some((world, geo))

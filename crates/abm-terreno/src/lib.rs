@@ -19,6 +19,7 @@ pub mod metrics;
 pub mod noise;
 pub mod statics;
 pub mod systems;
+pub mod tectonica;
 pub mod world;
 pub mod worldgen;
 
@@ -91,7 +92,18 @@ pub fn run_with_info(cfg: &TerrenoConfig) -> Result<(TerrenoDoc, World, RunInfo)
         if every > 0 && t > 0 && t.is_multiple_of(every) {
             let dt_years = every as f64 / cfg.climate.t_year * cfg.erosion.run_accel;
             let (p, tm) = erosion::running_means(&world, cfg);
-            acct.erosion = erosion::step(&mut world, cfg, dt_years, &p, &tm);
+            // Con el relieve tectónico, la erosión en ejecución lleva el rebote isostático (§6.9b);
+            // sin levantamiento: durante la simulación no hay tectónica (§6.10).
+            acct.erosion = if world.historia.is_some() {
+                let vecindad = erosion::Vecindad::new(&world, cfg.tectonica.r_flex_km);
+                let iso = erosion::Isostasia {
+                    levantamiento: &[],
+                    rebote: Some((cfg.tectonica.rho_c / cfg.tectonica.rho_m, &vecindad)),
+                };
+                erosion::step_con(&mut world, cfg, dt_years, &p, &tm, &iso)
+            } else {
+                erosion::step(&mut world, cfg, dt_years, &p, &tm)
+            };
             lod::update_hydro_lock(&mut world);
             scratch.cron.anotar("erosion");
         }
@@ -99,9 +111,18 @@ pub fn run_with_info(cfg: &TerrenoConfig) -> Result<(TerrenoDoc, World, RunInfo)
         scratch.cron.anotar("metricas");
     }
 
-    let diagnostico = metrics::diagnostico(&world, cfg);
+    let mut diagnostico = metrics::diagnostico(&world, cfg);
+    let ampliado = world.historia.is_some() || cfg.run.diagnostico_relieve;
+    if ampliado {
+        diagnostico.relieve = Some(metrics::diagnostico_relieve(&world, cfg));
+        scratch.cron.anotar("diagnostico_relieve");
+    }
     let doc = TerrenoDoc {
-        schema_version: metrics::SCHEMA_VERSION,
+        schema_version: if ampliado {
+            metrics::SCHEMA_VERSION_RELIEVE
+        } else {
+            metrics::SCHEMA_VERSION
+        },
         run: TerrenoRunMeta {
             name: cfg.run.name.clone(),
             seed: cfg.run.seed,
@@ -117,6 +138,7 @@ pub fn run_with_info(cfg: &TerrenoConfig) -> Result<(TerrenoDoc, World, RunInfo)
                 desvio: world.desvio_lluvia,
                 c_p: world.c_p,
             },
+            tectonica: world.historia.as_ref().map(|h| h.as_ref().clone()),
         },
         diagnostico,
         ticks,
@@ -155,6 +177,22 @@ pub struct WorldDumpCell {
     pub w_hum: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lluvia_anual_mm: Option<f64>,
+    /// Con el relieve tectónico: la celda de la malla tectónica que contiene el centro (corteza,
+    /// placa, edad del fondo oceánico y borde de placa más cercano).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tectonica: Option<DumpTectonica>,
+}
+
+/// Datos tectónicos de una celda del volcado.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DumpTectonica {
+    pub continental: bool,
+    pub placa: u64,
+    pub espesor_km: f64,
+    pub sedimento_km: f64,
+    pub edad_oc_myr: f64,
+    pub borde_tipo: u8,
+    pub borde_dist_km: f64,
 }
 
 /// Serializa el snapshot por celda del mundo (orden de clave).
@@ -178,6 +216,18 @@ pub fn world_dump(world: &World, cfg: &TerrenoConfig) -> Vec<WorldDumpCell> {
             m_oro: clima.then(|| systems::m_oro_celda(world, cfg, id)),
             w_hum: clima.then(|| world.w_hum[id]),
             lluvia_anual_mm: clima.then(|| systems::lluvia_media_anual_mm(world, cfg, id)),
+            tectonica: world.statgen.tectonica().map(|t| {
+                let k = t.celda(world.topo.dir[id]);
+                DumpTectonica {
+                    continental: t.continental[k],
+                    placa: t.placa[k],
+                    espesor_km: t.h_km[k],
+                    sedimento_km: t.sed_km[k],
+                    edad_oc_myr: t.edad_oc[k],
+                    borde_tipo: t.borde_tipo[k],
+                    borde_dist_km: t.borde_dist_km[k],
+                }
+            }),
         })
         .collect()
 }

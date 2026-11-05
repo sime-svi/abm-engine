@@ -1138,63 +1138,7 @@ fn rebuild(
             }
         }
         if any {
-            let mut seen = vec![false; n_new];
-            for start in 0..n_new {
-                if !is_target[start] || seen[start] {
-                    continue;
-                }
-                // Grupo conexo de hondonadas nuevas (en orden de posición: determinista).
-                let mut group = vec![start];
-                seen[start] = true;
-                let mut k = 0;
-                while k < group.len() {
-                    let c = group[k];
-                    k += 1;
-                    for &b in world.topo.neighbors(c) {
-                        let b = b as usize;
-                        if is_target[b] && !seen[b] {
-                            seen[b] = true;
-                            group.push(b);
-                        }
-                    }
-                }
-                group.sort_unstable();
-                let floor = group
-                    .iter()
-                    .fold(f64::NEG_INFINITY, |m, &c| m.max(world.filled_h[c]));
-                let mut donors: Vec<usize> = group
-                    .iter()
-                    .flat_map(|&c| world.topo.neighbors(c).iter().map(|&b| b as usize))
-                    .filter(|&b| !is_target[b] && !world.es_oceano(b) && world.h[b] > floor)
-                    .collect();
-                donors.sort_unstable();
-                donors.dedup();
-                // Lo que pide el grupo y lo que puede pagar su borde.
-                let need: f64 = group
-                    .iter()
-                    .map(|&c| (world.filled_h[c] - world.h[c]).max(0.0) * world.topo.area[c])
-                    .sum();
-                let room: f64 = donors
-                    .iter()
-                    .map(|&j| (world.h[j] - floor) * world.topo.area[j])
-                    .sum();
-                if need <= 0.0 || room <= 0.0 {
-                    continue;
-                }
-                let scale = (room / need).min(1.0);
-                let mut raised = 0.0;
-                for &c in &group {
-                    let d = (world.filled_h[c] - world.h[c]).max(0.0) * scale;
-                    if d > 0.0 {
-                        world.h[c] += d;
-                        world.e[c] += d;
-                        raised += d * world.topo.area[c];
-                    }
-                }
-                let removed = lower_to_floor(world, &donors, floor, raised);
-                rep.conditioned_m3 += raised;
-                rep.fill_m3 += raised - removed;
-            }
+            rellenar_grupos(world, &is_target, &mut rep);
             hydro::recompute_after_erosion(world, cfg);
         }
     }
@@ -1213,6 +1157,117 @@ fn rebuild(
             world.biome[s] = biome_for(world, cfg, s);
         }
     }
+    rep
+}
+
+/// Rellena hacia su cota de derrame cada grupo conexo de celdas `objetivo` en depresión, con el
+/// material de su borde (las vecinas de tierra por encima de la cota, bajadas por igual sin pasar de
+/// ella): se conserva exactamente y no aparecen hondonadas nuevas. Si el borde no alcanza, el grupo
+/// se rellena en proporción. Necesita `filled_h` al día; no recalcula los derivados.
+fn rellenar_grupos(world: &mut World, is_target: &[bool], rep: &mut LodReport) {
+    let n_new = world.topo.num_cells;
+    let mut seen = vec![false; n_new];
+    for start in 0..n_new {
+        if !is_target[start] || seen[start] {
+            continue;
+        }
+        // Grupo conexo de hondonadas (en orden de posición: determinista).
+        let mut group = vec![start];
+        seen[start] = true;
+        let mut k = 0;
+        while k < group.len() {
+            let c = group[k];
+            k += 1;
+            for &b in world.topo.neighbors(c) {
+                let b = b as usize;
+                if is_target[b] && !seen[b] {
+                    seen[b] = true;
+                    group.push(b);
+                }
+            }
+        }
+        group.sort_unstable();
+        let floor = group
+            .iter()
+            .fold(f64::NEG_INFINITY, |m, &c| m.max(world.filled_h[c]));
+        let mut donors: Vec<usize> = group
+            .iter()
+            .flat_map(|&c| world.topo.neighbors(c).iter().map(|&b| b as usize))
+            .filter(|&b| !is_target[b] && !world.es_oceano(b) && world.h[b] > floor)
+            .collect();
+        donors.sort_unstable();
+        donors.dedup();
+        // Lo que pide el grupo y lo que puede pagar su borde.
+        let need: f64 = group
+            .iter()
+            .map(|&c| (world.filled_h[c] - world.h[c]).max(0.0) * world.topo.area[c])
+            .sum();
+        let room: f64 = donors
+            .iter()
+            .map(|&j| (world.h[j] - floor) * world.topo.area[j])
+            .sum();
+        if need <= 0.0 || room <= 0.0 {
+            continue;
+        }
+        let scale = (room / need).min(1.0);
+        let mut raised = 0.0;
+        for &c in &group {
+            let d = (world.filled_h[c] - world.h[c]).max(0.0) * scale;
+            if d > 0.0 {
+                world.h[c] += d;
+                world.e[c] += d;
+                raised += d * world.topo.area[c];
+            }
+        }
+        let removed = lower_to_floor(world, &donors, floor, raised);
+        rep.conditioned_m3 += raised;
+        rep.fill_m3 += raised - removed;
+    }
+}
+
+/// Acondicionamiento hidrológico del relieve tectónico (G6 del diseño): el ruido de detalle tiene la
+/// rugosidad del relieve real pero no su red de drenaje, y deja hoyos que un millón de años de
+/// erosión no llega a rellenar. Se rellenan (con el material de su borde, balance exacto) las
+/// hondonadas que no existen en la base tectónica sin ruido; las cuencas de la tectónica (rifts,
+/// depresiones entre cordilleras) se conservan. Varias pasadas, porque rellenar un grupo puede
+/// unirlo a otro.
+pub fn acondicionar_detalle(world: &mut World, cfg: &TerrenoConfig) -> LodReport {
+    let mut rep = LodReport::default();
+    let n = world.topo.num_cells;
+    let base: Vec<f64> = (0..n)
+        .map(|s| {
+            world
+                .statgen
+                .h_base_at(world.topo.dir[s])
+                .unwrap_or(world.h[s])
+        })
+        .collect();
+    // Hondonadas de la base: priority-flood sobre la base con la misma malla.
+    let filled_full = world.filled_h.clone();
+    let h_full = world.h.clone();
+    world.h.copy_from_slice(&base);
+    hydro::recompute_after_erosion(world, cfg);
+    let base_en_hoyo: Vec<bool> = (0..n)
+        .map(|s| !world.es_oceano(s) && base[s] < world.filled_h[s])
+        .collect();
+    world.h.copy_from_slice(&h_full);
+    world.filled_h.copy_from_slice(&filled_full);
+    hydro::recompute_after_erosion(world, cfg);
+    for _ in 0..4 {
+        let target: Vec<bool> = (0..n)
+            .map(|s| !base_en_hoyo[s] && !world.es_oceano(s) && world.h[s] < world.filled_h[s])
+            .collect();
+        if !target.iter().any(|&x| x) {
+            break;
+        }
+        rellenar_grupos(world, &target, &mut rep);
+        hydro::recompute_after_erosion(world, cfg);
+    }
+    if world.e.iter().any(|&x| x != 0.0) {
+        erosion::refresh_gradients(world);
+        erosion::refresh_orography(world);
+    }
+    update_hydro_lock(world);
     rep
 }
 

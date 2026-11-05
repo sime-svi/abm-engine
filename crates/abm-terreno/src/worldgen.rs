@@ -6,7 +6,9 @@
 //! al mar) → **refinamiento inicial** del LOD (si está activo) → **génesis geológica** (erosión y
 //! suelo durante ~1 millón de años, incr. 3 §8) → estado dinámico inicial sobre la malla final.
 
-use crate::config::TerrenoConfig;
+use std::sync::Arc;
+
+use crate::config::{Relieve, TerrenoConfig};
 use crate::erosion::{self, GeoSummary};
 use crate::geometry::{face_n, key};
 use crate::humedad;
@@ -22,7 +24,15 @@ pub fn generate(cfg: &TerrenoConfig) -> World {
 
 /// Genera el mundo y devuelve también el resumen de la génesis geológica.
 pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
-    let statgen = StaticGen::new(cfg);
+    // Relieve de nacimiento: el ruido de los incrementos 1–3 o la deriva de placas (incremento 4,
+    // G1–G4; el detalle fino G5 lo pone el generador de estáticos).
+    let (statgen, historia) = match cfg.worldgen.relieve {
+        Relieve::Ruido => (StaticGen::new(cfg), None),
+        Relieve::Tectonico => {
+            let (t, r) = crate::tectonica::genesis(cfg);
+            (StaticGen::con_tectonica(cfg, Arc::new(t)), Some(r))
+        }
+    };
     let l = cfg.lod.l_min;
     let n = face_n(cfg.planet.n0, l);
     let num = 6 * (n as usize) * (n as usize);
@@ -133,6 +143,7 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
         desvio_lluvia: 0.0,
         humedad_activa: false,
         anillos: None,
+        historia: None,
         surface: Vec::new(),
         w: Vec::new(),
         temp: Vec::new(),
@@ -155,11 +166,15 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
     // agua al mar.
     // El relleno de hondonadas artificiales del refinado inicial (acondicionamiento, incr. 3 §3)
     // también entra en el balance de material de la génesis.
-    let pre = if cfg.lod.enabled() {
+    let mut pre = if cfg.lod.enabled() {
         lod::refine_initial(&mut world, cfg)
     } else {
         lod::LodReport::default()
     };
+    // G6 (relieve tectónico): acondicionamiento hidrológico de los hoyos del ruido de detalle.
+    if world.statgen.tectonica().is_some() && cfg.erosion.enabled() {
+        pre.absorb(&lod::acondicionar_detalle(&mut world, cfg));
+    }
     let mut geo = erosion::genesis(&mut world, cfg);
     geo.lod_fill_m3 += pre.fill_m3;
     geo.lod_conditioned_m3 += pre.conditioned_m3;
@@ -169,7 +184,20 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
     if cfg.lod.enabled() || cfg.erosion.geo_steps > 0 {
         set_initial_state(&mut world, cfg);
     }
+    if let Some(mut r) = historia {
+        r.nivel_mar_tras_prerrodaje_m = nivel_mar_malla(&world, cfg);
+        world.historia = Some(Arc::new(r));
+    }
     (world, geo)
+}
+
+/// Nivel del mar (m, respecto al de la génesis) que llena las cuencas de la malla del planeta con el
+/// agua de `tectonica.gel_m` (G7, §6.9c): `Σ max(0, ζ − h)·A = GEL·A_planeta`.
+pub fn nivel_mar_malla(world: &World, cfg: &TerrenoConfig) -> f64 {
+    let area_km2: Vec<f64> = world.topo.area.iter().map(|a| a / 1e6).collect();
+    let total: f64 = area_km2.iter().sum();
+    let h: Vec<f64> = world.h.iter().map(|h| h - cfg.planet.sea_level).collect();
+    crate::tectonica::isostasia::nivel_del_mar(&h, &area_km2, cfg.tectonica.gel_m / 1000.0 * total)
 }
 
 /// Estado dinámico inicial (incremento 1): suelo a media capacidad y biomasa semilla en tierra;

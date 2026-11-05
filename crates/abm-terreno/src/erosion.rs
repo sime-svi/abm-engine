@@ -33,6 +33,16 @@ pub struct ErosionReport {
     pub to_ocean_m3: f64,
     /// Cierre del balance de material: `Δ(Σ e·a) + al_mar`. Debe ≈ 0.
     pub residual_m3: f64,
+    /// Relieve tectónico (§6.9): roca que sube el levantamiento del prerrodaje y la que sube (o
+    /// baja) el rebote isostático. Partidas propias, fuera del balance de sedimento.
+    #[serde(default, skip_serializing_if = "es_cero")]
+    pub uplift_m3: f64,
+    #[serde(default, skip_serializing_if = "es_cero")]
+    pub rebound_m3: f64,
+}
+
+fn es_cero(x: &f64) -> bool {
+    *x == 0.0
 }
 
 impl ErosionReport {
@@ -43,6 +53,8 @@ impl ErosionReport {
         self.deposited_m3 += o.deposited_m3;
         self.to_ocean_m3 += o.to_ocean_m3;
         self.residual_m3 += o.residual_m3;
+        self.uplift_m3 += o.uplift_m3;
+        self.rebound_m3 += o.rebound_m3;
     }
 }
 
@@ -126,6 +138,55 @@ pub fn running_means(world: &World, cfg: &TerrenoConfig) -> (Vec<f64>, Vec<f64>)
     (p, t)
 }
 
+/// Procesos isostáticos que acompañan a la erosión con el relieve tectónico (§6.9).
+#[derive(Default)]
+pub struct Isostasia<'a> {
+    /// Levantamiento tectónico de cada celda (m/año), solo en el prerrodaje; vacío = sin él.
+    pub levantamiento: &'a [f64],
+    /// Rebote isostático: factor `ρ_c/ρ_m` y vecindad de flexión de cada celda.
+    pub rebote: Option<(f64, &'a Vecindad)>,
+}
+
+/// Vecinas de cada celda dentro del radio de flexión (incluida ella): CSR.
+pub struct Vecindad {
+    off: Vec<u32>,
+    celdas: Vec<u32>,
+}
+
+impl Vecindad {
+    /// Celdas a menos de `r_km` (entre centros) de cada celda, por la vecindad de la malla.
+    pub fn new(world: &World, r_km: f64) -> Self {
+        let topo = &world.topo;
+        let n = topo.num_cells;
+        let r = r_km * 1000.0 / topo.r_planet;
+        let mut off = Vec::with_capacity(n + 1);
+        let mut celdas = Vec::new();
+        let mut marca = vec![u32::MAX; n];
+        let mut pila = Vec::new();
+        off.push(0);
+        for s in 0..n {
+            celdas.push(s as u32);
+            marca[s] = s as u32;
+            pila.clear();
+            pila.push(s as u32);
+            while let Some(k) = pila.pop() {
+                for &v in topo.neighbors(k as usize) {
+                    if marca[v as usize] == s as u32 {
+                        continue;
+                    }
+                    if angle_between(topo.dir[s], topo.dir[v as usize]) <= r {
+                        marca[v as usize] = s as u32;
+                        celdas.push(v);
+                        pila.push(v);
+                    }
+                }
+            }
+            off.push(celdas.len() as u32);
+        }
+        Self { off, celdas }
+    }
+}
+
 /// Un paso de erosión de `dt_years` años (§4–§7) con las medias de clima dadas (`P̄` en m/año,
 /// `T̄` en °C). Requiere los derivados globales al día y los deja al día al terminar.
 pub fn step(
@@ -134,6 +195,20 @@ pub fn step(
     dt_years: f64,
     p_bar: &[f64],
     t_bar: &[f64],
+) -> ErosionReport {
+    step_con(world, cfg, dt_years, p_bar, t_bar, &Isostasia::default())
+}
+
+/// Como [`step`], con el levantamiento tectónico y el rebote isostático del relieve tectónico
+/// (§6.9): `∂h/∂t = U − K·A^m·S^n + κ∇²h + rebote`, con `rebote = (ρ_c/ρ_m)·Ē` y `Ē` la erosión neta
+/// media en el radio de flexión. Las dos partidas van aparte del balance de sedimento.
+pub fn step_con(
+    world: &mut World,
+    cfg: &TerrenoConfig,
+    dt_years: f64,
+    p_bar: &[f64],
+    t_bar: &[f64],
+    iso: &Isostasia,
 ) -> ErosionReport {
     let n = world.topo.num_cells;
     let ec = &cfg.erosion;
@@ -146,6 +221,17 @@ pub fn step(
     let mut dvol = 0.0; // Δ(Σ e·a), acumulado cambio a cambio (más preciso que restar dos sumas)
 
     let ocean: Vec<bool> = (0..n).map(|s| world.es_oceano(s)).collect();
+    // Levantamiento tectónico (§6.9a): antes de la incisión (separación de operadores).
+    if !iso.levantamiento.is_empty() {
+        for s in 0..n {
+            let du = iso.levantamiento[s] * dt_years;
+            if du > 0.0 {
+                world.h[s] += du;
+                world.e[s] += du;
+                rep.uplift_m3 += du * world.topo.area[s];
+            }
+        }
+    }
     // Celdas en depresión al inicio del paso: no se excavan, reciben sedimento (§4, §5).
     let in_dep: Vec<bool> = (0..n)
         .map(|s| !ocean[s] && world.h[s] < world.filled_h[s])
@@ -282,6 +368,36 @@ pub fn step(
                     diff[s] += d;
                     dvol += d * world.topo.area[s];
                 }
+            }
+        }
+    }
+
+    // --- Rebote isostático (§6.9b): la corteza descargada sube `(ρ_c/ρ_m)·Ē`, con `Ē` la erosión
+    //     neta (erosión − depósito − difusión) media por área en el radio de flexión. Solo en tierra,
+    //     y la tierra no baja del nivel del mar (la erosión no mueve agua). ---
+    if let Some((f, vec)) = iso.rebote {
+        let neta: Vec<f64> = (0..n).map(|s| eps[s] - dep[s] - diff[s]).collect();
+        for (s, &oc) in ocean.iter().enumerate() {
+            if oc {
+                continue;
+            }
+            let (a, b) = (vec.off[s] as usize, vec.off[s + 1] as usize);
+            let (mut num, mut den) = (0.0, 0.0);
+            for &v in &vec.celdas[a..b] {
+                let ar = world.topo.area[v as usize];
+                num += neta[v as usize] * ar;
+                den += ar;
+            }
+            if den <= 0.0 {
+                continue;
+            }
+            let dh = f * num / den;
+            let h_new = (world.h[s] + dh).max(sea);
+            let d = h_new - world.h[s];
+            if d != 0.0 {
+                world.h[s] = h_new;
+                world.e[s] += d;
+                rep.rebound_m3 += d * world.topo.area[s];
             }
         }
     }
@@ -481,6 +597,26 @@ pub fn orographic_gradient_at(world: &World, dir: V3, east: V3, north: V3) -> (f
     (se + ee, sn + en)
 }
 
+/// Gradiente del relieve de referencia orográfico (escala `d_oro`) en el centro de cada celda de
+/// `celdas`: el de nacimiento más el de la erosión acumulada (para el diagnóstico del relieve).
+pub fn gradientes_referencia(world: &World, celdas: &[usize]) -> Vec<(f64, f64)> {
+    if world.statgen.oro_delta() <= 0.0 {
+        return vec![(0.0, 0.0); celdas.len()];
+    }
+    let means = ancestor_means(world, world.statgen.oro_level());
+    celdas
+        .iter()
+        .map(|&s| {
+            let t = &world.topo;
+            let (se, sn) = world
+                .statgen
+                .oro_gradient0_at(t.dir[s], t.east[s], t.north[s]);
+            let (ee, en) = e_gradient_ref(world, &means, t.dir[s], t.east[s], t.north[s]);
+            (se + ee, sn + en)
+        })
+        .collect()
+}
+
 /// Refresca el gradiente orográfico de las celdas que usan el relieve de referencia: su parte pura
 /// (`oro0`, guardada al crear la celda) más la de la erosión acumulada (`e_gradient_ref`). Hay que
 /// llamarla cuando cambia `e` o la malla.
@@ -521,11 +657,27 @@ pub fn genesis(world: &mut World, cfg: &TerrenoConfig) -> GeoSummary {
         return summary;
     }
     let rounds = ec.geo_rounds.clamp(1, ec.geo_steps);
+    let tectonico = world.statgen.tectonica().is_some();
     for r in 0..rounds {
         let steps = ec.geo_steps / rounds + u32::from(r < ec.geo_steps % rounds);
+        // Con el relieve tectónico: levantamiento de los arcos y choques activos, y rebote
+        // isostático (§6.9). La malla no cambia dentro de una ronda.
+        let lev: Vec<f64> = if tectonico {
+            (0..world.topo.num_cells)
+                .map(|s| world.statgen.levantamiento_m_anio(world.topo.dir[s]))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let vecindad = tectonico.then(|| Vecindad::new(world, cfg.tectonica.r_flex_km));
+        let f_rebote = cfg.tectonica.rho_c / cfg.tectonica.rho_m;
         for _ in 0..steps {
             let (p, t) = analytic_means(world, cfg);
-            let rep = step(world, cfg, ec.geo_dt_years, &p, &t);
+            let iso = Isostasia {
+                levantamiento: &lev,
+                rebote: vecindad.as_ref().map(|v| (f_rebote, v)),
+            };
+            let rep = step_con(world, cfg, ec.geo_dt_years, &p, &t, &iso);
             summary.erosion.add(&rep);
         }
         // Las marcas hidrológicas de antes de la erosión clavaban refinamiento en lagos falsos y

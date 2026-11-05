@@ -1,6 +1,6 @@
 # Propuesta: un relieve realista
 
-**Estado:** propuesta de Claude Code (2026-11-05), **pendiente del responsable**. Sin código.
+**Estado:** propuesta de Claude Code (2026-11-05). **Decidida por el responsable:** opción C con deriva de placas (`diseno_relieve_tectonico.md`), implementada en el incremento 4 (`incremento-4-diseno.md`).
 **Origen:** decisión S1 de la nota de sombra pluviométrica.
 - En vez de forzar `k_oro` hasta 150 para que lloviera lo esperado en barlovento, hay que dudar del relieve (CLAUDE §2.8, realismo primero).
 - Con el valor físico de `k_oro` (40), las laderas de barlovento reciben solo ×1,37 de lluvia, frente a ×2–3 en la Tierra, porque nuestras montañas son demasiado suaves.

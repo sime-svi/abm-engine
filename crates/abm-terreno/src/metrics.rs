@@ -12,6 +12,12 @@
 //!
 //! Esquema v5: diagnóstico del planeta al final de la corrida (relieve, lluvia y PPN), para que las
 //! cifras que sostienen las decisiones se puedan consultar en cada corrida (CLAUDE §5).
+//!
+//! Esquema v6 (relieve tectónico, incremento 4): la historia geológica de la génesis en los
+//! metadatos y el diagnóstico ampliado del relieve (océano, pendientes a 25 km, plataforma, ley de
+//! Hack y espectro por escala), para compararlo con las tablas de la Tierra
+//! (`config/referencias/tierra_relieve.toml`). Con el relieve de ruido y sin
+//! `run.diagnostico_relieve`, la salida es la v5 sin cambios.
 
 use serde::{Deserialize, Serialize};
 
@@ -25,6 +31,20 @@ pub const N_BANDS: usize = 6;
 
 /// Versión del esquema del documento de salida.
 pub const SCHEMA_VERSION: u32 = 5;
+
+/// Versión del esquema con el relieve tectónico o el diagnóstico ampliado del relieve.
+pub const SCHEMA_VERSION_RELIEVE: u32 = 6;
+
+/// Franjas de profundidad del océano (m, positivas) del diagnóstico ampliado.
+pub const HIPSOMETRIA_OCEANO_LIMITES_M: [f64; 8] =
+    [0.0, 200.0, 1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 6000.0];
+
+/// Clases de altura (m) de las pendientes a 25 km.
+pub const PENDIENTES_SOBRE_M: [f64; 4] = [0.0, 500.0, 1000.0, 2000.0];
+
+/// Clases del espectro por escala: tierra por altura media (m) y mar por profundidad media (m).
+pub const ESPECTRO_TIERRA_M: [f64; 6] = [0.0, 200.0, 500.0, 1000.0, 2000.0, 3000.0];
+pub const ESPECTRO_MAR_M: [f64; 4] = [0.0, 200.0, 2000.0, 4000.0];
 
 /// Límites inferiores de las franjas de altura de la hipsometría (m sobre el nivel del mar).
 pub const HIPSOMETRIA_LIMITES_M: [f64; 7] = [0.0, 200.0, 500.0, 1000.0, 2000.0, 3000.0, 5000.0];
@@ -90,6 +110,9 @@ pub struct TerrenoRunMeta {
     /// Cuánto desvían la orografía y el agotamiento de humedad la lluvia total sobre tierra, y el
     /// factor `c_P` que la corrige (nota de sombra pluviométrica).
     pub lluvia: LluviaMeta,
+    /// Historia geológica de la génesis tectónica (esquema v6; solo con el relieve tectónico).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tectonica: Option<crate::tectonica::historia::ResumenTectonica>,
 }
 
 /// Lluvia total sobre tierra (nota de sombra pluviométrica §2).
@@ -100,6 +123,54 @@ pub struct LluviaMeta {
     pub desvio: f64,
     /// Factor global aplicado a la lluvia de la tierra (1 = sin corregir).
     pub c_p: f64,
+}
+
+/// Pendiente a 25 km de la tierra por encima de una altura.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PendientesClase {
+    pub sobre_m: f64,
+    pub area_frac: f64,
+    pub media: f64,
+    /// Percentiles 50, 75, 90, 95 y 99 de `|∇h|` (m/m), por área.
+    pub p50_p75_p90_p95_p99: Vec<f64>,
+}
+
+/// Espectro del relieve de nacimiento a una escala: desviación típica de las alturas de las 4 hijas
+/// de cada celda madre, por clase de la madre (`tierra_L`: altura media ≥ L m; `mar_L`: profundidad
+/// media ≥ L m). Es lo que el ruido de detalle debe continuar (decisión del responsable).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EspectroNivel {
+    pub nivel_madre: u32,
+    pub lado_madre_km: f64,
+    pub clases: Vec<String>,
+    pub sigma_m: Vec<f64>,
+    pub area_frac: Vec<f64>,
+}
+
+/// Diagnóstico ampliado del relieve (esquema v6), para compararlo con la Tierra.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DiagnosticoRelieve {
+    pub hipsometria_oceano_limites_m: Vec<f64>,
+    /// Fracción del océano en cada franja de profundidad (la última sin fondo).
+    pub hipsometria_oceano_frac: Vec<f64>,
+    /// Todo el planeta en franjas de 500 m, de −11 000 a +9 000 m.
+    pub histograma_planeta_frac: Vec<f64>,
+    pub pendientes_25km: Vec<PendientesClase>,
+    /// Plataforma continental: mar de menos de 200 m de profundidad entre la longitud de costa.
+    pub plataforma_area_km2: f64,
+    pub costa_km: f64,
+    pub plataforma_anchura_km: f64,
+    /// Ley de Hack: longitud del camino de agua más largo aguas arriba ∝ área^h (celdas de tierra
+    /// con más de 10⁴ km² de cuenca).
+    pub hack_h: f64,
+    pub hack_n: u64,
+    /// Fracción de la tierra en cuencas cerradas (altura bajo su cota de derrame), como la de la
+    /// Tierra a la misma resolución (`depresiones` en la referencia).
+    pub tierra_en_depresion_frac: f64,
+    pub espectro: Vec<EspectroNivel>,
+    /// Nivel del mar que llenaría las cuencas de la malla final con el agua del planeta (m,
+    /// respecto al de la génesis; solo con el relieve tectónico, si no 0).
+    pub nivel_mar_malla_m: f64,
 }
 
 /// Diagnóstico del planeta al final de la corrida: las cifras con las que se compara con la Tierra
@@ -128,6 +199,9 @@ pub struct DiagnosticoPlaneta {
     /// PPN media de la tierra con el modelo de Miami (g/m²/año de materia seca), con la temperatura y
     /// la lluvia medias anuales de cada celda. Es la base del forraje de los agentes.
     pub ppn_miami_tierra: f64,
+    /// Diagnóstico ampliado del relieve (esquema v6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relieve: Option<DiagnosticoRelieve>,
 }
 
 /// Documento completo de salida.
@@ -202,7 +276,203 @@ pub fn diagnostico(world: &World, cfg: &TerrenoConfig) -> DiagnosticoPlaneta {
         lluvia_oceano_mm: por(lluvia_mar, a_mar),
         tierra_w_bajo_frac: por(w_bajo, a_tierra),
         ppn_miami_tierra: por(ppn, a_tierra),
+        relieve: None,
     }
+}
+
+/// Percentiles por área de pares (valor, área).
+fn percentiles_area(v: &mut [(f64, f64)], qs: &[f64]) -> Vec<f64> {
+    v.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let tot: f64 = v.iter().map(|x| x.1).sum();
+    qs.iter()
+        .map(|&q| {
+            let mut acc = 0.0;
+            for &(x, a) in v.iter() {
+                acc += a;
+                if acc >= q * tot {
+                    return x;
+                }
+            }
+            v.last().map_or(0.0, |x| x.0)
+        })
+        .collect()
+}
+
+/// Diagnóstico ampliado del relieve (esquema v6). Cálculo pesado (evalúa el relieve de nacimiento en
+/// las mallas uniformes de los niveles 0 a 3): solo con el relieve tectónico o
+/// `run.diagnostico_relieve`.
+pub fn diagnostico_relieve(world: &World, cfg: &TerrenoConfig) -> DiagnosticoRelieve {
+    let topo = &world.topo;
+    let n = topo.num_cells;
+    let mar = cfg.planet.sea_level;
+    // Hipsometría del océano e histograma del planeta.
+    let lim = HIPSOMETRIA_OCEANO_LIMITES_M;
+    let mut fr = [0.0; HIPSOMETRIA_OCEANO_LIMITES_M.len()];
+    let mut hist = vec![0.0; 40];
+    let (mut a_mar, mut a_tot) = (0.0, 0.0);
+    for s in 0..n {
+        let a = topo.area[s];
+        let h = world.h[s] - mar;
+        a_tot += a;
+        let b = ((h + 11_000.0) / 500.0).floor().clamp(0.0, 39.0) as usize;
+        hist[b] += a;
+        if world.es_oceano(s) {
+            a_mar += a;
+            fr[lim.iter().rposition(|&l| -h >= l).unwrap_or(0)] += a;
+        }
+    }
+    let por = |x: f64, a: f64| if a > 0.0 { x / a } else { 0.0 };
+    // Pendientes a 25 km de la tierra (la escala que ve la lluvia, como la referencia de ETOPO).
+    let tierra: Vec<usize> = (0..n).filter(|&s| !world.es_oceano(s)).collect();
+    let grad = crate::erosion::gradientes_referencia(world, &tierra);
+    let a_tierra: f64 = tierra.iter().map(|&s| topo.area[s]).sum();
+    let pendientes = PENDIENTES_SOBRE_M
+        .iter()
+        .map(|&sobre| {
+            let mut v: Vec<(f64, f64)> = tierra
+                .iter()
+                .zip(&grad)
+                .filter(|(s, _)| world.h[**s] - mar >= sobre)
+                .map(|(&s, &(ge, gn))| ((ge * ge + gn * gn).sqrt(), topo.area[s]))
+                .collect();
+            let a: f64 = v.iter().map(|x| x.1).sum();
+            let media = por(v.iter().map(|x| x.0 * x.1).sum(), a);
+            PendientesClase {
+                sobre_m: sobre,
+                area_frac: por(a, a_tierra),
+                media,
+                p50_p75_p90_p95_p99: percentiles_area(&mut v, &[0.5, 0.75, 0.9, 0.95, 0.99]),
+            }
+        })
+        .collect();
+    // Plataforma: mar de menos de 200 m entre la costa (aristas tierra–mar).
+    let mut plat = 0.0;
+    for s in 0..n {
+        if world.es_oceano(s) && world.h[s] - mar > -200.0 {
+            plat += topo.area[s];
+        }
+    }
+    let mut costa = 0.0;
+    for p in &topo.pairs {
+        let (a, b) = (p.a as usize, p.b as usize);
+        if p.g == 1.0 && world.es_oceano(a) != world.es_oceano(b) {
+            costa += topo.side_km(a).min(topo.side_km(b));
+        }
+    }
+    // Ley de Hack: camino de agua más largo aguas arriba de cada celda.
+    let mut largo = vec![0.0f64; n];
+    for &id in &world.flow_order {
+        let i = id as usize;
+        let r = world.receiver[i];
+        if r >= 0 {
+            let r = r as usize;
+            let d =
+                crate::geometry::angle_between(topo.dir[i], topo.dir[r]) * topo.r_planet / 1000.0;
+            largo[r] = largo[r].max(largo[i] + d);
+        }
+    }
+    let (mut sx, mut sy, mut sxx, mut sxy, mut cuenta) = (0.0, 0.0, 0.0, 0.0, 0u64);
+    for (s, &l) in largo.iter().enumerate() {
+        let a_km2 = world.drainage_area.get(s).copied().unwrap_or(0.0) / 1e6;
+        if world.es_oceano(s) || a_km2 < 1e4 || l <= 0.0 {
+            continue;
+        }
+        let (x, y) = (a_km2.log10(), l.log10());
+        sx += x;
+        sy += y;
+        sxx += x * x;
+        sxy += x * y;
+        cuenta += 1;
+    }
+    // Sin datos, 0 (con `hack_n = 0`): el JSON no admite NaN.
+    let hack = if cuenta > 2 {
+        let c = cuenta as f64;
+        (c * sxy - sx * sy) / (c * sxx - sx * sx)
+    } else {
+        0.0
+    };
+    DiagnosticoRelieve {
+        hipsometria_oceano_limites_m: lim.to_vec(),
+        hipsometria_oceano_frac: fr.iter().map(|&x| por(x, a_mar)).collect(),
+        histograma_planeta_frac: hist.iter().map(|&x| por(x, a_tot)).collect(),
+        pendientes_25km: pendientes,
+        plataforma_area_km2: plat / 1e6,
+        costa_km: costa,
+        plataforma_anchura_km: por(plat / 1e6, costa),
+        hack_h: hack,
+        hack_n: cuenta,
+        tierra_en_depresion_frac: por(
+            (0..n)
+                .filter(|&s| !world.es_oceano(s) && world.h[s] < world.filled_h[s])
+                .map(|s| topo.area[s])
+                .sum(),
+            a_tierra,
+        ),
+        espectro: espectro(world, cfg),
+        nivel_mar_malla_m: if world.historia.is_some() {
+            crate::worldgen::nivel_mar_malla(world, cfg)
+        } else {
+            0.0
+        },
+    }
+}
+
+/// Espectro del relieve de nacimiento por escala y clase (sin erosión): en las mallas uniformes de
+/// los niveles `l_min .. l_max`, la desviación típica de las alturas de las 4 hijas de cada madre.
+fn espectro(world: &World, cfg: &TerrenoConfig) -> Vec<EspectroNivel> {
+    use crate::geometry::{center_dir, face_n};
+    let g = &world.statgen;
+    let (n0, r) = (cfg.planet.n0, cfg.planet.r_km);
+    let mut out = Vec::new();
+    for l in cfg.lod.l_min..cfg.lod.l_max {
+        let (n, n2) = (face_n(n0, l), face_n(n0, l + 1));
+        let nt = ESPECTRO_TIERRA_M.len();
+        let mut var = vec![0.0; nt + ESPECTRO_MAR_M.len()];
+        let mut area = vec![0.0; var.len()];
+        let mut a_tot = 0.0;
+        for c in 0..6u8 {
+            for j in 0..n {
+                for i in 0..n {
+                    let hm = g.h_at(center_dir(c, i, j, n), l);
+                    let hs: Vec<f64> = [(0, 0), (1, 0), (0, 1), (1, 1)]
+                        .iter()
+                        .map(|&(di, dj)| g.h_at(center_dir(c, 2 * i + di, 2 * j + dj, n2), l + 1))
+                        .collect();
+                    let m = hs.iter().sum::<f64>() / 4.0;
+                    let v = hs.iter().map(|x| (x - m).powi(2)).sum::<f64>() / 4.0;
+                    let a = crate::geometry::cell_area(c, i, j, n, r);
+                    a_tot += a;
+                    let k = if hm >= 0.0 {
+                        ESPECTRO_TIERRA_M
+                            .iter()
+                            .rposition(|&x| hm >= x)
+                            .unwrap_or(0)
+                    } else {
+                        nt + ESPECTRO_MAR_M.iter().rposition(|&x| -hm >= x).unwrap_or(0)
+                    };
+                    var[k] += v * a;
+                    area[k] += a;
+                }
+            }
+        }
+        let mut clases: Vec<String> = ESPECTRO_TIERRA_M
+            .iter()
+            .map(|x| format!("tierra_{x}"))
+            .collect();
+        clases.extend(ESPECTRO_MAR_M.iter().map(|x| format!("mar_{x}")));
+        out.push(EspectroNivel {
+            nivel_madre: l,
+            lado_madre_km: std::f64::consts::FRAC_PI_2 * r / n as f64,
+            clases,
+            sigma_m: var
+                .iter()
+                .zip(&area)
+                .map(|(v, a)| if *a > 0.0 { (v / a).sqrt() } else { 0.0 })
+                .collect(),
+            area_frac: area.iter().map(|a| a / a_tot).collect(),
+        });
+    }
+    out
 }
 
 /// Calcula las métricas del tick actual. Reducciones en orden de clave (deterministas).

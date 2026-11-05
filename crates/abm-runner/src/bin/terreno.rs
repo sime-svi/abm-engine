@@ -57,6 +57,30 @@ fn main() -> Result<()> {
     } else {
         println!("  Tiempo total: {segundos:.1} s.");
     }
+    if let Some(t) = &doc.run.tectonica {
+        let c = &t.cuentas;
+        println!(
+            "  Génesis tectónica: {} pasos en la malla de nivel {} ({:.0} km). Placas al final {}; corteza continental {:.3} -> {:.3}; nivel del mar {:.0} m respecto al dato.",
+            t.pasos,
+            t.nivel_malla,
+            t.lado_km,
+            t.placas_final.len(),
+            t.f_cont_inicial,
+            t.f_cont_final,
+            t.nivel_mar_m
+        );
+        println!(
+            "    Velocidad media {:.2} cm/año; edad del fondo media/mediana/máxima {:.0}/{:.0}/{:.0} Myr; eventos {}; volumen continental {:.3e} -> {:.3e} km³ (remuestreo {:.1e}).",
+            t.v_rms_media_cm_anio,
+            t.edades_oceano.media_myr,
+            t.edades_oceano.mediana_myr,
+            t.edades_oceano.max_myr,
+            t.eventos.len(),
+            c.volumen_inicial_km3,
+            c.volumen_final_km3,
+            c.remuestreo_km3
+        );
+    }
     let g = &doc.run.genesis;
     if g.erosion.steps > 0 {
         println!(
