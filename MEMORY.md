@@ -823,3 +823,46 @@ Formato de entrada:
   - pasar a Rust las medidas que aún son de Python (sombra pluviométrica);
   - el paralelismo determinista, cuando el informe de tiempos lo pida;
   - el LOD de agentes, que es el incremento 2.
+
+## [2026-11-05] Traspaso a la siguiente sesión: el relieve realista
+
+- **Estado:**
+  - main en `61fabdd` (más este traspaso). `herramientas/verificar.sh` en verde: fmt, clippy, 76 tests y la batería de escenarios (37/37 métricas).
+  - Las decisiones S1–S5 y A1–A7 están aplicadas. Las herramientas de escalabilidad, hechas (`herramientas/README.md`).
+- **Decisión del responsable:** el relieve va primero. Está escribiendo su documento de diseño del relieve y lo dejará en `docs/temp/`.
+- **Qué hacer al empezar:**
+  1. Leer CLAUDE.md, TREE.md y MEMORY.md, y también `docs/design/terreno/propuesta_relieve_realista.md`: el diagnóstico frente a la Tierra y las opciones. El documento del responsable manda sobre esa propuesta.
+  2. Archivar su documento con `git mv` en `docs/design/terreno/` y borrar `docs/temp/`. Si deja algo ambiguo en el modelo o las ecuaciones, preguntar antes de codificar (CLAUDE §10).
+  3. Rama propia e implementación con el método:
+     - interruptor mientras se mide, si hay que comparar con el relieve actual;
+     - no regresión byte a byte con el interruptor apagado (`herramientas/no_regresion.sh`);
+     - medidas frente a la Tierra con el bloque `diagnostico` de la salida del planeta y `herramientas/analisis/terreno.py`;
+     - la batería: las métricas del escenario `planeta` se moverán a propósito, así que se actualizan sus márgenes con nota;
+     - `verificar.sh`, documentación, commit y main al día.
+  4. Con el relieve realista:
+     - comprobar que `k_oro` = 40 da 2–3 veces más lluvia en barlovento sin tocarlo;
+     - calibrar la lluvia de base con datos de la Tierra (~1 000 mm/año en todo el planeta y ~800 sobre tierra);
+     - retirar `c_P`;
+     - comparar los biomas con los de la Tierra.
+
+  La génesis en caché se recalcula sola: su clave incluye la huella del código.
+- **Pendiente de confirmar por el responsable (propuestas para CLAUDE.md, aún sin escribir):**
+  - **§1, visión:** "poder seguir a un único individuo (p. ej., un humano desde que nace hasta que muere) y subir de escala hasta ver toda su población, sin perder su trazabilidad". Además: ¿siguen dentro del alcance la "geopolítica" y los "conflictos" de §1? El responsable dudó de querer "hacer civilizaciones".
+  - **§2.8, tipos de parámetros** (nota que el responsable reenvió el 2026-11-05):
+    - **(a) con valor físico medible** (`k_oro`, `H_v`, Kleiber): se quedan en su valor real; si no cuadra, se revisa la base;
+    - **(b) no medibles directamente** (`f_com`, `L_recarga`): se calibran contra datos observados reales, citando la observación (p. ej., la ley de Damuth), nunca contra otra irrealidad del modelo;
+    - **(c) apaños provisionales** (`c_P`): se marcan como tales, con la causa real que hay que corregir.
+  - **§10:** la verificación completa se pasa con `herramientas/verificar.sh`.
+- **Pendiente de medir** (nota reenviada por el responsable): en el escenario `agentes_sequia` muere el 97 % de los herbívoros. Hay que medir cuánto mueve cada causa antes de elegir.
+  1. **Vegetación: descartada,** medido el 2026-11-05.
+     - La sequía multiplica el rebrote por 0,5, así que la producción cae justo a la mitad.
+     - El forraje en pie solo baja del 50 al 38 % de K.
+     - Aun así, el 90 % de los herbívoros muere en ~4 meses, comiendo ~87 % de su gasto: con `k_ap` = 2 y Holling, `2·0,385/0,885`. La condición media de partida es 0,40.
+  2. **Ahorro metabólico al pasar hambre: no existe en el modelo.**
+     - El gasto usa la masa estructural (`sistemas.rs`, `bio_demanda`), las reservas no lo bajan y el `PAL` es fijo.
+     - En la realidad, en el experimento de Minnesota (Keys et al., 1950) el basal cae ~40 % en total (~15–20 % más de lo que explica la pérdida de masa), y los ciervos bajan su metabolismo en invierno (Arnold et al., 2004).
+  3. **Competencia con jerarquía (A5-c):** pendiente obligatorio.
+  4. **Posible cuarta causa:** las reservas son solo grasa (`e_max`). Un animal real también consume proteína antes de morir.
+
+  Los mecanismos 2–4 necesitan nota de diseño antes de codificarse (CLAUDE §2.7).
+- **Pendientes obligatorios de realismo:** en TREE.md.

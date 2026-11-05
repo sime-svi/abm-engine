@@ -229,10 +229,16 @@ metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
   - **fecundabilidad por edad** y abortos espontáneos (Q1, Q3);
   - **individuos persistentes** (P6): seguir a un humano desde que nace hasta que muere y subir a su
     población (visión del responsable), requisito del incremento 2;
+  - **la sequía que mata al 97 % del herbívoro** (escenario `agentes_sequia`). No es la vegetación: el
+    forraje en pie solo baja del 50 al 38 % de K. Hay que medir antes de elegir:
+    - el ahorro metabólico al pasar hambre (hoy el gasto no baja);
+    - la competencia con jerarquía;
+    - si las reservas deben incluir proteína, además de grasa;
 - biología de los agentes: incremento 2 (cohortes y conversión, con la versión de poblaciones de la
   revisión 1 y P6), incremento 3 (planeta, forraje del terreno y Foco), incremento 4 (eventos y BD);
 - terreno incremento 4 (lagos dinámicos, flujo multidireccional, fertilidad dinámica, eventos);
-- terreno: incremento 4 = relieve tectónico (propuesta pendiente del responsable);
+- **siguiente: el relieve realista** (incremento 4 del terreno). El responsable escribe su documento de
+  diseño y lo dejará en `docs/temp/` (traspaso en la última entrada de MEMORY.md);
 - tablas `events` y `agent_snapshots` (LOD micro) con su sink;
 - volcar las métricas del terreno a la BD.
 
