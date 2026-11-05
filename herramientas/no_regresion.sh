@@ -2,18 +2,18 @@
 # No regresión byte a byte frente a un commit anterior (CLAUDE §6 y §10).
 #
 # Compila el binario del commit de referencia en un worktree temporal, lo ejecuta con su config, ejecuta
-# el binario actual con la config que lleva los interruptores nuevos apagados y compara los dos JSON de
-# salida byte a byte, salvo la línea del nombre de la corrida.
+# el binario actual con la suya (con los interruptores nuevos apagados, si los hay) y compara los dos
+# JSON de salida byte a byte, salvo la línea del nombre de la corrida.
 #
 # Uso:
 #   herramientas/no_regresion.sh REF BINARIO CONFIG_REF CONFIG_ACTUAL
 #     REF            commit, rama o etiqueta de referencia (p. ej. ece0868)
 #     BINARIO        agentes | terreno | abm
 #     CONFIG_REF     config para el binario de referencia, como ruta dentro del repo en REF
-#     CONFIG_ACTUAL  config para el binario actual (normalmente la de config/experiments/ con todo apagado)
+#     CONFIG_ACTUAL  config para el binario actual (la misma, o una con los interruptores nuevos apagados)
 #
 # Ejemplos:
-#   herramientas/no_regresion.sh ece0868 agentes config/agentes.toml config/experiments/agentes_incremento1.toml
+#   herramientas/no_regresion.sh main agentes config/agentes.toml config/agentes.toml
 #   herramientas/no_regresion.sh bb6a8c0 terreno config/terreno.toml config/experiments/terreno_sin_sombra.toml
 #
 # Sale con 0 si las salidas son idénticas y con 1 si no. Cada binario corre en su propia carpeta temporal
@@ -42,7 +42,8 @@ mkdir -p "$TMP/actual"
 (cd "$TMP/actual" && "$RAIZ/target/release/$BIN" "$CONFIG_ACTUAL" > "$TMP/actual.log")
 
 # La salida principal es output/<nombre>_<binario>.json (en el motor de forrajeo, la ruta de su config).
-salida() { ls -t "$1"/output/*.json 2>/dev/null | grep -v '_world\.json$' | head -1; }
+# El informe de tiempos (`_tiempos.json`) cambia en cada corrida y no forma parte de la salida.
+salida() { ls -t "$1"/output/*.json 2>/dev/null | grep -v -e '_world\.json$' -e '_tiempos\.json$' | head -1; }
 A="$(salida "$TMP/ref")"; B="$(salida "$TMP/actual")"
 if [ -z "$A" ] || [ -z "$B" ]; then
   echo "No encuentro las salidas JSON (¿la config escribe en output/?)."; exit 2

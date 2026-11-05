@@ -71,6 +71,36 @@ fn determinismo_misma_semilla_misma_salida() {
 }
 
 #[test]
+fn el_diagnostico_del_planeta_cuadra_con_el_mundo() {
+    // El diagnóstico (esquema v5) resume el mundo final: sus fracciones suman 1, la tierra cuadra
+    // con el área de tierra de las métricas del último tick y la mediana queda entre los extremos.
+    let cfg = cfg_test();
+    let (doc, world) = abm_terreno::run(&cfg).unwrap();
+    let d = &doc.diagnostico;
+    let ultimo = doc.ticks.last().unwrap();
+    let area_total: f64 = world.topo.area.iter().sum();
+    assert!((d.tierra_frac - ultimo.land_area_m2 / area_total).abs() < 1e-12);
+    assert!((d.hipsometria_frac.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+    assert_eq!(d.hipsometria_frac.len(), d.hipsometria_limites_m.len());
+    let tierra: Vec<f64> = (0..world.topo.num_cells)
+        .filter(|&s| !world.es_oceano(s))
+        .map(|s| world.h[s] - cfg.planet.sea_level)
+        .collect();
+    let (min, max) = tierra
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &h| {
+            (a.min(h), b.max(h))
+        });
+    assert!(min <= d.altura_mediana_tierra_m && d.altura_mediana_tierra_m <= max);
+    assert!(min <= d.altura_media_tierra_m && d.altura_media_tierra_m <= max);
+    assert!(d.profundidad_media_oceano_m > 0.0);
+    assert!(d.lluvia_tierra_mm > 0.0 && d.lluvia_oceano_mm > 0.0);
+    assert!((0.0..=1.0).contains(&d.tierra_w_bajo_frac));
+    // PPN de Miami: entre 0 y su techo de 3 000 g/m²/año.
+    assert!(d.ppn_miami_tierra > 0.0 && d.ppn_miami_tierra < 3000.0);
+}
+
+#[test]
 fn semillas_distintas_mundos_distintos() {
     let cfg_a = cfg_test();
     let mut cfg_b = cfg_test();

@@ -1,26 +1,33 @@
 //! Binario `agentes` (CLAUDE §5: `anyhow` solo aquí, en el arranque).
 //!
-//! Uso: `agentes [ruta/config.toml]` (por defecto `config/agentes.toml`). Simula la biología de los
-//! agentes por días sobre el hábitat de prueba y vuelca las métricas a JSON.
+//! Uso: `agentes [ruta/config.toml] [--set ruta=valor]...` (por defecto `config/agentes.toml`).
+//! Simula la biología de los agentes por días sobre el hábitat de prueba y vuelca las métricas a JSON
+//! y, aparte, el informe de tiempos por sistema (`<nombre>_tiempos.json`).
+//!
+//! Ejemplo: `agentes --set run.total_ticks=36500 --set habitat.sequia.factor=0.3`.
 
 use anyhow::{Context, Result};
 
 fn main() -> Result<()> {
-    let config_path = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "config/agentes.toml".to_string());
-    let cfg = abm_runner::BioConfig::load(&config_path)
-        .with_context(|| format!("al cargar la configuración '{config_path}'"))?;
+    let args = abm_runner::leer_args(std::env::args().skip(1), "config/agentes.toml")?;
+    let cfg = abm_runner::BioConfig::load_con(&args.config, &args.ajustes)
+        .with_context(|| format!("al cargar la configuración '{}'", args.config))?;
 
     // El reloj de pared solo mide el rendimiento para informar (CLAUDE §6: nunca decide nada).
     let inicio = std::time::Instant::now();
-    let doc = abm_runner::run_biologia(&cfg).context("al ejecutar la biología")?;
+    let (doc, _, tiempos) =
+        abm_runner::run_biologia_completa(&cfg, None).context("al ejecutar la biología")?;
     let segundos = inicio.elapsed().as_secs_f64();
 
     std::fs::create_dir_all(&cfg.run.output_path).context("al crear la carpeta de salida")?;
     let path = format!("{}/{}_agentes.json", cfg.run.output_path, cfg.run.name);
     let json = serde_json::to_string_pretty(&doc).context("al serializar las métricas")?;
     std::fs::write(&path, json).context("al escribir el JSON de métricas")?;
+    let path_t = format!("{}/{}_tiempos.json", cfg.run.output_path, cfg.run.name);
+    let informe =
+        abm_runner::informe_tiempos(&cfg.run.name, "agentes", cfg.run.total_ticks, &tiempos);
+    std::fs::write(&path_t, serde_json::to_string_pretty(&informe)?)
+        .context("al escribir el informe de tiempos")?;
 
     let anios = cfg.run.total_ticks as f64 / cfg.tiempo.dias_anio as f64;
     println!(
@@ -56,6 +63,10 @@ fn main() -> Result<()> {
         );
     }
     println!("  Balance de energía: residuo máximo {residuo:.2e} kcal por registro");
+    println!(
+        "  Tiempos por sistema: {} -> {path_t}",
+        abm_runner::resumen_tiempos(&tiempos, 4)
+    );
     println!("  Métricas -> {path}");
     Ok(())
 }

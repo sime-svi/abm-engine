@@ -1,17 +1,18 @@
 //! Binario `terreno` (CLAUDE §5: `anyhow` solo aquí, en el arranque).
 //!
-//! Uso: `terreno [ruta/config.toml]` (por defecto `config/terreno.toml`). Genera un planeta esférico,
-//! corre los sistemas rápidos (clima/agua/vegetación) de forma determinista y vuelca métricas a JSON.
+//! Uso: `terreno [ruta/config.toml] [--set ruta=valor]...` (por defecto `config/terreno.toml`).
+//! Genera un planeta esférico, corre los sistemas rápidos (clima/agua/vegetación) de forma
+//! determinista y vuelca métricas a JSON y, aparte, el informe de tiempos por sistema
+//! (`<nombre>_tiempos.json`).
+//!
+//! Ejemplo: `terreno --set climate.k_oro=60 --set run.name=k60`.
 
 use anyhow::{Context, Result};
 
 fn main() -> Result<()> {
-    let config_path = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "config/terreno.toml".to_string());
-
-    let cfg = abm_terreno::TerrenoConfig::load(&config_path)
-        .with_context(|| format!("al cargar la configuración '{config_path}'"))?;
+    let args = abm_runner::leer_args(std::env::args().skip(1), "config/terreno.toml")?;
+    let cfg = abm_terreno::TerrenoConfig::load_con(&args.config, &args.ajustes)
+        .with_context(|| format!("al cargar la configuración '{}'", args.config))?;
 
     // El reloj de pared solo mide el rendimiento para informar (CLAUDE §6: nunca decide nada).
     let inicio = std::time::Instant::now();
@@ -25,6 +26,15 @@ fn main() -> Result<()> {
     let json = serde_json::to_string_pretty(&doc).context("al serializar las métricas")?;
     std::fs::write(&metrics_path, json).context("al escribir el JSON de métricas")?;
     println!("  Métricas -> {metrics_path}");
+    let path_t = format!("{}/{}_tiempos.json", cfg.run.output_path, cfg.run.name);
+    let informe =
+        abm_runner::informe_tiempos(&cfg.run.name, "terreno", cfg.run.total_ticks, &info.tiempos);
+    std::fs::write(&path_t, serde_json::to_string_pretty(&informe)?)
+        .context("al escribir el informe de tiempos")?;
+    println!(
+        "  Tiempos por sistema: {} -> {path_t}",
+        abm_runner::resumen_tiempos(&info.tiempos, 4)
+    );
 
     if cfg.run.dump_world {
         let dump = abm_terreno::world_dump(&world, &cfg);
@@ -75,6 +85,18 @@ fn main() -> Result<()> {
         "  Sombra pluviométrica: la orografía y el agotamiento de humedad cambian la lluvia sobre tierra un {:+.1} %; c_P = {:.4}.",
         100.0 * l.desvio,
         l.c_p
+    );
+    let d = &doc.diagnostico;
+    println!(
+        "  Diagnóstico: tierra {:.1} % del planeta, altura media {:.0} m (mediana {:.0} m), océano de {:.0} m; lluvia {:.0} mm/año en tierra y {:.0} en el mar; w < 0,5 en el {:.1} % de la tierra; PPN (Miami) {:.0} g/m²/año.",
+        100.0 * d.tierra_frac,
+        d.altura_media_tierra_m,
+        d.altura_mediana_tierra_m,
+        d.profundidad_media_oceano_m,
+        d.lluvia_tierra_mm,
+        d.lluvia_oceano_mm,
+        100.0 * d.tierra_w_bajo_frac,
+        d.ppn_miami_tierra
     );
     let last = doc.ticks.last();
     println!(

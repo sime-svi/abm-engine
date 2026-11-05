@@ -37,19 +37,20 @@ pub fn run(cfg: &TerrenoConfig) -> Result<(TerrenoDoc, World), TerrenoError> {
     run_with_info(cfg).map(|(doc, world, _)| (doc, world))
 }
 
-/// Cómo se obtuvo la génesis. No forma parte de la salida: la salida es idéntica se use o no la
-/// caché.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GenesisInfo {
+/// Datos de la corrida que no forman parte de la salida del modelo: la salida es idéntica se use o
+/// no la caché, y los tiempos cambian de una corrida a otra.
+#[derive(Debug, Clone)]
+pub struct RunInfo {
     /// La génesis se leyó de la caché de disco (`run.genesis_cache`).
     pub from_cache: bool,
+    /// Tiempo de cada paso: la génesis (o su lectura de la caché) y cada sistema del tick.
+    pub tiempos: abm_core::cronometro::Cronometro,
 }
 
-/// Como [`run`], e informa además de si la génesis salió de la caché.
-pub fn run_with_info(
-    cfg: &TerrenoConfig,
-) -> Result<(TerrenoDoc, World, GenesisInfo), TerrenoError> {
+/// Como [`run`], e informa además de si la génesis salió de la caché y de los tiempos por paso.
+pub fn run_with_info(cfg: &TerrenoConfig) -> Result<(TerrenoDoc, World, RunInfo), TerrenoError> {
     cfg.validate()?;
+    let mut cron = abm_core::cronometro::Cronometro::default();
     let ((mut world, genesis), from_cache) = match cache::load(cfg)? {
         Some(cached) => (cached, true),
         None => {
@@ -58,13 +59,20 @@ pub fn run_with_info(
             (generated, false)
         }
     };
+    cron.anotar(if from_cache {
+        "genesis_desde_cache"
+    } else {
+        "genesis"
+    });
     let mut scratch = systems::Scratch::new(world.topo.num_cells);
+    scratch.cron = cron;
     let mut ticks = Vec::with_capacity(cfg.run.total_ticks as usize);
     let initial_cells = world.topo.num_cells as u64;
 
     for t in 0..cfg.run.total_ticks {
         // El almacenamiento previo se mide ANTES del paso de topología: el residual del tick cubre
         // también lo que el reparto del LOD envía al mar.
+        scratch.cron.marcar();
         let store_before = systems::total_store_vol(&world);
         let lod_report = if cfg.lod.enabled() && t > 0 && t.is_multiple_of(cfg.lod.n_lod) {
             let r = lod::step(&mut world, cfg);
@@ -75,6 +83,7 @@ pub fn run_with_info(
         } else {
             lod::LodReport::default()
         };
+        scratch.cron.anotar("lod");
         let mut acct = systems::step(&mut world, cfg, &mut scratch, t, store_before, &lod_report);
         // Erosión en ejecución (incr. 3 §9), al final del tick: no mueve agua (el exceso de agua
         // sobre una capacidad menor se drena en el tick siguiente).
@@ -84,10 +93,13 @@ pub fn run_with_info(
             let (p, tm) = erosion::running_means(&world, cfg);
             acct.erosion = erosion::step(&mut world, cfg, dt_years, &p, &tm);
             lod::update_hydro_lock(&mut world);
+            scratch.cron.anotar("erosion");
         }
         ticks.push(metrics::compute(&world, &acct, t));
+        scratch.cron.anotar("metricas");
     }
 
+    let diagnostico = metrics::diagnostico(&world, cfg);
     let doc = TerrenoDoc {
         schema_version: metrics::SCHEMA_VERSION,
         run: TerrenoRunMeta {
@@ -106,9 +118,17 @@ pub fn run_with_info(
                 c_p: world.c_p,
             },
         },
+        diagnostico,
         ticks,
     };
-    Ok((doc, world, GenesisInfo { from_cache }))
+    Ok((
+        doc,
+        world,
+        RunInfo {
+            from_cache,
+            tiempos: scratch.cron,
+        },
+    ))
 }
 
 /// Snapshot por celda del mundo generado (para inspección/depuración).

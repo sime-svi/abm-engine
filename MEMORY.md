@@ -783,3 +783,43 @@ Formato de entrada:
   - `fmt`, `clippy --workspace --all-targets -D warnings` y `cargo test --workspace` en verde (biología: 8 unitarios + 15 de simulación, con el nuevo `en_equilibrio_la_densidad_sigue_la_ley_de_damuth`).
   - Medidas del planeta y de 100 años de agentes, en las notas.
 - **Estado tras el cambio:** decisiones S1–S5 y A1–A7 aplicadas. Siguiente: las herramientas de escalabilidad (batería de escenarios, tiempos por sistema, medidas en `herramientas/`). Después, el relieve realista, cuando el responsable apruebe la propuesta.
+
+## [2026-11-05] Herramientas de escalabilidad: ajustes `--set`, tiempos por sistema, diagnóstico del planeta, batería de escenarios y `verificar.sh`
+
+- **Qué:** las soluciones aprobadas por el responsable para los cinco puntos de escalabilidad (el 1 y el 2 ya estaban: retirar interruptores, CLAUDE §5, y `no_regresion.sh`).
+  - **Ajustes desde la línea de comandos:** `agentes` y `terreno` aceptan `--set ruta=valor`, que cambia la config sin editarla.
+    - `abm_core::config::cargar` crea las tablas que falten y admite índices de lista.
+    - Una clave mal escrita da error, porque las configs rechazan los campos desconocidos.
+  - **Tiempos por sistema** (punto 5):
+    - `abm_core::cronometro::Cronometro`, y `abm_core::time::Programa`: los sistemas del tick en orden, cada uno en su propio `Schedule` y cronometrado;
+    - la biología pasa de `bio_systems()` a `bio_programa()`;
+    - el terreno anota cada paso de `step`, el LOD, la erosión, las métricas y la génesis;
+    - cada corrida escribe `<nombre>_tiempos.json` aparte de su salida, porque cambia de una corrida a otra (CLAUDE §6); `no_regresion.sh` lo ignora.
+  - **Diagnóstico del planeta en la salida** (punto 4, opción d; esquema del terreno **v5**). Bloque `diagnostico`:
+    - tierra emergida, altura media y mediana, curva hipsométrica por franjas, profundidad del océano;
+    - lluvia en tierra y en el mar, tierra con `w` < 0,5 y PPN de Miami.
+
+    La sombra pluviométrica sigue en Python, sobre el volcado por celda.
+  - **Medidas en `herramientas/analisis/`** (punto 4): `agentes.py` y `terreno.py`, los análisis de la campaña pasados del scratchpad al repositorio y reutilizables.
+  - **Batería de escenarios de referencia** (punto 3; `herramientas/escenarios.py` + `escenarios.toml`):
+    - 4 escenarios: `planeta`, `agentes_equilibrio` (100 años), `agentes_sequia` y `humanos_hambruna`;
+    - 37 métricas con margen y nota, y un presupuesto de tiempo por escenario;
+    - informe en `output/escenarios/informe.json`; tarda ~1 min.
+  - **`herramientas/verificar.sh`:** CLAUDE §10 en un comando: fmt, clippy, tests, escenarios y, con `--no-regresion REF`, la no regresión. `herramientas/README.md` lo explica todo.
+- **Por qué:** el responsable quiere que el método escale a ~100 sistemas y que "se pueda consultar todo".
+- **Decisiones / problemas:**
+  - **Programa frente a `.chain()`:** correr cada sistema en su propio `Schedule` equivale a encadenarlos. La salida de `agentes` y de `terreno` es **idéntica byte a byte** a la de `main` (`475b3c9`), antes de añadir el diagnóstico.
+  - **Los márgenes rodean el valor actual,** no son objetivos de realismo. Cada nota dice el valor real cuando se conoce, y los irreales quedan marcados como pendientes: tierra emergida, altura media, barlovento.
+  - **Hallazgo:**
+    - con la config real, una sequía de un año al 50 % deja al herbívoro en el **2,7 %** de su población, y 29 años después está en el 37 %. En las mortandades reales muere un 20–60 %;
+    - es el hambre sincronizada (A5): la competencia con jerarquía, pendiente obligatorio, debe subir esa cifra;
+    - en humanos, la misma sequía quita un 12 %.
+  - **Primeros tiempos:**
+    - planeta: el LOD se lleva el 53 %, la difusión lateral el 20 % y el clima el 11 %;
+    - agentes: la demanda el 32 %, la energética el 22 % y **las métricas el 17 %**. El observador es caro: candidato a optimizar.
+  - El primer `verificar.sh` cazó un aviso de clippy (`sort_by` → `sort_by_key`).
+- **Verificación:** `herramientas/verificar.sh` en verde: fmt, clippy, todos los tests (nuevos: carga con ajustes, cronómetro, argumentos, diagnóstico) y la batería (37/37 métricas y 4/4 presupuestos).
+- **Estado tras el cambio:** los cinco puntos tienen solución en marcha. Quedan, a medida que hagan falta:
+  - pasar a Rust las medidas que aún son de Python (sombra pluviométrica);
+  - el paralelismo determinista, cuando el informe de tiempos lo pida;
+  - el LOD de agentes, que es el incremento 2.

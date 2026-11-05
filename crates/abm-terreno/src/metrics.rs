@@ -9,18 +9,25 @@
 //! erosión (erosionado, depositado, al mar, residual) y resumen de la génesis geológica.
 //!
 //! Esquema v4: acondicionamiento hidrológico del paso de topología (material movido y no compensado).
+//!
+//! Esquema v5: diagnóstico del planeta al final de la corrida (relieve, lluvia y PPN), para que las
+//! cifras que sostienen las decisiones se puedan consultar en cada corrida (CLAUDE §5).
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::TerrenoConfig;
 use crate::erosion::GeoSummary;
-use crate::systems::TickAccount;
+use crate::systems::{self, TickAccount};
 use crate::world::{Biome, Surface, World};
 
 /// Nº de franjas de latitud para la temperatura media por banda (cada una de 15°).
 pub const N_BANDS: usize = 6;
 
 /// Versión del esquema del documento de salida.
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
+
+/// Límites inferiores de las franjas de altura de la hipsometría (m sobre el nivel del mar).
+pub const HIPSOMETRIA_LIMITES_M: [f64; 7] = [0.0, 200.0, 500.0, 1000.0, 2000.0, 3000.0, 5000.0];
 
 /// Área por bioma (m²), con nombre estable para claves de salida.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -95,12 +102,107 @@ pub struct LluviaMeta {
     pub c_p: f64,
 }
 
+/// Diagnóstico del planeta al final de la corrida: las cifras con las que se compara con la Tierra
+/// (propuesta de relieve realista) y que sostienen las decisiones sobre la lluvia. Medias por área.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DiagnosticoPlaneta {
+    /// Fracción de la superficie del planeta que no es océano (los lagos cuentan como tierra).
+    pub tierra_frac: f64,
+    /// Altura media de la tierra sobre el nivel del mar (m).
+    pub altura_media_tierra_m: f64,
+    /// Altura mediana de la tierra (m): la mitad del área está por debajo.
+    pub altura_mediana_tierra_m: f64,
+    /// Límites inferiores de las franjas de altura (m): la franja `i` va de `limites[i]` a
+    /// `limites[i + 1]` y la última no tiene techo. La tierra bajo el nivel del mar va en la primera.
+    pub hipsometria_limites_m: Vec<f64>,
+    /// Fracción de la tierra en cada franja.
+    pub hipsometria_frac: Vec<f64>,
+    /// Profundidad media del océano (m, positiva).
+    pub profundidad_media_oceano_m: f64,
+    /// Lluvia media anual sobre la tierra (mm/año), con el clima del final de la corrida.
+    pub lluvia_tierra_mm: f64,
+    /// Lluvia media anual sobre el océano (mm/año).
+    pub lluvia_oceano_mm: f64,
+    /// Fracción de la tierra donde el aire llega con menos de la mitad de su vapor (`w` < 0,5).
+    pub tierra_w_bajo_frac: f64,
+    /// PPN media de la tierra con el modelo de Miami (g/m²/año de materia seca), con la temperatura y
+    /// la lluvia medias anuales de cada celda. Es la base del forraje de los agentes.
+    pub ppn_miami_tierra: f64,
+}
+
 /// Documento completo de salida.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TerrenoDoc {
     pub schema_version: u32,
     pub run: TerrenoRunMeta,
+    pub diagnostico: DiagnosticoPlaneta,
     pub ticks: Vec<TerrenoTickMetrics>,
+}
+
+/// PPN del modelo de Miami (Lieth, 1975), g/m²/año: el mínimo del límite por temperatura (°C) y del
+/// límite por lluvia (mm/año). Solo para el diagnóstico; el forraje de los agentes usa la misma
+/// fórmula en su hábitat de prueba (`abm-ruleset`), y se unirán cuando pasen al planeta.
+fn ppn_miami(t_c: f64, p_mm: f64) -> f64 {
+    let f_t = 3000.0 / (1.0 + (1.315 - 0.119 * t_c).exp());
+    let f_p = 3000.0 * (1.0 - (-0.000664 * p_mm).exp());
+    f_t.min(f_p).max(0.0)
+}
+
+/// Calcula el diagnóstico del planeta con el estado final del mundo. Sumas en orden de celda
+/// (deterministas); se llama una vez, al final, así que puede reservar memoria.
+pub fn diagnostico(world: &World, cfg: &TerrenoConfig) -> DiagnosticoPlaneta {
+    let mar = cfg.planet.sea_level;
+    let limites = HIPSOMETRIA_LIMITES_M;
+    let mut franjas = [0.0; HIPSOMETRIA_LIMITES_M.len()];
+    let (mut a_total, mut a_tierra, mut a_mar) = (0.0, 0.0, 0.0);
+    let (mut h_tierra, mut prof_mar, mut lluvia_tierra, mut lluvia_mar) = (0.0, 0.0, 0.0, 0.0);
+    let (mut w_bajo, mut ppn) = (0.0, 0.0);
+    let mut alturas: Vec<(f64, f64)> = Vec::new();
+    for s in 0..world.topo.num_cells {
+        let a = world.topo.area[s];
+        let h = world.h[s] - mar;
+        let lluvia = systems::lluvia_media_anual_mm(world, cfg, s);
+        a_total += a;
+        if world.es_oceano(s) {
+            a_mar += a;
+            prof_mar += -h * a;
+            lluvia_mar += lluvia * a;
+            continue;
+        }
+        a_tierra += a;
+        h_tierra += h * a;
+        lluvia_tierra += lluvia * a;
+        alturas.push((h, a));
+        let franja = limites.iter().rposition(|&l| h >= l).unwrap_or(0);
+        franjas[franja] += a;
+        if world.w_hum[s] < 0.5 {
+            w_bajo += a;
+        }
+        let t_media = systems::temp_annual_mean(cfg, world.topo.lat[s], world.h[s], false);
+        ppn += ppn_miami(t_media, lluvia) * a;
+    }
+    alturas.sort_by(|x, y| x.0.total_cmp(&y.0));
+    let mut acumulada = 0.0;
+    let mediana = alturas
+        .iter()
+        .find(|&&(_, a)| {
+            acumulada += a;
+            acumulada >= 0.5 * a_tierra
+        })
+        .map_or(0.0, |&(h, _)| h);
+    let por = |x: f64, a: f64| if a > 0.0 { x / a } else { 0.0 };
+    DiagnosticoPlaneta {
+        tierra_frac: por(a_tierra, a_total),
+        altura_media_tierra_m: por(h_tierra, a_tierra),
+        altura_mediana_tierra_m: mediana,
+        hipsometria_limites_m: limites.to_vec(),
+        hipsometria_frac: franjas.iter().map(|&x| por(x, a_tierra)).collect(),
+        profundidad_media_oceano_m: por(prof_mar, a_mar),
+        lluvia_tierra_mm: por(lluvia_tierra, a_tierra),
+        lluvia_oceano_mm: por(lluvia_mar, a_mar),
+        tierra_w_bajo_frac: por(w_bajo, a_tierra),
+        ppn_miami_tierra: por(ppn, a_tierra),
+    }
 }
 
 /// Calcula las métricas del tick actual. Reducciones en orden de clave (deterministas).

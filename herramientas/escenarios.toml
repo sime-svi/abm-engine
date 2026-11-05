@@ -1,0 +1,351 @@
+# Batería de escenarios de referencia (CLAUDE §10.5). La pasa `herramientas/escenarios.py`.
+#
+# Cada escenario es una corrida fija: un binario, su config de `config/` y unos ajustes `--set`
+# encima. Se usa la config real, así que la batería ve el modelo tal y como está. Cada métrica
+# tiene:
+#   - medida:  el nombre de la función de `escenarios.py` (MEDIDAS), con sus parámetros;
+#   - min/max: el margen;
+#   - nota:    qué vigila y, cuando se sabe, el valor real de referencia.
+#
+# Los márgenes rodean el valor actual. No son objetivos de realismo: avisan cuando un cambio mueve
+# algo que emerge al juntar sistemas. Si un cambio intencionado saca una métrica de su margen, se
+# documenta en la nota de diseño del cambio y se actualiza aquí el margen, diciendo de dónde sale.
+# Valores y márgenes medidos el 2026-11-05 (commit de las herramientas de escalabilidad).
+#
+# presupuesto_s: tiempo máximo de simulación del escenario (el que mide el binario en
+# `<nombre>_tiempos.json`), con margen de sobra sobre esta máquina.
+
+# ---------------------------------------------------------------------------------------------------
+[[escenario]]
+nombre = "planeta"
+binario = "terreno"
+descripcion = "el planeta por defecto, un año, con el volcado por celda para medir la sombra pluviométrica"
+config = "config/terreno.toml"
+ajustes = ["run.dump_world=true", "run.dump_climate=true"]
+presupuesto_s = 120   # ~11 s con la génesis en caché; ~45 s si hay que recalcularla
+
+[[escenario.metrica]]
+medida = "terreno.valor"
+campo = "residuo_agua_max"
+min = 0.0
+max = 1e-9
+nota = "conservación del agua: peor residual relativo de un tick (hoy ~2e-12)"
+
+[[escenario.metrica]]
+medida = "terreno.valor"
+campo = "temp_media"
+min = 8.8
+max = 9.9
+nota = "temperatura media del planeta en el último tick (9,35 °C)"
+
+[[escenario.metrica]]
+medida = "terreno.valor"
+campo = "tierra_frac"
+min = 0.37
+max = 0.40
+nota = "tierra emergida (38,8 %; la Tierra, ~29 %: pendiente del relieve realista)"
+
+[[escenario.metrica]]
+medida = "terreno.valor"
+campo = "altura_media_tierra_m"
+min = 380.0
+max = 435.0
+nota = "altura media de la tierra (407 m; la Tierra, ~840 m: pendiente del relieve realista)"
+
+[[escenario.metrica]]
+medida = "terreno.hipsometria_frac"
+franja = 0
+min = 0.63
+max = 0.73
+nota = "tierra por debajo de 200 m (68 %; la Tierra, ~25-30 %: pendiente del relieve realista)"
+
+[[escenario.metrica]]
+medida = "terreno.valor"
+campo = "c_p"
+min = 1.15
+max = 1.26
+nota = "factor provisional que conserva la lluvia de la tierra (1,207); se retirará al calibrar la lluvia con la Tierra"
+
+[[escenario.metrica]]
+medida = "terreno.valor"
+campo = "lluvia_tierra_mm"
+min = 650.0
+max = 725.0
+nota = "lluvia media anual sobre tierra (687 mm; la Tierra, ~800 mm)"
+
+[[escenario.metrica]]
+medida = "terreno.valor"
+campo = "tierra_w_bajo_frac"
+min = 0.13
+max = 0.19
+nota = "tierra donde el aire llega con menos de la mitad de su vapor (16 %)"
+
+[[escenario.metrica]]
+medida = "terreno.valor"
+campo = "ppn_miami_tierra"
+min = 670.0
+max = 740.0
+nota = "PPN media de la tierra (704 g/m²/año): la base del forraje de los agentes"
+
+[[escenario.metrica]]
+medida = "terreno.bioma_pct"
+bioma = "desierto"
+min = 5.5
+max = 6.7
+nota = "desierto, % del planeta (6,08)"
+
+[[escenario.metrica]]
+medida = "terreno.bioma_pct"
+bioma = "selva"
+min = 2.4
+max = 3.1
+nota = "selva, % del planeta (2,73)"
+
+[[escenario.metrica]]
+medida = "terreno.bioma_pct"
+bioma = "bosque_templado"
+min = 5.1
+max = 6.3
+nota = "bosque templado, % del planeta (5,66)"
+
+[[escenario.metrica]]
+medida = "terreno.bioma_pct"
+bioma = "pradera"
+min = 2.5
+max = 3.3
+nota = "pradera, % del planeta (2,91)"
+
+[[escenario.metrica]]
+medida = "terreno.bioma_pct"
+bioma = "hielo"
+min = 3.6
+max = 4.2
+nota = "hielo, % del planeta (3,90)"
+
+[[escenario.metrica]]
+medida = "terreno.valor"
+campo = "lagos"
+min = 25.0
+max = 65.0
+nota = "celdas de lago (42): muy sensible al relieve fino, margen ancho"
+
+[[escenario.metrica]]
+medida = "terreno.valor"
+campo = "rios_km"
+min = 185000.0
+max = 212000.0
+nota = "longitud de los ríos (198 425 km)"
+
+[[escenario.metrica]]
+medida = "terreno.sotavento"
+campo = "lluvia_mm"
+min = 200.0
+max = 300.0
+nota = "lluvia a sotavento de las cordilleras grandes en latitudes medias (250 mm; sin la nota de sombra, 688)"
+
+[[escenario.metrica]]
+medida = "terreno.sotavento"
+campo = "desierto_pct"
+min = 12.0
+max = 21.0
+nota = "desierto a sotavento de las cordilleras grandes (16,5 %; sin la nota de sombra, 7,6 %)"
+
+[[escenario.metrica]]
+medida = "terreno.resto_latitudes_medias"
+campo = "lluvia_mm"
+min = 820.0
+max = 920.0
+nota = "lluvia en el resto de las latitudes medias (870 mm)"
+
+[[escenario.metrica]]
+medida = "terreno.valor"
+campo = "barlovento_m_oro"
+min = 1.25
+max = 1.45
+nota = "factor orográfico medio en las laderas de barlovento de las cordilleras grandes (1,34; real ×2-3: pendiente del relieve)"
+
+# ---------------------------------------------------------------------------------------------------
+[[escenario]]
+nombre = "agentes_equilibrio"
+binario = "agentes"
+descripcion = "la config de agentes por defecto, 100 años con clima constante (medias de los años 40-100)"
+config = "config/agentes.toml"
+ajustes = ["run.total_ticks=36500"]
+presupuesto_s = 150   # ~50 s
+
+[[escenario.metrica]]
+medida = "agentes.residuo_energia"
+min = 0.0
+max = 1e-4
+nota = "balance de energía cerrado: peor residuo de un registro (kcal; hoy ~2e-6)"
+
+[[escenario.metrica]]
+medida = "agentes.resumen"
+especie = "herbivoro_70kg"
+campo = "n_rel"
+desde = 40
+min = 1.05
+max = 1.30
+nota = "población del herbívoro frente a N_max (1,17; la nota pedía 0,7-1,2)"
+
+[[escenario.metrica]]
+medida = "agentes.resumen"
+especie = "herbivoro_70kg"
+campo = "cv"
+desde = 40
+min = 0.0
+max = 0.05
+nota = "estabilidad del equilibrio del herbívoro (coeficiente de variación interanual)"
+
+[[escenario.metrica]]
+medida = "agentes.resumen"
+especie = "humano"
+campo = "n_rel"
+desde = 40
+min = 0.85
+max = 1.08
+nota = "población humana frente a N_max (0,96)"
+
+[[escenario.metrica]]
+medida = "agentes.resumen"
+especie = "humano"
+campo = "tgf"
+desde = 40
+min = 6.3
+max = 7.4
+nota = "hijos por mujer (6,8; cazadores-recolectores, 5-7)"
+
+[[escenario.metrica]]
+medida = "agentes.resumen"
+especie = "humano"
+campo = "ultimo_parto_anios"
+desde = 40
+min = 37.0
+max = 39.5
+nota = "edad media del último parto (38,2; real 37-40)"
+
+[[escenario.metrica]]
+medida = "agentes.fecundidad_rel"
+especie = "humano"
+grupo = 4
+desde = 40
+min = 0.20
+max = 0.42
+nota = "fecundidad de 40-44 años frente a 20-24 (0,30; Coale-Trussell 0,36)"
+
+[[escenario.metrica]]
+medida = "agentes.resumen"
+especie = "humano"
+campo = "e0_anios"
+desde = 40
+min = 17.5
+max = 23.5
+nota = "esperanza de vida al nacer en equilibrio (20,4 años; ver A6: faltan otras causas de muerte)"
+
+[[escenario.metrica]]
+medida = "agentes.resumen"
+especie = "humano"
+campo = "hambre_frac"
+desde = 40
+min = 0.20
+max = 0.38
+nota = "parte de las muertes humanas por hambre en equilibrio (29 %)"
+
+# ---------------------------------------------------------------------------------------------------
+[[escenario]]
+nombre = "agentes_sequia"
+binario = "agentes"
+descripcion = "la config por defecto con una sequía (rebrote al 50 %) el año 21, 50 años"
+config = "config/agentes.toml"
+ajustes = ["run.total_ticks=18250", "habitat.sequia.inicio_dia=7300",
+           "habitat.sequia.duracion_dias=365", "habitat.sequia.factor=0.5"]
+presupuesto_s = 35   # ~11 s
+
+[[escenario.metrica]]
+medida = "agentes.caida"
+especie = "herbivoro_70kg"
+antes = 19
+desde = 20
+hasta = 30
+min = 0.01
+max = 0.06
+nota = "población mínima del herbívoro tras la sequía frente a la de antes (0,027). Irreal: en las mortandades reales muere un 20-60 %. Es el hambre sincronizada (A5): subirá con la competencia con jerarquía"
+
+[[escenario.metrica]]
+medida = "agentes.hembras_adultas"
+especie = "herbivoro_70kg"
+anio = 21
+min = 0.18
+max = 0.35
+nota = "fracción de hembras entre los adultos del herbívoro tras la sequía (0,25; antes de la revisión 1, 0 %)"
+
+[[escenario.metrica]]
+medida = "agentes.relativa"
+especie = "herbivoro_70kg"
+antes = 19
+anio = 49
+min = 0.20
+max = 0.55
+nota = "población del herbívoro 29 años después frente a la de antes de la sequía (0,37: se recupera despacio desde el 3 %)"
+
+[[escenario.metrica]]
+medida = "agentes.caida"
+especie = "humano"
+antes = 19
+desde = 20
+hasta = 30
+min = 0.82
+max = 0.93
+nota = "población humana mínima tras la sequía frente a la de antes (0,88)"
+
+# ---------------------------------------------------------------------------------------------------
+[[escenario]]
+nombre = "humanos_hambruna"
+binario = "agentes"
+descripcion = "solo humanos, hambruna (rebrote al 30 %) el año 11, 60 años"
+config = "config/agentes.toml"
+ajustes = ['especies=[{ nombre = "humano", preset = "humano" }]', "run.total_ticks=21900",
+           "habitat.sequia.inicio_dia=3650", "habitat.sequia.duracion_dias=365",
+           "habitat.sequia.factor=0.3"]
+presupuesto_s = 10   # ~1 s
+
+[[escenario.metrica]]
+medida = "agentes.caida"
+especie = "humano"
+antes = 9
+desde = 10
+hasta = 20
+min = 0.58
+max = 0.72
+nota = "población mínima tras la hambruna frente a la de antes (0,65)"
+
+[[escenario.metrica]]
+medida = "agentes.mortalidad"
+especie = "humano"
+sexo = "hembras"
+grupo = 2
+desde = 10
+hasta = 12
+min = 0.04
+max = 0.11
+nota = "mortalidad de las mujeres adultas en la hambruna (0,071 al año)"
+
+[[escenario.metrica]]
+medida = "agentes.mortalidad"
+especie = "humano"
+sexo = "machos"
+grupo = 2
+desde = 10
+hasta = 12
+min = 0.42
+max = 0.65
+nota = "mortalidad de los hombres adultos en la hambruna (0,54 al año): mayor que la de las mujeres, como en la realidad (Zarulli et al., 2018)"
+
+[[escenario.metrica]]
+medida = "agentes.recuperacion"
+especie = "humano"
+desde = 10
+anio = 59
+min = 1.25
+max = 1.65
+nota = "población del año 60 frente al mínimo tras la hambruna (1,43: vuelve a crecer, despacio)"

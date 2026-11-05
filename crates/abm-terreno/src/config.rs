@@ -373,14 +373,13 @@ impl Default for PersistenceCfg {
 impl TerrenoConfig {
     /// Carga y valida la configuración desde un archivo TOML.
     pub fn load(path: &str) -> Result<TerrenoConfig, ConfigError> {
-        let text = std::fs::read_to_string(path).map_err(|source| ConfigError::Read {
-            path: path.to_string(),
-            source,
-        })?;
-        let cfg: TerrenoConfig = toml::from_str(&text).map_err(|source| ConfigError::Parse {
-            path: path.to_string(),
-            source,
-        })?;
+        Self::load_con(path, &[])
+    }
+
+    /// Carga la config con ajustes `ruta=valor` encima (los `--set` de la línea de comandos; ver
+    /// `abm_core::config::cargar`) y la valida.
+    pub fn load_con(path: &str, ajustes: &[String]) -> Result<TerrenoConfig, ConfigError> {
+        let cfg: TerrenoConfig = abm_core::config::cargar(path, ajustes)?;
         cfg.validate()?;
         Ok(cfg)
     }

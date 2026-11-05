@@ -6,6 +6,7 @@
 //! Incremento 2 (§7): la física es local por celda salvo la difusión lateral, que ahora recorre los
 //! pares de vecinos multinivel con una fórmula **simétrica**.
 
+use abm_core::cronometro::Cronometro;
 use std::f64::consts::PI;
 
 use crate::config::TerrenoConfig;
@@ -20,6 +21,9 @@ pub struct Scratch {
     d: Vec<f64>,
     gen_vol: Vec<f64>,
     q: Vec<f64>,
+    /// Tiempo de cada paso (informe de rendimiento; no lo lee ninguna regla, CLAUDE §6). Cada paso
+    /// suma el tiempo desde la última anotación: quien llama a [`step`] pone la marca.
+    pub cron: Cronometro,
 }
 
 impl Scratch {
@@ -30,6 +34,7 @@ impl Scratch {
             d: vec![0.0; num],
             gen_vol: vec![0.0; num],
             q: vec![0.0; num],
+            cron: Cronometro::default(),
         }
     }
 
@@ -141,10 +146,15 @@ pub fn step(
     lod: &LodReport,
 ) -> TickAccount {
     climate(world, cfg, t);
+    sc.cron.anotar("clima");
     snow(world, cfg, sc);
+    sc.cron.anotar("nieve");
     let et_vol = water_balance(world, cfg, sc);
+    sc.cron.anotar("balance_agua");
     lateral_diffusion(world, cfg);
+    sc.cron.anotar("difusion_lateral");
     let (to_ocean_vol, discharge_max) = surface_water(world, sc);
+    sc.cron.anotar("agua_superficial");
 
     // Acumuladores de medias (para idoneidad y biomas).
     for id in 0..world.topo.num_cells {
@@ -156,6 +166,7 @@ pub fn step(
     if t.is_multiple_of(cfg.vegetation.n_veg) {
         vegetation(world, cfg);
     }
+    sc.cron.anotar("vegetacion");
 
     // Entrada = precipitación total sobre tierra (mm → m³).
     let mut precip_vol = 0.0;
@@ -165,6 +176,7 @@ pub fn step(
         }
     }
     let store_after = total_store_vol(world);
+    sc.cron.anotar("contabilidad");
 
     TickAccount {
         precip_vol,

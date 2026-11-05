@@ -12,7 +12,7 @@ pub enum ConfigError {
         #[source]
         source: std::io::Error,
     },
-    #[error("error de sintaxis TOML en '{path}'")]
+    #[error("error en el TOML de '{path}' (sintaxis, campo desconocido o tipo equivocado)")]
     Parse {
         path: String,
         #[source]

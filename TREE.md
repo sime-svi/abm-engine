@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-05 — decisiones del responsable sobre la sombra pluviométrica y la revisión 1 de agentes (realismo primero)
+Última actualización: 2026-11-05 — herramientas de escalabilidad (ajustes `--set`, tiempos por sistema, diagnóstico del planeta, batería de escenarios, `verificar.sh`)
 
 ---
 
@@ -33,9 +33,11 @@ abm/
 │   │   ├── [x] Cargo.toml
 │   │   └── src/
 │   │       ├── [x] lib.rs
-│   │       ├── [x] time.rs         # Tick + run_ticks (el bucle de tiempo)
+│   │       ├── [x] time.rs         # Tick + run_ticks + Programa (sistemas en orden, cada uno cronometrado)
 │   │       ├── [x] schedule.rs     # Planificador de un solo hilo (deterministic)
 │   │       ├── [x] rng.rs          # RNG raíz determinista sembrado (ChaCha8)
+│   │       ├── [x] config.rs       # Carga de la config con ajustes `ruta=valor` (los `--set`)
+│   │       ├── [x] cronometro.rs   # Tiempo por sistema (solo informa; CLAUDE §6)
 │   │       └── [x] error.rs        # ConfigError (común a todos los paquetes)
 │   │
 │   ├── abm-ruleset/               # LAS REGLAS: forrajeo original + biología de los agentes (→ abm-core)
@@ -62,10 +64,11 @@ abm/
 │   │   ├── src/
 │   │   │   ├── [x] lib.rs           # run / run_with_info / world_dump
 │   │   │   ├── [x] config · error · geometry · noise · statics · world · hydro · lod
-│   │   │   ├── [x] erosion · cache · worldgen · systems · metrics
+│   │   │   ├── [x] erosion · cache · worldgen · systems
+│   │   │   ├── [x] metrics.rs       # Métricas por tick + diagnóstico del planeta (esquema v5)
 │   │   │   └── [x] humedad.rs       # Agotamiento de humedad a favor del viento (anillos, Λ, w, c_P)
 │   │   └── tests/
-│   │       ├── [x] terreno.rs       # incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación…) + lluvia y w vs resolución
+│   │       ├── [x] terreno.rs       # incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación…) + lluvia y w vs resolución + diagnóstico
 │   │       └── [x] erosion.rs       # incr. 3 (material, hondonadas, camino, tope, caché…) + relieve orográfico + mundo plano
 │   │
 │   ├── abm-metrics/               # OBSERVADORES + LOD de almacenamiento (→ core, ruleset, persistence)
@@ -87,17 +90,24 @@ abm/
 │   └── abm-runner/                # BINARIOS + CLI (→ todos)
 │       ├── [x] Cargo.toml           # default-run = "abm"
 │       ├── src/
-│       │   ├── [x] lib.rs           # run_simulation (monta las piezas), run_record, SimError
+│       │   ├── [x] lib.rs           # run_simulation / run_biologia_completa, argumentos (--set), informe de tiempos
 │       │   ├── [x] main.rs          # binario `abm` (forrajeo; JSON y/o BD)
-│       │   ├── [x] bin/agentes.rs   # binario `agentes` (biología por días)
-│       │   └── [x] bin/terreno.rs   # binario `terreno` (planeta)
+│       │   ├── [x] bin/agentes.rs   # binario `agentes` (biología por días; + <nombre>_tiempos.json)
+│       │   └── [x] bin/terreno.rs   # binario `terreno` (planeta; + <nombre>_tiempos.json)
 │       └── tests/
 │           ├── [x] biologia.rs      # balance, ayuno, determinismo, orden, cohorte + revisión 1 (Holling, sequía, fecundidad…)
 │           ├── [x] determinism.rs   # misma semilla → misma salida + guardias
 │           └── [x] persistence_pg.rs # escribe run+métricas en BD (#[ignore]; corre con --ignored)
 │
-├── herramientas/                  # Herramientas fuera del motor
-│   └── [x] no_regresion.sh        # No regresión byte a byte frente a un commit anterior (worktree temporal)
+├── herramientas/                  # Herramientas fuera del motor (Python y bash; ver su README)
+│   ├── [x] README.md              # Qué hay y cómo se usa
+│   ├── [x] verificar.sh           # CLAUDE §10 en un comando: fmt, clippy, tests, escenarios (+ no regresión)
+│   ├── [x] escenarios.py          # Batería de escenarios de referencia (márgenes + presupuesto de tiempo)
+│   ├── [x] escenarios.toml        # Los escenarios, sus métricas, márgenes y notas
+│   ├── [x] no_regresion.sh        # No regresión byte a byte frente a un commit anterior (worktree temporal)
+│   └── analisis/
+│       ├── [x] agentes.py         # Resumen de una corrida de agentes (N/N_max, fecundidad, e0, mortalidad…)
+│       └── [x] terreno.py         # Resumen y comparación de planetas (biomas, diagnóstico, sombra pluviométrica)
 │
 ├── infra/
 │   ├── [x] docker-compose.yml     # Postgres/TimescaleDB (host :25432) + Grafana (host :23000), subred fija
@@ -167,9 +177,18 @@ En curso: **«agentes»** (biología por días), incremento 1 hecho (individuos 
 Estado:
 - **Determinismo:** misma semilla → mismo JSON byte a byte, verificado también entre procesos y entre
   `debug` y `release`.
-- **Comprobaciones:** `cargo fmt` / `clippy --workspace -D warnings` / `cargo test` en verde
-  (unitarios: terreno 14 + biología 8 + métricas 1; forrajeo 3; biología 15; terreno 15; erosión 15;
-  el test de BD es `#[ignore]` y pasa con `--ignored`).
+- **Comprobaciones:** `herramientas/verificar.sh` pasa toda la lista de CLAUDE §10 en un comando:
+  - `cargo fmt`, `clippy --workspace -D warnings` y `cargo test` en verde (unitarios: núcleo 3,
+    terreno 14, biología 8, métricas 1, runner 1; forrajeo 3; biología 15; terreno 16; erosión 15; el
+    test de BD es `#[ignore]` y pasa con `--ignored`);
+  - la **batería de escenarios de referencia** (`herramientas/escenarios.toml`): 4 escenarios y 37
+    métricas con sus márgenes y presupuestos de tiempo, ~1 min;
+  - con `--no-regresion REF`, la no regresión byte a byte frente a un commit.
+- **Consultable:**
+  - los binarios aceptan ajustes `--set ruta=valor` sin editar la config;
+  - escriben un informe de tiempos por sistema (`<nombre>_tiempos.json`). En el planeta, el LOD se
+    lleva el 53 % del tiempo; en los agentes, la demanda el 32 % y las métricas el 17 %;
+  - la salida del planeta trae un diagnóstico (relieve, lluvia, PPN) para compararlo con la Tierra.
 - **Biología de los agentes (incremento 1 + revisión 1):** individuos con energía en kcal, crecimiento de West,
   reproducción sexual y mortalidad de Siler calibrada (humano: e0 30,9 años; genérico: l(1) = 0,6),
   sobre un hábitat de prueba. Balance de energía cerrado a 10⁻⁶ kcal. Con la revisión 1:

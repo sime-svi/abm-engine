@@ -455,14 +455,13 @@ fn invalida(msg: impl Into<String>) -> ConfigError {
 impl BioConfig {
     /// Lee y valida `config/agentes.toml`.
     pub fn load(path: &str) -> Result<BioConfig, ConfigError> {
-        let text = std::fs::read_to_string(path).map_err(|source| ConfigError::Read {
-            path: path.to_string(),
-            source,
-        })?;
-        let cfg: BioConfig = toml::from_str(&text).map_err(|source| ConfigError::Parse {
-            path: path.to_string(),
-            source,
-        })?;
+        Self::load_con(path, &[])
+    }
+
+    /// Carga la config con ajustes `ruta=valor` encima (los `--set` de la línea de comandos; ver
+    /// `abm_core::config::cargar`) y la valida.
+    pub fn load_con(path: &str, ajustes: &[String]) -> Result<BioConfig, ConfigError> {
+        let cfg: BioConfig = abm_core::config::cargar(path, ajustes)?;
         cfg.validate()?;
         Ok(cfg)
     }
