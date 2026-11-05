@@ -724,6 +724,10 @@ struct Cols {
     grad0_n: Vec<f64>,
     w_cap0: Vec<f64>,
     z_soil: Vec<f64>,
+    oro0_e: Vec<f64>,
+    oro0_n: Vec<f64>,
+    oro_e: Vec<f64>,
+    oro_n: Vec<f64>,
 }
 
 /// Lo que una hoja nueva hereda: clima intensivo `[T, P, ΣT, ΣP]`, marca hidrológica, erosión
@@ -771,6 +775,10 @@ impl Cols {
         self.grad0_n.push(w.grad0_n[s]);
         self.w_cap0.push(w.w_cap0[s]);
         self.z_soil.push(w.z_soil[s]);
+        self.oro0_e.push(w.oro0_e[s]);
+        self.oro0_n.push(w.oro0_n[s]);
+        self.oro_e.push(w.oro_e[s]);
+        self.oro_n.push(w.oro_n[s]);
     }
 
     /// Hoja nueva: geometría y estáticos recalculados (función pura); clima, marca, erosión y suelo
@@ -812,6 +820,13 @@ impl Cols {
         self.grad0_n.push(st.grad_n);
         self.w_cap0.push(st.w_cap);
         self.z_soil.push(z);
+        // Gradiente orográfico: parte pura (relieve de referencia, función de la posición); la de
+        // la erosión se rehace tras construir la vecindad si el relieve está vivo.
+        let (oe, on) = w.statgen.oro_gradient0(g, split_key(k).1);
+        self.oro0_e.push(oe);
+        self.oro0_n.push(on);
+        self.oro_e.push(oe);
+        self.oro_n.push(on);
     }
 
     fn set_state(&mut self, ns: usize, st: WaterState) {
@@ -1081,6 +1096,10 @@ fn rebuild(
     world.grad0_n = cols.grad0_n;
     world.w_cap0 = cols.w_cap0;
     world.z_soil = cols.z_soil;
+    world.oro0_e = cols.oro0_e;
+    world.oro0_n = cols.oro0_n;
+    world.oro_e = cols.oro_e;
+    world.oro_n = cols.oro_n;
 
     // Derivados globales sobre la malla nueva (§4), marca hidrológica y biomas de las hojas nuevas.
     hydro::recompute(world, cfg);
@@ -1170,6 +1189,7 @@ fn rebuild(
     // Sin erosión (`e ≡ 0`) no se toca nada: el resultado es el del incremento 2, bit a bit.
     if world.e.iter().any(|&x| x != 0.0) {
         erosion::refresh_gradients(world);
+        erosion::refresh_orography(world);
     }
     for (s, &nuevo) in is_new.iter().enumerate() {
         if nuevo {

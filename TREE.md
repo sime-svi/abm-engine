@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-05 — código dividido en el workspace de paquetes (CLAUDE §3), con `abm-terreno` propio
+Última actualización: 2026-11-05 — nota de lluvia orográfica implementada (relieve de referencia a 25 km, distancia de humedad desde la costa)
 
 ---
 
@@ -57,8 +57,8 @@ abm/
 │   │   │   ├── [x] config · error · geometry · noise · statics · world · hydro · lod
 │   │   │   ├── [x] erosion · cache · worldgen · systems · metrics
 │   │   └── tests/
-│   │       ├── [x] terreno.rs       # incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación, convergencia…)
-│   │       └── [x] erosion.rs       # incr. 3 (material, estabilidad, hondonadas, camino, tope, caché…)
+│   │       ├── [x] terreno.rs       # incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación…) + lluvia vs resolución
+│   │       └── [x] erosion.rs       # incr. 3 (material, hondonadas, camino, tope, caché…) + relieve orográfico
 │   │
 │   ├── abm-metrics/               # OBSERVADORES + LOD de almacenamiento (→ core, ruleset, persistence)
 │   │   ├── [x] Cargo.toml
@@ -109,7 +109,8 @@ abm/
 │       │   ├── [x] diseno_terreno_espacio_geografia.md    # Visión completa (madre)
 │       │   ├── [x] incremento-1-diseno.md                 # Diseño del 1er incremento (IMPLEMENTADO)
 │       │   ├── [x] incremento-2-diseno.md                 # Diseño LOD dinámico v1.1 (IMPLEMENTADO)
-│       │   └── [x] incremento-3-diseno.md                 # Diseño relieve vivo v1.2 (IMPLEMENTADO)
+│       │   ├── [x] incremento-3-diseno.md                 # Diseño relieve vivo v1.2 (IMPLEMENTADO)
+│       │   └── [x] nota_terreno_lluvia_orografica.md      # Lluvia independiente de la resolución (IMPLEMENTADA, §8)
 │       └── paquetes/              # Fase: código dividido en el workspace de paquetes
 │           └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │
@@ -144,12 +145,15 @@ Estado:
 - **Determinismo:** misma semilla → mismo JSON byte a byte, verificado también entre procesos y entre
   `debug` y `release`.
 - **Comprobaciones:** `cargo fmt` / `clippy --workspace -D warnings` / `cargo test` en verde (12
-  unitarios + forrajeo 3 + terreno 14 + erosión 13; el test de BD es `#[ignore]` y pasa con
+  unitarios + forrajeo 3 + terreno 15 + erosión 14; el test de BD es `#[ignore]` y pasa con
   `--ignored`).
+- **Lluvia independiente de la resolución** (nota de lluvia orográfica): relieve de referencia a
+  25 km para el efecto orográfico y distancia de humedad medida desde la costa. Al afinar una zona a
+  la resolución real, su lluvia cambia un 0,03 % (antes +3,9 %).
 - **Terreno:** balance de agua a ~1e-12 con LOD y erosión; balance de material cerrado (el
   acondicionamiento también, exacto); 9 biomas emergentes, ríos y ~50 lagos; ~195 000–205 000 celdas
   con la config por defecto.
-- **Génesis en caché** (`output/cache`): ~37 s la primera vez, ~8 s después.
+- **Génesis en caché** (`output/cache`): ~42 s la primera vez, ~8 s después.
 - **Base de datos:** el motor de forrajeo escribe en la BD además del JSON (`[persistence] sink =
   "json" | "postgres" | "both"`; conexión desde `infra/.env`).
 
@@ -163,7 +167,7 @@ metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
   apetito, rebrote);
 - acoplar los agentes al planeta;
 - terreno incremento 4 (lagos dinámicos, flujo multidireccional, fertilidad dinámica, eventos);
-- decidir si se corrige el efecto de escala de la pendiente (lluvia orográfica, incr. 3 §16);
+- decidir `k_oro`: con 0,5 no hay sombra pluviométrica (propuesta ≈ 40; nota de lluvia §8.4);
 - tablas `events` y `agent_snapshots` (LOD micro) con su sink;
 - volcar las métricas del terreno a la BD.
 

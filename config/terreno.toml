@@ -40,6 +40,8 @@ k_oro             = 0.5     # sensibilidad orográfica (sombra pluviométrica)
 m_oro_min         = 0.2     # factor orográfico mínimo (sotavento seco)
 m_oro_max         = 3.0     # factor orográfico máximo (barlovento húmedo)
 moisture_length_km = 1500.0 # escala de secado tierra adentro (km)
+moisture_from_coast = true  # distancia de humedad desde la línea de costa (false = desde el centro de la celda de mar, hasta el incr. 3)
+d_oro_km          = 25.0    # escala (km) a la que la lluvia "ve" el relieve (nota de lluvia orográfica; 0 = pendiente local)
 seas_precip_amp   = 0.0     # amplitud de la modulación estacional de lluvia (0 = suave)
 
 [soil]

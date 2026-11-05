@@ -223,6 +223,21 @@ pub(crate) fn precip_no_season(
     p_base * m_water * m_oro
 }
 
+/// Pendiente este que "ve" la lluvia (nota de lluvia orográfica): la del relieve de referencia a
+/// escala `d_oro` en las celdas tan finas como `d_oro` o más; en las más gruesas (o con la
+/// corrección apagada, `d_oro = 0`), la propia de la celda, como hasta el incremento 3.
+#[inline]
+pub(crate) fn oro_slope_e(world: &World, s: usize) -> f64 {
+    if world
+        .statgen
+        .uses_oro_reference(u32::from(world.topo.level[s]))
+    {
+        world.oro_e[s]
+    } else {
+        world.grad_e[s]
+    }
+}
+
 /// 6.2 Clima: temperatura (latitud + altura + estación) y precipitación (franja · humedad · orografía).
 fn climate(world: &mut World, cfg: &TerrenoConfig, t: u64) {
     let c = &cfg.climate;
@@ -238,7 +253,7 @@ fn climate(world: &mut World, cfg: &TerrenoConfig, t: u64) {
         let s = if lat_deg >= 0.0 { 1.0 } else { -1.0 };
         world.temp[id] = t_media + s * a_est * sin_p;
 
-        let p = precip_no_season(cfg, lat, world.dist_ocean_km[id], world.grad_e[id]);
+        let p = precip_no_season(cfg, lat, world.dist_ocean_km[id], oro_slope_e(world, id));
         let m_est = (1.0 + c.seas_precip_amp * s * sin_p).max(0.0);
         world.precip[id] = (p * m_est).max(0.0);
     }

@@ -13,10 +13,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::config::TerrenoConfig;
-use crate::geometry::{angle_between, dot};
+use crate::geometry::{V3, angle_between, dot, face_n, key, locate, parent_key, split_key};
 use crate::hydro;
 use crate::lod;
-use crate::systems::{precip_no_season, temp_annual_mean};
+use crate::statics::oro_offset;
+use crate::systems::{oro_slope_e, precip_no_season, temp_annual_mean};
 use crate::world::{Surface, World};
 
 /// Resumen de uno o varios pasos de erosión (volúmenes en m³).
@@ -101,7 +102,7 @@ pub fn analytic_means(world: &World, cfg: &TerrenoConfig) -> (Vec<f64>, Vec<f64>
     let mut t = Vec::with_capacity(n);
     for s in 0..n {
         let lat = world.topo.lat[s];
-        let mm_tick = precip_no_season(cfg, lat, world.dist_ocean_km[s], world.grad_e[s]);
+        let mm_tick = precip_no_season(cfg, lat, world.dist_ocean_km[s], oro_slope_e(world, s));
         p.push(mm_tick.max(0.0) * t_year / 1000.0);
         t.push(temp_annual_mean(cfg, lat, world.h[s], world.es_oceano(s)));
     }
@@ -306,6 +307,7 @@ pub fn step(
     refresh_w_cap(world, cfg);
     hydro::recompute_after_erosion(world, cfg);
     refresh_gradients(world);
+    refresh_orography(world);
     rep
 }
 
@@ -379,6 +381,127 @@ pub fn refresh_gradients(world: &mut World) {
         world.grad_n[s] = gy;
         world.slope[s] = (gx * gx + gy * gy).sqrt().atan();
         world.aspect[s] = gy.atan2(gx);
+    }
+}
+
+/// Hoja que contiene una dirección del planeta: la celda del nivel más fino que la contiene, y si no
+/// es hoja, su madre, su abuela… (búsqueda binaria en las claves).
+fn leaf_at(world: &World, d: [f64; 3]) -> Option<usize> {
+    let topo = &world.topo;
+    let (c, i, j) = locate(d, face_n(topo.n0, topo.l_max));
+    let mut k = key(c, topo.l_max, i, j);
+    loop {
+        if let Some(s) = topo.slot_of(k) {
+            return Some(s);
+        }
+        if split_key(k).1 <= topo.l_min {
+            return None;
+        }
+        k = parent_key(k);
+    }
+}
+
+/// Media de `e` (ponderada por área) de cada celda de nivel `l_ref` con descendientes hoja, en
+/// orden de clave: `(clave del antepasado, media)`. Es la erosión vista a la escala de referencia;
+/// como al subdividir las hijas copian `e` y al colapsar la madre toma la media, no depende de
+/// cuánto detalle haya por debajo de `l_ref`.
+fn ancestor_means(world: &World, l_ref: u32) -> Vec<(u64, f64)> {
+    let topo = &world.topo;
+    let mut acc: Vec<(u64, f64, f64)> = Vec::new();
+    for s in 0..topo.num_cells {
+        if u32::from(topo.level[s]) > l_ref {
+            let mut k = topo.keys[s];
+            while split_key(k).1 > l_ref {
+                k = parent_key(k);
+            }
+            acc.push((k, world.e[s] * topo.area[s], topo.area[s]));
+        }
+    }
+    acc.sort_by_key(|x| x.0); // estable: dentro de cada grupo, el orden de las hojas
+    let mut out: Vec<(u64, f64)> = Vec::new();
+    let mut i = 0;
+    while i < acc.len() {
+        let (k, mut ea, mut a) = (acc[i].0, 0.0, 0.0);
+        while i < acc.len() && acc[i].0 == k {
+            ea += acc[i].1;
+            a += acc[i].2;
+            i += 1;
+        }
+        out.push((k, ea / a));
+    }
+    out
+}
+
+/// Erosión acumulada `e` en un punto, vista a la escala de referencia `l_ref`: la de la hoja que lo
+/// contiene si es de nivel `≤ l_ref`; si es más fina, la media de su antepasado de nivel `l_ref`.
+fn e_ref_at(world: &World, means: &[(u64, f64)], l_ref: u32, p: [f64; 3]) -> f64 {
+    let Some(leaf) = leaf_at(world, p) else {
+        return 0.0;
+    };
+    if u32::from(world.topo.level[leaf]) <= l_ref {
+        return world.e[leaf];
+    }
+    let mut k = world.topo.keys[leaf];
+    while split_key(k).1 > l_ref {
+        k = parent_key(k);
+    }
+    means
+        .binary_search_by_key(&k, |x| x.0)
+        .map_or(world.e[leaf], |i| means[i].1)
+}
+
+/// Parte del gradiente orográfico que aporta la erosión acumulada, en un punto: diferencias
+/// centrales de `e` a ±`d_oro`, vista al nivel `L_oro` (`e_ref_at`).
+fn e_gradient_ref(world: &World, means: &[(u64, f64)], dir: V3, east: V3, north: V3) -> (f64, f64) {
+    let delta = world.statgen.oro_delta();
+    let l_ref = world.statgen.oro_level();
+    let at = |u: V3, sign: f64| e_ref_at(world, means, l_ref, oro_offset(dir, u, sign, delta));
+    let denom = 2.0 * delta * world.topo.r_planet;
+    (
+        (at(east, 1.0) - at(east, -1.0)) / denom,
+        (at(north, 1.0) - at(north, -1.0)) / denom,
+    )
+}
+
+/// Gradiente del relieve de referencia orográfico (nota de lluvia orográfica) en un punto
+/// cualquiera del planeta (`dir`, con su base `east`/`north`): el relieve de nacimiento al nivel
+/// `L_oro` más la erosión acumulada vista a ese nivel, ambos con paso `d_oro`. Es lo que usan las
+/// celdas tan finas como `d_oro` o más, y no depende del detalle que tenga la malla por debajo de
+/// `L_oro`. `(0, 0)` con la corrección apagada.
+pub fn orographic_gradient_at(world: &World, dir: V3, east: V3, north: V3) -> (f64, f64) {
+    if world.statgen.oro_delta() <= 0.0 {
+        return (0.0, 0.0);
+    }
+    let (se, sn) = world.statgen.oro_gradient0_at(dir, east, north);
+    let means = ancestor_means(world, world.statgen.oro_level());
+    let (ee, en) = e_gradient_ref(world, &means, dir, east, north);
+    (se + ee, sn + en)
+}
+
+/// Refresca el gradiente orográfico de las celdas que usan el relieve de referencia: su parte pura
+/// (`oro0`, guardada al crear la celda) más la de la erosión acumulada (`e_gradient_ref`). Hay que
+/// llamarla cuando cambia `e` o la malla.
+pub fn refresh_orography(world: &mut World) {
+    let n = world.topo.num_cells;
+    let usa = |w: &World, s: usize| w.statgen.uses_oro_reference(u32::from(w.topo.level[s]));
+    if !(0..n).any(|s| usa(world, s)) {
+        return;
+    }
+    if world.e.iter().all(|&x| x == 0.0) {
+        world.oro_e.copy_from_slice(&world.oro0_e);
+        world.oro_n.copy_from_slice(&world.oro0_n);
+        return;
+    }
+    let means = ancestor_means(world, world.statgen.oro_level());
+    let mut ge = vec![0.0; n];
+    let mut gn = vec![0.0; n];
+    for s in (0..n).filter(|&s| usa(world, s)) {
+        let t = &world.topo;
+        (ge[s], gn[s]) = e_gradient_ref(world, &means, t.dir[s], t.east[s], t.north[s]);
+    }
+    for s in 0..n {
+        world.oro_e[s] = world.oro0_e[s] + ge[s];
+        world.oro_n[s] = world.oro0_n[s] + gn[s];
     }
 }
 

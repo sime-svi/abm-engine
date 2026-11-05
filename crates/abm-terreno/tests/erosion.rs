@@ -305,6 +305,7 @@ fn totales(w: &World) -> (f64, f64, f64) {
 }
 
 /// Avanza `n` ticks desde `t0` con la física y la erosión en ejecución, sin LOD automático.
+/// Devuelve la lluvia caída sobre la tierra de la cara 0 (la zona que se afina) en esos ticks (m³).
 fn avanzar(
     w: &mut World,
     cfg: &TerrenoConfig,
@@ -312,17 +313,23 @@ fn avanzar(
     t0: u64,
     n: u64,
     ero: &mut erosion::ErosionReport,
-) {
+) -> f64 {
     let every = cfg.erosion.run_every;
     let dt = every as f64 / cfg.climate.t_year * cfg.erosion.run_accel;
+    let mut lluvia = 0.0;
     for t in t0..t0 + n {
         let antes = abm_terreno::systems::total_store_vol(w);
         abm_terreno::systems::step(w, cfg, sc, t, antes, &Default::default());
+        lluvia += (0..w.topo.num_cells)
+            .filter(|&s| w.topo.face(s) == 0 && !w.es_oceano(s))
+            .map(|s| w.precip[s] / 1000.0 * w.topo.area[s])
+            .sum::<f64>();
         if every > 0 && t > 0 && t % every == 0 {
             let (p, tm) = erosion::running_means(w, cfg);
             ero.add(&erosion::step(w, cfg, dt, &p, &tm));
         }
     }
+    lluvia
 }
 
 #[test]
@@ -332,10 +339,16 @@ fn independencia_del_camino_con_dinamica() {
     // (c) gruesa todo el rato. Dos comprobaciones:
     // - Sin huella: (b), tras volver a gruesa, acaba como (c) salvo por la física de su tramo fino.
     // - (a) frente a (b), la comparación de la revisión.
-    // Medido (2026-11-05): material y erosión coinciden al 0,02–0,3 %. El agua (+0,5 % / +3,8 %) y el
-    // suelo (−2,3 % / −2,4 %) difieren por un efecto de escala de la física, no de la malla: con más
-    // detalle hay más pendiente, así que el factor orográfico sube la lluvia y la incisión arranca más
-    // suelo. Las tolerancias dejan margen sobre esas cifras.
+    // Las celdas de esta prueba son enormes (834 km la gruesa, 417 km la fina): lo que difiere es
+    // la física a una u otra escala, no las operaciones de la malla (exactas, ver
+    // `lod_ida_y_vuelta_conserva_erosion_y_suelo`). Medido (2026-11-05, nota de lluvia orográfica
+    // §8), (b)/(c) · (a)/(b) · (a)/(c):
+    // - lluvia sobre la tierra de la zona: 1,4 % · 2,3 % · 3,6 % (con la distancia de humedad medida
+    //   desde el centro de la celda de mar, como hasta el incremento 3: 6,2 % · 10,5 % · 16 %);
+    // - erosionado: 1,1 % · 1,9 % · 3,0 % (antes 0,2–0,3 %: el exceso de lluvia de la malla fina
+    //   compensaba que erosiona menos con la misma lluvia; la nota pide vigilarlo);
+    // - material Σe·a: 0,09 % · 0,15 %; agua: 0,15 % · 2,9 %; suelo: 2,5 % · 2,4 %.
+    // Las tolerancias dejan margen sobre esas cifras.
     let mut cfg = cfg_geo();
     cfg.lod.l_max = cfg.lod.l_min; // génesis en malla uniforme...
     cfg.erosion.run_every = 10;
@@ -359,53 +372,114 @@ fn independencia_del_camino_con_dinamica() {
         let mut w = base.clone();
         let mut sc = abm_terreno::systems::Scratch::new(w.topo.num_cells);
         let mut ero = erosion::ErosionReport::default();
+        let mut lluvia = 0.0;
         match plan {
             "fina" => {
                 subdividir(&mut w);
                 sc.resize(w.topo.num_cells);
-                avanzar(&mut w, &cfg, &mut sc, 0, 3 * tramo, &mut ero);
+                lluvia += avanzar(&mut w, &cfg, &mut sc, 0, 3 * tramo, &mut ero);
             }
             "ida_y_vuelta" => {
-                avanzar(&mut w, &cfg, &mut sc, 0, tramo, &mut ero);
+                lluvia += avanzar(&mut w, &cfg, &mut sc, 0, tramo, &mut ero);
                 subdividir(&mut w);
                 sc.resize(w.topo.num_cells);
-                avanzar(&mut w, &cfg, &mut sc, tramo, tramo, &mut ero);
+                lluvia += avanzar(&mut w, &cfg, &mut sc, tramo, tramo, &mut ero);
                 assert!(colapsar(&mut w).collapses > 0);
                 sc.resize(w.topo.num_cells);
-                avanzar(&mut w, &cfg, &mut sc, 2 * tramo, tramo, &mut ero);
+                lluvia += avanzar(&mut w, &cfg, &mut sc, 2 * tramo, tramo, &mut ero);
                 assert_eq!(w.topo.keys, base.topo.keys, "no volvió a la malla gruesa");
             }
-            _ => avanzar(&mut w, &cfg, &mut sc, 0, 3 * tramo, &mut ero),
+            _ => lluvia += avanzar(&mut w, &cfg, &mut sc, 0, 3 * tramo, &mut ero),
         }
         relieve_sano(&w, &cfg);
         let (agua, mat, suelo) = totales(&w);
-        (agua, mat, suelo, ero.eroded_m3)
+        (agua, mat, suelo, ero.eroded_m3, lluvia)
     };
     let (a, b, c) = (correr("fina"), correr("ida_y_vuelta"), correr("gruesa"));
     let rel = |x: f64, y: f64| (x - y).abs() / x.abs().max(y.abs()).max(1e-30);
-    let informe = |n: &str, x: (f64, f64, f64, f64), y: (f64, f64, f64, f64)| {
-        let r = (rel(x.0, y.0), rel(x.1, y.1), rel(x.2, y.2), rel(x.3, y.3));
+    type Tot = (f64, f64, f64, f64, f64);
+    let informe = |n: &str, x: Tot, y: Tot| {
+        let r = (
+            rel(x.0, y.0),
+            rel(x.1, y.1),
+            rel(x.2, y.2),
+            rel(x.3, y.3),
+            rel(x.4, y.4),
+        );
         println!(
-            "{n}: agua {:.2e}, Σe·a {:.2e}, suelo {:.2e}, erosionado {:.2e}",
-            r.0, r.1, r.2, r.3
+            "{n}: agua {:.2e}, Σe·a {:.2e}, suelo {:.2e}, erosionado {:.2e}, lluvia {:.2e}",
+            r.0, r.1, r.2, r.3, r.4
         );
         r
     };
     // Sin huella: (b) frente a (c).
     let bc = informe("(b) vs (c)", b, c);
     assert!(bc.0 < 0.01, "huella en el agua: {:.2e}", bc.0);
-    assert!(bc.1 < 1e-3, "huella en el material: {:.2e}", bc.1);
+    assert!(bc.1 < 2e-3, "huella en el material: {:.2e}", bc.1);
     assert!(bc.2 < 0.04, "huella en el suelo: {:.2e}", bc.2);
-    assert!(bc.3 < 0.01, "huella en la erosión: {:.2e}", bc.3);
-    // (a) frente a (b), la comparación de la revisión.
+    assert!(bc.3 < 0.02, "huella en la erosión: {:.2e}", bc.3);
+    assert!(bc.4 < 0.02, "huella en la lluvia: {:.2e}", bc.4);
+    // (a) frente a (b), la comparación de la revisión, y (a) frente a (c), fina frente a gruesa.
     let ab = informe("(a) vs (b)", a, b);
-    assert!(ab.1 < 1e-3, "material: {:.2e}", ab.1);
+    assert!(ab.0 < 0.04, "agua: {:.2e}", ab.0);
+    assert!(ab.1 < 3e-3, "material: {:.2e}", ab.1);
     assert!(ab.2 < 0.05, "suelo: {:.2e}", ab.2);
-    assert!(ab.3 < 0.01, "erosionado: {:.2e}", ab.3);
+    assert!(ab.3 < 0.03, "erosionado: {:.2e}", ab.3);
+    assert!(ab.4 < 0.03, "lluvia: {:.2e}", ab.4);
+    let ac = informe("(a) vs (c)", a, c);
+    assert!(ac.4 < 0.05, "lluvia, fina frente a gruesa: {:.2e}", ac.4);
+}
+
+#[test]
+fn el_relieve_orografico_no_depende_de_la_malla() {
+    // Nota de lluvia orográfica §3: en un punto del planeta, el relieve de referencia de la lluvia
+    // (el de nacimiento al nivel L_oro más la erosión vista a ese nivel) es el mismo esté la zona en
+    // malla fina o gruesa. Con n0 = 12 los lados son 834 (L0), 417 (L1), 208 (L2) y 104 km (L3), así
+    // que d_oro = 400 km da L_oro = 1 y hay celdas más finas que la referencia.
+    let mut cfg = cfg_geo();
+    cfg.lod.l_max = 3;
+    cfg.climate.d_oro_km = 400.0;
+    let a = worldgen::generate(&cfg);
+    assert_eq!(a.statgen.oro_level(), 1);
     assert!(
-        ab.0 < 0.06,
-        "agua (efecto de escala de la lluvia): {:.2e}",
-        ab.0
+        a.e.iter().any(|&x| x != 0.0),
+        "la génesis debe dejar erosión"
+    );
+    // B: la cara 0 un nivel más fina. Sin acondicionar las hondonadas nuevas, para que las hijas
+    // copien `e` tal cual (el acondicionamiento cambia el relieve, y eso sí es otro relieve).
+    let mut b = a.clone();
+    let n = b.topo.num_cells;
+    let marcar: Vec<bool> = (0..n)
+        .map(|s| b.topo.face(s) == 0 && (1..3).contains(&b.topo.level[s]))
+        .collect();
+    let rep = lod::apply(
+        &mut b,
+        &sin_erosion(cfg.clone()),
+        &Marks::forced(marcar, vec![false; n]),
+    );
+    assert!(rep.subdivisions > 0);
+    let (mut peor, mut usadas, mut finas) = (0.0f64, 0, 0);
+    for s in (0..b.topo.num_cells).filter(|&s| b.topo.face(s) == 0) {
+        let t = &b.topo;
+        let ga = erosion::orographic_gradient_at(&a, t.dir[s], t.east[s], t.north[s]);
+        let gb = erosion::orographic_gradient_at(&b, t.dir[s], t.east[s], t.north[s]);
+        let escala = ga.0.abs().max(ga.1.abs()).max(1e-9);
+        peor = peor.max((ga.0 - gb.0).abs().max((ga.1 - gb.1).abs()) / escala);
+        if b.statgen.uses_oro_reference(u32::from(t.level[s])) {
+            usadas += 1;
+            finas += usize::from(t.level[s] > 1);
+            // Y es justo lo que usa la lluvia de la celda.
+            assert!((b.oro_e[s] - gb.0).abs() <= 1e-12 * gb.0.abs().max(1e-9));
+            assert!((b.oro_n[s] - gb.1).abs() <= 1e-12 * gb.1.abs().max(1e-9));
+        }
+    }
+    assert!(
+        usadas > 0 && finas > 0,
+        "{usadas} celdas con referencia, {finas} más finas"
+    );
+    assert!(
+        peor < 1e-9,
+        "el relieve de referencia cambia con la malla: {peor:.2e}"
     );
 }
 

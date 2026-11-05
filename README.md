@@ -34,7 +34,7 @@ cargo run --release --bin terreno    # usa config/terreno.toml → output/terren
 cargo test --test terreno            # tests de la fase
 ```
 
-Conviene `--release`: la primera vez ~37 s (génesis geológica + un año); después ~8 s, porque la
+Conviene `--release`: la primera vez ~42 s (génesis geológica + un año); después ~8 s, porque la
 génesis se guarda en `output/cache` y se rehace sola si cambia la config o el código. Para la malla
 uniforme sin LOD, pon
 `l_max = 0` en `[lod]`; para el relieve fijo, `geo_steps = 0` y `run_every = 0` en `[erosion]`

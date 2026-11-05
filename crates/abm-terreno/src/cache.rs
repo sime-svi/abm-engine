@@ -19,7 +19,7 @@ use crate::error::TerrenoError;
 use crate::statics::StaticGen;
 use crate::world::{Biome, Pair, Surface, Topology, World};
 
-const MAGIC: &[u8; 8] = b"ABMGEN01";
+const MAGIC: &[u8; 8] = b"ABMGEN02";
 const FINGERPRINT: &str = env!("ABM_TERRENO_FINGERPRINT");
 
 fn fnv1a(mut h: u64, bytes: &[u8]) -> u64 {
@@ -210,8 +210,11 @@ fn surface_from(c: u8) -> Option<Surface> {
     })
 }
 
+/// Nº de columnas `f64` del mundo que se guardan.
+const N_F64: usize = 29;
+
 /// Columnas `f64` del mundo, en orden fijo (el mismo al guardar y al cargar).
-fn f64_columns(w: &World) -> [&Vec<f64>; 25] {
+fn f64_columns(w: &World) -> [&Vec<f64>; N_F64] {
     [
         &w.h0,
         &w.grad0_e,
@@ -238,6 +241,10 @@ fn f64_columns(w: &World) -> [&Vec<f64>; 25] {
         &w.veg,
         &w.temp_sum,
         &w.precip_sum,
+        &w.oro0_e,
+        &w.oro0_n,
+        &w.oro_e,
+        &w.oro_n,
     ]
 }
 
@@ -327,8 +334,8 @@ fn decode(bytes: &[u8], cfg: &TerrenoConfig, key: u64) -> Option<(World, GeoSumm
             g,
         })
         .collect();
-    let mut cols: Vec<Vec<f64>> = Vec::with_capacity(25);
-    for _ in 0..25 {
+    let mut cols: Vec<Vec<f64>> = Vec::with_capacity(N_F64);
+    for _ in 0..N_F64 {
         cols.push(r.vf64()?);
     }
     let receiver = r.vi64()?;
@@ -425,6 +432,10 @@ fn decode(bytes: &[u8], cfg: &TerrenoConfig, key: u64) -> Option<(World, GeoSumm
         hydro_lock,
         temp_sum: next(),
         precip_sum: next(),
+        oro0_e: next(),
+        oro0_n: next(),
+        oro_e: next(),
+        oro_n: next(),
         sample_count,
     };
     Some((world, geo))

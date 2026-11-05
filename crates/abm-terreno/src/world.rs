@@ -171,8 +171,10 @@ pub struct World {
     pub grad0_e: Vec<f64>,  // ∂h0/∂este (m/m), diferencias centrales de la función pura
     pub grad0_n: Vec<f64>,  // ∂h0/∂norte (m/m)
     pub w_cap0: Vec<f64>,   // capacidad de campo por textura (mm), con el suelo a z_init
-    pub k_perm: Vec<f64>,   // permeabilidad (0..1)
-    pub fert: Vec<f64>,     // fertilidad efectiva (0..1)
+    pub oro0_e: Vec<f64>, // gradiente orográfico puro (relieve de nacimiento a escala d_oro), este
+    pub oro0_n: Vec<f64>, // ídem, norte
+    pub k_perm: Vec<f64>, // permeabilidad (0..1)
+    pub fert: Vec<f64>,   // fertilidad efectiva (0..1)
     pub resource: Vec<f64>, // recurso genérico extraíble
 
     // --- Relieve y suelo vivos (incr. 3): cambian con la erosión, despacio ---
@@ -184,6 +186,8 @@ pub struct World {
     pub grad_e: Vec<f64>, // ∂h/∂este (m/m) = ∂h0/∂este + ∂e/∂este
     pub grad_n: Vec<f64>, // ∂h/∂norte (m/m)
     pub w_cap: Vec<f64>,  // capacidad de campo actual (mm) = w_cap0 · z_soil / z_init
+    pub oro_e: Vec<f64>,  // gradiente orográfico actual: oro0 + el de la erosión a escala d_oro
+    pub oro_n: Vec<f64>,
 
     // --- Derivados globales (se recalculan tras cada cambio de topología, incremento 2 §4) ---
     pub filled_h: Vec<f64>,      // elevación tras rellenar depresiones (m)

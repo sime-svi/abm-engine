@@ -121,6 +121,13 @@ pub struct ClimateCfg {
     pub m_oro_max: f64,
     pub moisture_length_km: f64,
     pub seas_precip_amp: f64,
+    /// Escala (km) a la que la lluvia "ve" el relieve (nota de lluvia orográfica): el factor
+    /// orográfico usa la pendiente de un relieve de referencia a esta escala, igual en malla fina o
+    /// gruesa. 0 = desactivado (pendiente local de la celda, como hasta el incremento 3).
+    pub d_oro_km: f64,
+    /// Distancia de humedad medida desde la línea de costa (`true`) o desde el centro de la celda
+    /// de mar más cercana (`false`, como hasta el incremento 3; nota de lluvia orográfica §8).
+    pub moisture_from_coast: bool,
 }
 
 impl Default for ClimateCfg {
@@ -141,6 +148,8 @@ impl Default for ClimateCfg {
             m_oro_max: 3.0,
             moisture_length_km: 1500.0,
             seas_precip_amp: 0.0,
+            d_oro_km: 25.0,
+            moisture_from_coast: true,
         }
     }
 }
@@ -394,6 +403,9 @@ impl TerrenoConfig {
         // se recorte en cero (incr. 3 §4).
         if !(0.0..=1.0).contains(&self.climate.seas_precip_amp) {
             return Err(invalid("se requiere 0 <= climate.seas_precip_amp <= 1"));
+        }
+        if !(self.climate.d_oro_km >= 0.0 && self.climate.d_oro_km < 0.5 * self.planet.r_km) {
+            return Err(invalid("se requiere 0 <= climate.d_oro_km < r_km/2"));
         }
         let e = &self.erosion;
         if e.geo_steps > 0 && (e.geo_rounds == 0 || e.geo_rounds > e.geo_steps) {

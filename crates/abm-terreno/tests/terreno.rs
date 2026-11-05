@@ -415,3 +415,51 @@ fn lod_refina_costas_y_rios() {
         "la fracción de tierra cambia demasiado: {fa:.3} vs {fb:.3}"
     );
 }
+
+#[test]
+fn la_lluvia_no_depende_de_la_resolucion() {
+    // Nota de lluvia orográfica §6: al afinar una zona, su lluvia no debe cambiar más que el ruido
+    // numérico. Con la resolución real (cara 0 de 208 a 104 km), la lluvia sobre su tierra cambia un
+    // 0,03 % con la distancia de humedad medida desde la costa, y un +3,9 % midiéndola desde el
+    // centro de la celda de mar (como hasta el incremento 3): sobraba media celda de mar en cada
+    // distancia, y al afinar la costa "se acercaba".
+    let cambio = |desde_costa: bool| -> f64 {
+        let mut cfg = TerrenoConfig::default();
+        cfg.run.seed = 7;
+        cfg.run.genesis_cache = String::new();
+        cfg.planet.n0 = 48;
+        cfg.lod.l_max = 0;
+        sin_erosion(&mut cfg);
+        cfg.climate.moisture_from_coast = desde_costa;
+        let mut w = worldgen::generate(&cfg);
+        let lluvia = |w: &mut World| -> f64 {
+            let mut sc = abm_terreno::systems::Scratch::new(w.topo.num_cells);
+            let antes = total_store_vol(w);
+            abm_terreno::systems::step(w, &cfg, &mut sc, 0, antes, &Default::default());
+            (0..w.topo.num_cells)
+                .filter(|&s| w.topo.face(s) == 0 && !w.es_oceano(s))
+                .map(|s| w.precip[s] * w.topo.area[s])
+                .sum()
+        };
+        let gruesa = lluvia(&mut w);
+        w.topo.l_max = 1;
+        let n = w.topo.num_cells;
+        let cara0: Vec<bool> = (0..n).map(|s| w.topo.face(s) == 0).collect();
+        lod::apply(&mut w, &cfg, &Marks::forced(cara0, vec![false; n]));
+        lluvia(&mut w) / gruesa - 1.0
+    };
+    let (costa, centro) = (cambio(true), cambio(false));
+    println!(
+        "lluvia de la zona al afinar: {:+.2} % (antes {:+.2} %)",
+        100.0 * costa,
+        100.0 * centro
+    );
+    assert!(
+        costa.abs() < 0.005,
+        "la lluvia depende de la resolución: {costa:+.2e}"
+    );
+    assert!(
+        centro > 0.02,
+        "la prueba ya no detecta el sesgo de antes: {centro:+.2e}"
+    );
+}

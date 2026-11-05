@@ -527,3 +527,56 @@ Formato de entrada:
   (`baseline.json` y `terreno_terreno.json`).
 - **Estado tras el cambio:** Workspace operativo. Siguiente: el responsable rehace la biología de los
   agentes por días; después, acoplar agentes y planeta.
+
+## [2026-11-05] Nota de lluvia orográfica: relieve de referencia a 25 km y distancia de humedad desde la costa
+
+- **Qué:** El responsable entregó dos documentos en `docs/temp/`. Se archivaron con git y `docs/temp`
+  se borró:
+  - `nota_terreno_lluvia_orografica.md` → `docs/design/terreno/`;
+  - `diseno_biologia_agentes.md` → `docs/design/agentes/` (se trabaja en la entrada siguiente).
+
+  Se implementó la nota:
+  - `climate.d_oro_km = 25` y nivel de referencia `L_oro`, el de lado más cercano a `d_oro`.
+  - Relieve de referencia en un punto = relieve de nacimiento del nivel `L_oro` + erosión `e` vista a
+    ese nivel (media por área de los descendientes del antepasado `L_oro`). Diferencias centrales
+    con paso `d_oro`.
+  - Las celdas más gruesas que la referencia usan su propia pendiente.
+  - Columnas `oro0_e/n` (parte pura, al crear la celda) y `oro_e/n` (con la erosión). Se refrescan
+    dentro de `erosion::step` y tras cada cambio de malla con `e ≠ 0`. La caché pasa al formato
+    `ABMGEN02`.
+  - Función pública `erosion::orographic_gradient_at`.
+- **Por qué:** En el incremento 3 la lluvia dependía de la resolución (+4 % con la zona fina). Con
+  los agentes, eso cerraría un bucle artificial (Foco → malla fina → más lluvia → más forraje → más
+  agentes → más Foco).
+- **Decisiones / problemas:**
+  - **Hallazgo 1, mi diagnóstico del incremento 3 era erróneo.** Con `k_oro = 0` la diferencia es
+    idéntica. La causa era la distancia de humedad, medida hasta el **centro** de la celda de mar:
+    sobraba media celda y, al afinar, la costa "se acercaba" (+16,9 / +8,4 / +3,1 % de lluvia por
+    área de tierra al afinar de 834/417/208 km). Corregido con `climate.moisture_from_coast = true`:
+    la distancia se mide desde la línea de costa. Es una decisión técnica mía, reversible por config.
+    A la resolución real queda +0,03 % en la lluvia de la zona (−0,7 % por área). Nota corregida en
+    `incremento-3-diseno.md` §16.
+  - **Hallazgo 2, con `k_oro = 0,5` no hay sombra pluviométrica:** el factor queda en 0,99–1,01
+    para el 98 % de la tierra. Barrido: con `k_oro = 40`, percentiles 1–99 de 0,36–1,66 y la
+    lluvia total +0,14 %. Propuesta: `k_oro ≈ 40`, **pendiente del responsable** (pregunta abierta
+    §7 de la nota). Se mantiene 0,5.
+  - **Hallazgo 3, la erosión depende de la resolución:** 1,1 / 1,9 / 3,0 % en la prueba de
+    independencia. El 0,3 % de antes era una compensación con el exceso de lluvia. Queda vigilada
+    (nota §4), sin cambios.
+  - Con la config por defecto, `L_oro = 3 = l_max`. La corrección orográfica apenas cambia nada hoy;
+    actuará cuando el Foco afine por debajo de 26 km.
+  - **Fallo latente:** `serde_json` no leía los `f64` de forma exacta, y el resumen de la génesis
+    guardado en la caché podía volver con 1 ulp de diferencia. Lo destapó
+    `la_cache_reproduce_la_genesis_bit_a_bit`. Se activó `float_roundtrip` en el workspace.
+  - Coste: la génesis por defecto pasa de 36 a 42 s, una sola vez gracias a la caché.
+- **Verificación:**
+  - **No regresión:** con `d_oro_km = 0` y `moisture_from_coast = false`, salida **idéntica byte a
+    byte** al binario de `d7bd4a3`, con erosión y sin ella.
+  - **Tests nuevos:** `el_relieve_orografico_no_depende_de_la_malla` (invariancia < 1e-9) y
+    `la_lluvia_no_depende_de_la_resolucion` (+0,03 %, antes +3,86 %).
+  - La prueba de independencia del camino mide ahora la lluvia de la zona: (b)/(c) 6,2 → 1,4 %;
+    (a)/(c) 16 → 3,6 %. Tolerancias ajustadas y documentadas.
+  - `fmt`, `clippy --workspace --all-targets -D warnings` y `cargo test` en verde (12 + 3 + 15 + 14).
+  - Nueva salida de referencia: lluvia +0,40 %, desierto −1,6 %, selva +3,9 %.
+- **Estado tras el cambio:** Terreno con la lluvia independiente de la resolución. Pendiente del
+  responsable: `k_oro`. Siguiente: biología de los agentes (incremento 1).

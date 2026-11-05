@@ -42,7 +42,7 @@ impl PartialOrd for MinItem {
 /// Recalcula todos los derivados globales del mundo sobre su malla actual.
 pub fn recompute(world: &mut World, cfg: &TerrenoConfig) {
     recompute_flow(world, cfg);
-    recompute_dist_ocean(world);
+    recompute_dist_ocean(world, cfg);
     label_rivers_lakes(world, cfg);
 }
 
@@ -129,19 +129,52 @@ fn recompute_flow(world: &mut World, _cfg: &TerrenoConfig) {
 }
 
 /// Paso 4: distancia a la fuente de humedad, Dijkstra multi-fuente con distancias reales.
-fn recompute_dist_ocean(world: &mut World) {
+///
+/// Con `climate.moisture_from_coast` (por defecto) se mide desde la **línea de costa**: una celda
+/// de tierra que toca el mar empieza a la distancia de su centro al borde compartido (el centro a
+/// centro repartido según el tamaño de cada celda). Medida desde el centro de la celda de mar, como
+/// hasta el incremento 3, sobraba media celda de mar en cada distancia, y al afinar la malla la
+/// costa "se acercaba" y llovía más (+3 % de 208 a 104 km; nota de lluvia orográfica, §8).
+fn recompute_dist_ocean(world: &mut World, cfg: &TerrenoConfig) {
     let num = world.topo.num_cells;
     let r_km = world.topo.r_planet / 1000.0;
     world.dist_ocean_km.clear();
     world.dist_ocean_km.resize(num, f64::INFINITY);
     let mut heap = BinaryHeap::with_capacity(num);
+    let ocean = |w: &World, s: usize| matches!(w.surface[s], Surface::Oceano);
     for s in 0..num {
-        if matches!(world.surface[s], Surface::Oceano) {
+        if ocean(world, s) {
             world.dist_ocean_km[s] = 0.0;
-            heap.push(MinItem {
-                v: 0.0,
-                id: s as u32,
-            });
+            if !cfg.climate.moisture_from_coast {
+                heap.push(MinItem {
+                    v: 0.0,
+                    id: s as u32,
+                });
+            }
+        }
+    }
+    if cfg.climate.moisture_from_coast {
+        for s in 0..num {
+            if ocean(world, s) {
+                continue;
+            }
+            let side_s = world.topo.area[s].sqrt();
+            let mut best = f64::INFINITY;
+            for &nb in world.topo.neighbors(s) {
+                let nb = nb as usize;
+                if ocean(world, nb) {
+                    let cc = angle_between(world.topo.dir[s], world.topo.dir[nb]) * r_km;
+                    let side_o = world.topo.area[nb].sqrt();
+                    best = best.min(cc * side_s / (side_s + side_o));
+                }
+            }
+            if best.is_finite() {
+                world.dist_ocean_km[s] = best;
+                heap.push(MinItem {
+                    v: best,
+                    id: s as u32,
+                });
+            }
         }
     }
     while let Some(MinItem { v: d, id }) = heap.pop() {

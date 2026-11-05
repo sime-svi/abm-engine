@@ -158,3 +158,14 @@ Una revisión externa propuso tres ajustes antes de seguir. Se aplicaron los tre
 - **Nuevos:** un **tope** de subdivisiones por revisión (el 2 % de las celdas, las más urgentes primero) y la **caché** de la génesis.
 
 Lo que **queda para los siguientes incrementos**: los lagos de verdad (que se llenan, se vacían y se desbordan), el agua repartida entre varias celdas de bajada, la fertilidad que cambia con el tiempo y el registro de eventos (incremento 4); y que la malla se afine también donde haya agentes, cuando existan.
+
+## Nota de lluvia orográfica (05-11-2026)
+
+El responsable pidió corregir un efecto que salió en el incremento 3: con la malla fina **llovía más** que con la gruesa (+4 %). Era peligroso para lo que viene. Donde haya agentes, la malla se afinará; si eso trae más lluvia, habrá más comida y más agentes, y la malla se afinará aún más. Es un bucle artificial. La nota está en `nota_terreno_lluvia_orografica.md` y su §8 cuenta lo hecho.
+
+- **Lo que pedía la nota.** La lluvia de montaña (la que aumenta al subir el aire por una ladera, el **efecto orográfico**) ya no mira la pendiente de cada celda. Mira el relieve **suavizado a 25 km**, la escala a la que el viento arrastra las nubes antes de que llueva. Ese relieve sale siempre del mismo nivel de malla, así que da igual que la zona esté fina o gruesa. Hecho y comprobado con un test.
+- **La sorpresa.** La culpa del +4 % no era de la orografía (me equivoqué en el diagnóstico del incremento 3). Era de la **distancia al mar**, que decide cuánta humedad llega tierra adentro. Se medía hasta el centro de la celda de mar más cercana, así que siempre sobraba media celda de mar. Al afinar, esa media celda encoge y la costa parece "acercarse". Ahora se mide **hasta la línea de costa**. A la resolución real, el +3,9 % baja a +0,03 %.
+- **Otra sorpresa.** Con el valor actual del parámetro (`k_oro = 0,5`), la lluvia de montaña apenas se notaba: en el 98 % de la tierra cambia la lluvia menos de un 1 %. **Las sombras de lluvia (el lado seco de las montañas) no existían.** Para que existan, el parámetro tendría que valer unos 40. Lo decide el responsable.
+- **Y una tercera.** Sin el exceso de lluvia que lo tapaba, se ve que la erosión depende algo de la resolución (1–3 % en la prueba). Queda vigilada.
+- **Nada se rompe.** Con las dos correcciones apagadas, el programa da exactamente la misma salida que antes. Con ellas encendidas, el planeta cambia poco: llueve un 0,4 % más en total (algo más en las costas), hay un 1,6 % menos de desierto y un 4 % más de selva.
+

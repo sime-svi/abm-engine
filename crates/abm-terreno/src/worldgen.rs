@@ -65,6 +65,8 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
     let mut k_perm = Vec::with_capacity(num);
     let mut fert = Vec::with_capacity(num);
     let mut resource = Vec::with_capacity(num);
+    let mut oro0_e = Vec::with_capacity(num);
+    let mut oro0_n = Vec::with_capacity(num);
     for s in 0..num {
         let (c, lv, i, j) = crate::geometry::split_key(topo.keys[s]);
         let g = statgen.geom(c, lv, i, j);
@@ -84,6 +86,9 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
         k_perm.push(st.k_perm);
         fert.push(st.fert);
         resource.push(st.resource);
+        let (oe, on) = statgen.oro_gradient0(&g, lv);
+        oro0_e.push(oe);
+        oro0_n.push(on);
     }
     lod::build_neighbors(&mut topo);
 
@@ -94,6 +99,10 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
         grad0_e: grad_e.clone(),
         grad0_n: grad_n.clone(),
         w_cap0: w_cap.clone(),
+        oro_e: oro0_e.clone(),
+        oro_n: oro0_n.clone(),
+        oro0_e,
+        oro0_n,
         k_perm,
         fert,
         resource,

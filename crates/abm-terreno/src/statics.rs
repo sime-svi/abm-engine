@@ -83,6 +83,29 @@ pub struct StaticGen {
     w_cap_min: f64,
     w_cap_max: f64,
     resource_density: f64,
+    /// Relieve de referencia de la lluvia orográfica: nivel `L_oro` (el de lado más cercano a
+    /// `d_oro`) y paso angular `d_oro / R` de sus diferencias centrales. Paso 0 = desactivado.
+    oro_level: u32,
+    oro_delta: f64,
+}
+
+/// Punto a un ángulo `delta` de `dir` en la dirección tangente `u` (`sign` = ±1): los extremos de
+/// las diferencias centrales del relieve de referencia orográfico.
+pub fn oro_offset(dir: V3, u: V3, sign: f64, delta: f64) -> V3 {
+    let (cd, sd) = (delta.cos(), delta.sin());
+    [
+        cd * dir[0] + sign * sd * u[0],
+        cd * dir[1] + sign * sd * u[1],
+        cd * dir[2] + sign * sd * u[2],
+    ]
+}
+
+/// Nivel del árbol cuyo lado de celda (en el centro de una cara) es el más cercano a `d_km`.
+pub fn level_closest_to(n0: u32, r_km: f64, d_km: f64) -> u32 {
+    let side = |l: u32| std::f64::consts::FRAC_PI_2 * r_km / face_n(n0, l) as f64;
+    (0..=20u32)
+        .min_by(|&a, &b| (side(a) - d_km).abs().total_cmp(&(side(b) - d_km).abs()))
+        .unwrap_or(0)
 }
 
 impl StaticGen {
@@ -112,6 +135,8 @@ impl StaticGen {
             w_cap_min: cfg.soil.w_cap_min,
             w_cap_max: cfg.soil.w_cap_max,
             resource_density: wg.resource_density,
+            oro_level: level_closest_to(cfg.planet.n0, cfg.planet.r_km, cfg.climate.d_oro_km),
+            oro_delta: cfg.climate.d_oro_km / cfg.planet.r_km,
         };
         let n = face_n(g.n0, g.l_min);
         let (mut mn, mut mx) = (f64::INFINITY, f64::NEG_INFINITY);
@@ -255,6 +280,49 @@ impl StaticGen {
             fert,
             resource,
         }
+    }
+
+    /// Paso angular (rad) del relieve de referencia orográfico (0 = desactivado).
+    pub fn oro_delta(&self) -> f64 {
+        self.oro_delta
+    }
+
+    /// Nivel de referencia `L_oro` del relieve orográfico (el de lado más cercano a `d_oro`).
+    pub fn oro_level(&self) -> u32 {
+        self.oro_level
+    }
+
+    /// `true` si la lluvia de una celda de este nivel usa el relieve de referencia: es tan fina
+    /// como `d_oro` o más. Las más gruesas usan su propia pendiente, que ya está suavizada a una
+    /// escala mayor (nota de lluvia orográfica §3).
+    pub fn uses_oro_reference(&self, level: u32) -> bool {
+        self.oro_delta > 0.0 && level >= self.oro_level
+    }
+
+    /// Parte pura del gradiente orográfico de una celda (nota de lluvia orográfica): diferencias
+    /// centrales de la elevación de nacimiento **al nivel de referencia `L_oro`**, con paso `d_oro`,
+    /// en su base este/norte. Es función pura de la posición: en un punto del planeta da lo mismo
+    /// que la zona esté en malla fina o gruesa. `(0, 0)` si la celda no usa la referencia.
+    pub fn oro_gradient0(&self, g: &CellGeom, level: u32) -> (f64, f64) {
+        if !self.uses_oro_reference(level) {
+            return (0.0, 0.0);
+        }
+        self.oro_gradient0_at(g.dir, g.east, g.north)
+    }
+
+    /// Lo mismo en un punto cualquiera (`dir`, con su base `east`/`north`), sin mirar el nivel.
+    pub fn oro_gradient0_at(&self, dir: V3, east: V3, north: V3) -> (f64, f64) {
+        if self.oro_delta <= 0.0 {
+            return (0.0, 0.0);
+        }
+        let at = |u: V3, s: f64| -> f64 {
+            self.h_at(oro_offset(dir, u, s, self.oro_delta), self.oro_level)
+        };
+        let denom = 2.0 * self.oro_delta * self.r_planet;
+        (
+            (at(east, 1.0) - at(east, -1.0)) / denom,
+            (at(north, 1.0) - at(north, -1.0)) / denom,
+        )
     }
 
     /// `true` si una elevación queda bajo el nivel del mar (clasificación base, §4).

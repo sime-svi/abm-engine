@@ -385,4 +385,6 @@ El responsable trajo una revisión del incremento con tres ajustes, dos protecci
 
 Arreglarlo exige calcular las parametrizaciones que dependen de la pendiente (orografía, escorrentía, textura, incisión) a una **escala de referencia** común. Eso cambiaría los resultados del incremento 2, así que queda como decisión pendiente del responsable.
 
+> **Corrección (2026-11-05).** La causa dada en este hallazgo **era errónea**. Medido después: con `k_oro = 0` (sin orografía) la diferencia de lluvia es idéntica. Con `k_oro = 0,5` el factor orográfico apenas se aparta de 1 (±1 %). La causa real era la **distancia de humedad**, medida desde el centro de la celda de mar: sobraba media celda de mar en cada distancia, y al afinar la costa "se acercaba". Detalle y corrección en `nota_terreno_lluvia_orografica.md` §8.
+
 **Resultados tras la revisión** (config por defecto, un año): 52 lagos tras la génesis (antes 30; ahora algunas hondonadas quedan como lagos poco hondos porque el borde no podía pagar el relleno). Tierra 39,3 % → 38,9 %. ~204 700 celdas al final del año. Balance de agua ≤ 2,6·10⁻¹². Con la erosión apagada, la salida sigue siendo **idéntica** a la del incremento 2 (7 300 valores, 0 diferencias). Tests: 12 unitarios + forrajeo 3 + terreno 14 + erosión 13.

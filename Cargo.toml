@@ -32,7 +32,7 @@ rand = "0.10"
 rand_chacha = "0.10"
 # Serialización de la config (TOML) y de la salida (JSON).
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["float_roundtrip"] } # lectura exacta de f64 (la caché de la génesis guarda su resumen en JSON)
 toml = "1.1"
 # Errores de librería.
 thiserror = "2"
