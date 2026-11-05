@@ -455,3 +455,80 @@ La prueba de coherencia entre modos debe incluir la sequía (§6), y las sumas d
 | A5 | Hambre sincronizada: ¿algo de heterogeneidad en el acceso al forraje, o esperar al movimiento? | Sin cambios (no está en la nota) | §8.8.5 |
 | A6 | `e0` humana de 21–25 años en equilibrio | Sin cambios (P4) | §8.8.6 |
 | A7 | La opción `"proporcional"` (D16) se retira, sustituida por Holling | Sustituida | §8.1 |
+
+---
+
+## 9. Decisiones del responsable y cambios (2026-11-05)
+
+Criterio del responsable: **lo que más se parezca al comportamiento real** (CLAUDE §2.8, realismo primero). Lo que no puede hacerse bien todavía queda apuntado como **pendiente obligatorio**.
+
+### 9.1 Decisiones
+
+| # | Decisión | Qué se ha hecho |
+|---|---|---|
+| A1 | `N_max` debe contar la población real, no a todos como adultos | `N_max` usa el **gasto medio de la población estable** (§9.2). Como consecuencia, `f_com` del herbívoro se recalibra de 0,004 a **0,00324**: el diseño lo calibraba "para que la densidad de equilibrio reproduzca la ley de Damuth", y con la población real eso pedía bajarlo |
+| A2 | Lo que más simule el comportamiento real | **Pendiente obligatorio** (§9.4): costes reproductivos de los machos, estacionalidad del celo y dimorfismo por especie |
+| A3 | Se arreglará con A5-c | **Pendiente obligatorio**, junto con A5-c |
+| A4 | La que cumpla todo lo más cerca de la realidad | `μ_est` = **40** años y `p_conc` = **0,005**/día (fecundabilidad de 0,13 por ciclo, dentro de lo observado en cazadoras-recolectoras): cumple los tres objetivos (§9.3) |
+| A5 | (a) ahora y (c) apuntada | Se acepta el hambre sincronizada por ahora. **Pendiente obligatorio:** competencia con jerarquía (§9.4) |
+| A6 | La (c), aunque sea más adelante | **Pendiente obligatorio:** otras causas de muerte (§9.4) |
+| A7 | Como vea Claude | La variante "proporcional" queda retirada. Era la propuesta D16 del incremento 1 (comer en proporción al forraje que queda), y la respuesta funcional de Holling, más realista, la sustituye. Se puede reproducir con el commit ece0868 |
+
+**Interruptores retirados** (CLAUDE §5): los seis cambios quedan siempre encendidos y las métricas de demografía se escriben siempre. La salida por defecto quedó idéntica byte a byte a la de antes de retirarlos.
+
+### 9.2 `N_max` con la población real (A1)
+
+`N_max = f_com·PPN·A·ρ_veg·ε / (dias·G_medio)`, donde `G_medio` es el gasto medio por individuo de la población estable:
+- edades repartidas según la supervivencia de Siler `l(a)` (la misma de la génesis, D7) y sexos según `ρ_sexo`;
+- por edad y sexo: mantenimiento y actividad, más crecimiento, con la curva de su sexo;
+- en las crías, además, la pérdida al fabricar su leche: `φ·G·(1/ε_leche − 1)`;
+- en las hembras fértiles, la gestación en la fracción del ciclo que pasan gestantes.
+
+Sustituye a D6, que usaba el gasto del adulto.
+
+| | Gasto del adulto | Gasto medio | `N_max` a PPN 700 | `N/N_max` en equilibrio | Densidad en equilibrio a PPN 700 |
+|---|---|---|---|---|---|
+| Herbívoro de 70 kg | 4 235 kcal/día | 4 036 (0,953) | 3,39/km² | **1,17** (la nota pedía 0,7–1,2) | **4,04/km²** (Damuth: 3,97) |
+| Humano | 2 716 | 2 365 (0,871) | 0,334/km² | **0,96** | **0,309/km²** (el diseño: ~0,3) |
+
+Que el herbívoro siga algo por encima de 1 es esperable: `l(a)` no incluye el hambre, y en equilibrio la población es algo más joven y pequeña de lo que supone.
+
+### 9.3 Fecundidad humana (A4)
+
+Años 40–100 de la config por defecto:
+
+| | Objetivo de la nota | Resultado |
+|---|---|---|
+| Hijos por mujer | ≈ 6 (aceptable 5–7) | 6,83 |
+| Edad media del último parto | 37–40 | 38,2 años |
+| Fecundidad 20–24 / 25–29 / 30–34 / 35–39 / 40–44 / 45–49 | 1,00 / 0,94 / 0,86 / 0,70 / 0,36 / 0,05 | 1,00 / 0,87 / 0,94 / 0,68 / 0,30 / 0,03 |
+
+Para bajar de ~6,8 a ~6 hijos sin estropear la forma faltan dos efectos reales que la nota dejó como preguntas abiertas (§9.4):
+- la fecundabilidad que baja con la edad (Q1);
+- los abortos espontáneos (Q3).
+
+**Hambruna humana** (rebrote al 30 % durante un año):
+- la mortalidad adulta de las mujeres es 0,07 al año, frente a 0,54 la de los hombres;
+- la población no colapsa (pierde un 35 %) y se recupera despacio: crece un ~0,6 % al año, como los cazadores-recolectores reales, y tarda ~50 años.
+
+**Esperanza de vida en equilibrio:** ~20 años. Con 6,8 hijos por mujer y la población en el límite de la comida, solo un tercio de las niñas puede llegar a ser madre (A6).
+
+### 9.4 Pendientes obligatorios de realismo
+
+Para no olvidarlos: también en TREE.md.
+
+1. **Competencia con jerarquía (A5-c, también arregla A3).**
+   - Hoy todos los de una celda consiguen la misma parte de su ración, porque solo depende del forraje. Por eso el hambre llega a la vez a todos.
+   - En la realidad los dominantes comen primero, y los jóvenes y los viejos compiten peor: en las hambrunas mueren primero, y los demás sobreviven.
+   - Necesita una nota de diseño: rango por tamaño y condición, y pérdida de eficiencia con la vejez.
+2. **Costes reproductivos de los machos y estacionalidad (A2).**
+   - En ungulados reales, en las hambrunas mueren más los machos: llegan al invierno agotados por el celo, y son más grandes.
+   - Hace falta el celo ligado a la estación (pregunta P3 del diseño), su coste en los machos y el dimorfismo por especie (Q2). Subir `r_abort` o `r_aband` no lo arregla (medido).
+3. **Otras causas de muerte (A6-c):** enfermedad, accidentes, violencia. Con ellas, recalibrar Siler separando la parte que no es hambre (P4 del diseño).
+4. **Fecundabilidad por edad y abortos espontáneos (Q1, Q3).**
+5. **Individuos persistentes (P6 del diseño).** La visión del responsable es poder seguir a un humano desde que nace hasta que muere y subir hasta ver toda su población. Eso exige que un individuo que se sigue no se disuelva en "población" cuando su zona sale del Foco. Pasa a ser un requisito del incremento 2.
+
+### 9.5 Medidas tras las decisiones
+
+- **Tests de biología** (8 unitarios y 15 de simulación), en verde. Nuevo: `en_equilibrio_la_densidad_sigue_la_ley_de_damuth`.
+- **Coste:** 30 años de la config por defecto, ~15 s.

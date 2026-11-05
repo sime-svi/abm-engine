@@ -342,17 +342,14 @@ fn independencia_del_camino_con_dinamica() {
     // Las celdas de esta prueba son enormes (834 km la gruesa, 417 km la fina): lo que difiere es
     // la física a una u otra escala, no las operaciones de la malla (exactas, ver
     // `lod_ida_y_vuelta_conserva_erosion_y_suelo`). Medido (2026-11-05), (b)/(c) · (a)/(b) · (a)/(c),
-    // con la config por defecto (nota de sombra pluviométrica §6.5):
-    // - lluvia sobre la tierra de la zona: 2,3 % · 4,5 % · 6,7 %. Sin la nota de sombra: 1,4 % ·
-    //   2,3 % · 3,6 %; con k_oro = 40: 1,0 % · 2,0 % · 3,0 %; con la distancia de humedad medida
-    //   desde el centro de la celda de mar, como hasta el incremento 3: 6,2 % · 10,5 % · 16 %. Lo sube
-    //   k_oro: estas celdas son más gruesas que d_oro y usan su propia pendiente, que cambia con la
-    //   resolución (nota de lluvia orográfica §3). A la escala que usará el Foco (de 52 a 26 km) la
-    //   lluvia de la zona cambia un 0,00 %;
-    // - erosionado: 0,17 % · 2,0 % · 2,1 % (sin la nota de sombra: 1,1 % · 1,9 % · 3,0 %; con
-    //   k_oro = 40: 0,7 % · 3,2 % · 3,9 %, lo subía el agotamiento de humedad). La nota de lluvia
-    //   orográfica pide vigilarlo;
-    // - material Σe·a: 0,01 % · 0,13 %; agua: 0,18 % · 3,0 %; suelo: 2,6 % · 2,7 %.
+    // con la config por defecto (nota de sombra pluviométrica §7.4):
+    // - lluvia sobre la tierra de la zona: 0,6 % · 1,5 % · 2,1 % (sin la nota de sombra: 1,4 % ·
+    //   2,3 % · 3,6 %; con la distancia de humedad medida desde el centro de la celda de mar, como
+    //   hasta el incremento 3: 6,2 % · 10,5 % · 16 %);
+    // - erosionado: 0,5 % · 3,9 % · 4,4 % (sin la nota de sombra: 1,1 % · 1,9 % · 3,0 %). Lo sube el
+    //   agotamiento de humedad: concentra la lluvia en costas y barloventos y, con celdas de
+    //   834/417 km, cambia qué ríos la recogen. La nota de lluvia orográfica pide vigilarlo;
+    // - material Σe·a: 0,03 % · 0,23 %; agua: 0,1 % · 2,1 %; suelo: 2,6 % · 2,4 %.
     // Las tolerancias dejan margen sobre esas cifras.
     let mut cfg = cfg_geo();
     cfg.lod.l_max = cfg.lod.l_min; // génesis en malla uniforme...
@@ -429,7 +426,7 @@ fn independencia_del_camino_con_dinamica() {
     assert!(ab.0 < 0.04, "agua: {:.2e}", ab.0);
     assert!(ab.1 < 3e-3, "material: {:.2e}", ab.1);
     assert!(ab.2 < 0.05, "suelo: {:.2e}", ab.2);
-    assert!(ab.3 < 0.04, "erosionado: {:.2e}", ab.3);
+    assert!(ab.3 < 0.05, "erosionado: {:.2e}", ab.3);
     assert!(ab.4 < 0.06, "lluvia: {:.2e}", ab.4);
     let ac = informe("(a) vs (c)", a, c);
     assert!(ac.4 < 0.08, "lluvia, fina frente a gruesa: {:.2e}", ac.4);

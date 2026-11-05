@@ -10,6 +10,11 @@
 //! Λ = Σ_j max(0, Δh_oro,j) · e^(−s_j / L_recarga)          w = e^(−Λ / H_v)
 //! ```
 //!
+//! Por decisión del responsable (S3, lo más realista), `Λ` no suma cada subida del camino: es la
+//! **altura de saturación** del aire, que solo sube cuando el terreno supera lo que el aire ya subió y
+//! se recarga sobre tierra con `L_recarga` (ver [`lambda_camino`]). Para una cordillera que se alza
+//! sobre un llano da lo mismo; sobre terreno ondulado, las lomas pequeñas ya no secan el aire.
+//!
 //! Cómo se calcula:
 //! - **Anillos.** El viento del modelo es zonal: sopla solo hacia el este o el oeste, según la
 //!   franja de latitud. Por eso el camino hacia atrás de un punto es su propio paralelo. `Λ` se
@@ -20,7 +25,6 @@
 //!   al nivel `L_oro` más la erosión vista a ese nivel. No depende de la malla.
 //! - **Mar.** Un punto cuyo relieve de referencia queda bajo el nivel del mar. Ahí el aire se
 //!   recarga y la suma se corta; el tramo de la costa cuenta la subida desde el nivel del mar.
-//! - **Distancia de cada tramo**, `s_j`: la de su punto medio, `(j + ½)·paso`.
 //! - **Celdas.** La de nivel `L_oro` o más fina toma `w` interpolado en su centro. La más gruesa,
 //!   la media de sus descendientes de nivel `L_oro` (como mucho 8×8 muestras). Así, juntar o
 //!   separar celdas por encima de `L_oro` no cambia la media. En cada punto, `w` se interpola solo
@@ -42,37 +46,52 @@ use crate::world::World;
 /// Máximo de muestras por lado al promediar `w` sobre una celda gruesa (8×8 = 64).
 const MUESTRAS_LADO_MAX: u32 = 3; // 2^3 = 8
 
-/// `Λ` (m) de un punto a partir de su camino del viento hacia atrás.
+/// `Λ` (m) de un punto: cuánto ha subido el aire que le llega, medido como su **altura de
+/// saturación** sobre el nivel del mar (nota de sombra pluviométrica §7, decisión S3).
 ///
 /// `camino` da `(h, es_mar)`: el primer elemento es el propio punto y cada uno de los siguientes
-/// está un paso (`ds_km`) más contra el viento. Se suman como mucho `max_tramos` tramos y la suma
-/// se corta en el primer punto de mar, contando la subida desde el nivel del mar.
+/// está un paso (`ds_km`) más contra el viento. Se recorre a favor del viento desde el extremo (el
+/// primer punto de mar, o `max_tramos` pasos atrás) hasta el punto:
+/// - sobre el mar el aire está fresco: su altura de saturación `z` es el nivel del mar;
+/// - si el terreno sube por encima de `z`, el aire suelta vapor y `z` sube con él;
+/// - si baja o sigue llano, el aire conserva su `z` (bajar lo calienta, pero no le devuelve el
+///   agua) y se recarga sobre tierra: `z` se acerca al suelo como `e^(−paso/L_recarga)`.
+///
+/// Así, una loma que no sube por encima de lo que el aire ya subió no lo vuelve a secar, y sobre una
+/// meseta alta el aire lleva menos vapor. Si el camino se corta por `max_tramos` sin llegar al mar,
+/// el aire de su extremo empieza fresco a la altura de su suelo. `buf` se reutiliza entre llamadas.
 pub fn lambda_camino<I: Iterator<Item = (f64, bool)>>(
-    mut camino: I,
+    camino: I,
     ds_km: f64,
     l_recarga_km: f64,
     nivel_mar: f64,
     max_tramos: usize,
+    buf: &mut Vec<(f64, bool)>,
 ) -> f64 {
-    let Some((mut h_cur, mar)) = camino.next() else {
+    buf.clear();
+    for (h, mar) in camino.take(max_tramos + 1) {
+        buf.push((h, mar));
+        if mar {
+            break;
+        }
+    }
+    let Some(&(_, mar_punto)) = buf.first() else {
         return 0.0;
     };
-    if mar {
+    if mar_punto {
         return 0.0;
     }
     let decae = (-ds_km / l_recarga_km).exp();
-    let mut peso = (-0.5 * ds_km / l_recarga_km).exp();
-    let mut lam = 0.0;
-    for (h_up, mar_up) in camino.take(max_tramos) {
-        if mar_up {
-            lam += (h_cur - nivel_mar).max(0.0) * peso;
-            break;
-        }
-        lam += (h_cur - h_up).max(0.0) * peso;
-        peso *= decae;
-        h_cur = h_up;
+    // Extremo del camino: el mar (aire fresco al nivel del mar) o el corte por longitud.
+    let (mut z, desde) = match buf.last() {
+        Some(&(_, true)) => (nivel_mar, buf.len() - 1),
+        Some(&(h, false)) => (h.max(nivel_mar), buf.len() - 1),
+        None => return 0.0,
+    };
+    for &(h, _) in buf[..desde].iter().rev() {
+        z = h + (z - h).max(0.0) * decae;
     }
-    lam
+    (z - nivel_mar).max(0.0)
 }
 
 /// Fracción de humedad que le queda al aire tras `Λ` metros de subida: `w = e^(−Λ/H_v)`.
@@ -172,6 +191,7 @@ impl Anillos {
             *m = h < sea;
         }
         let c = &cfg.climate;
+        let mut buf = Vec::new();
         for k in 0..self.lat.len() {
             let (a, b) = (self.off[k], self.off[k + 1]);
             let n = b - a;
@@ -186,7 +206,7 @@ impl Anillos {
                     let q = (i + j * atras) % n;
                     (h[q], mar[q])
                 });
-                let lam = lambda_camino(camino, ds, c.l_recarga_km, sea, tramos);
+                let lam = lambda_camino(camino, ds, c.l_recarga_km, sea, tramos, &mut buf);
                 self.w[a + i] = if mar[i] { 1.0 } else { w_de_lambda(lam, c) };
             }
         }
@@ -355,28 +375,37 @@ mod tests {
     }
 
     #[test]
-    fn la_suma_se_corta_en_el_mar_y_cuenta_la_costa() {
-        // Llano a 300 m tras la costa: Λ = la subida de la costa, pesada por su distancia.
-        let camino = [
+    fn el_aire_se_seca_al_subir_y_se_recarga_sobre_tierra() {
+        let mut buf = Vec::new();
+        let mut lam = |camino: &[(f64, bool)], ds: f64, l: f64, tramos: usize| {
+            lambda_camino(camino.iter().copied(), ds, l, 0.0, tramos, &mut buf)
+        };
+        // Llano a 300 m tras la costa: el aire subió 300 m y, sobre el llano, ya no baja de ahí.
+        let llano = [
             (300.0, false),
             (300.0, false),
             (300.0, false),
             (-50.0, true),
         ];
-        let lam = lambda_camino(camino.into_iter(), 10.0, 1000.0, 0.0, 10);
-        let esperado = 300.0 * (-2.5 * 10.0 / 1000.0f64).exp();
-        assert!((lam - esperado).abs() < 1e-9, "{lam} vs {esperado}");
-        // Las bajadas no restan y el tope de tramos corta el camino.
-        let camino = [(0.0, false), (500.0, false), (0.0, false), (0.0, true)];
-        let lam = lambda_camino(camino.into_iter(), 10.0, 1e12, 0.0, 10);
-        assert!((lam - 500.0).abs() < 1e-6, "{lam}");
-        let lam = lambda_camino(camino.into_iter(), 10.0, 1e12, 0.0, 1);
-        assert_eq!(lam, 0.0);
+        assert!((lam(&llano, 10.0, 1000.0, 10) - 300.0).abs() < 1e-9);
+        // Una loma de 500 m: el aire sigue con la altura que alcanzó y se recarga despacio.
+        let loma = [(0.0, false), (500.0, false), (0.0, false), (0.0, true)];
+        let esperado = 500.0 * (-10.0 / 1000.0f64).exp();
+        assert!((lam(&loma, 10.0, 1000.0, 10) - esperado).abs() < 1e-9);
+        // Lomas repetidas a la misma altura no vuelven a secar el aire (antes sumaban 600 m).
+        let lomas = [
+            (0.0, false),
+            (300.0, false),
+            (0.0, false),
+            (300.0, false),
+            (0.0, false),
+            (0.0, true),
+        ];
+        assert!((lam(&lomas, 10.0, 1e12, 10) - 300.0).abs() < 1e-6);
+        // Si el camino se corta antes del mar, el aire empieza fresco a la altura de su suelo.
+        assert!((lam(&loma, 10.0, 1e12, 1) - 500.0).abs() < 1e-6);
         // En el mar no hay agotamiento.
-        assert_eq!(
-            lambda_camino([(-10.0, true)].into_iter(), 10.0, 1e3, 0.0, 5),
-            0.0
-        );
+        assert_eq!(lam(&[(-10.0, true)], 10.0, 1e3, 5), 0.0);
     }
 
     #[test]
@@ -387,13 +416,15 @@ mod tests {
         let ds = c.d_oro_km;
         let p = perfil(ds);
         let tramos = (c.l_traj_km / ds).floor() as usize;
+        let mut buf = Vec::new();
         let lluvia: Vec<f64> = (0..p.len())
             .map(|i| {
                 if p[i].2 {
                     return f64::NAN;
                 }
                 let camino = (0..=tramos.min(i)).map(|j| (p[i - j].1, p[i - j].2));
-                let w = w_de_lambda(lambda_camino(camino, ds, c.l_recarga_km, 0.0, tramos), &c);
+                let lam = lambda_camino(camino, ds, c.l_recarga_km, 0.0, tramos, &mut buf);
+                let w = w_de_lambda(lam, &c);
                 // Pendiente con diferencias centrales a ±d_oro, y el mar plano.
                 let (hm, hp) = (p[i - 1].1.max(0.0), p[(i + 1).min(p.len() - 1)].1.max(0.0));
                 let grad = (hp - hm) / (2.0 * ds * 1000.0);
@@ -418,14 +449,15 @@ mod tests {
         println!(
             "barlovento (pie → cresta) {barlovento:.2?} · sotavento a 200–500 km {sotavento:.2?} · contraste {contraste:.1}"
         );
-        // Medido con la config por defecto (nota de sombra §6.3): pie de barlovento 3,04 (el factor
-        // orográfico llega a su tope, 3); al subir la ladera llueve menos (2,11 · 1,47 · cresta
-        // 0,45), porque el aire ya se secó al subir; sotavento a 200–500 km 0,42–0,54 (la nota
-        // esperaba 0,2–0,4); contraste 7,2 (la nota: 5–20). Con k_oro = 40, pie 1,77 y contraste 4,2.
-        assert!((2.0..=3.2).contains(&barlovento[0]) && (1.6..=3.2).contains(&barlovento[1]));
+        // Medido con la config por defecto (nota de sombra §7.3), con valores físicos (k_oro = 40,
+        // H_v = 2 500 m, L_recarga = 3 000 km): pie de barlovento 1,75 (la nota esperaba ~2–3: la
+        // propia ladera ya seca el aire y el paso de 25 km suaviza el pie); al subir la ladera
+        // llueve menos (1,72 · 1,18 · cresta 0,35); sotavento a 200–500 km 0,35–0,38 (la nota:
+        // 0,2–0,4); contraste 5,1 (la nota: 5–20).
+        assert!((1.6..=3.2).contains(&barlovento[0]) && (1.6..=3.2).contains(&barlovento[1]));
         assert!(barlovento.windows(2).all(|v| v[1] <= v[0] + 1e-12));
-        // Sotavento: menos lluvia que la llanura de barlovento, y algo más al alejarse (recarga).
-        assert!(sotavento.iter().all(|&x| (0.3..0.7).contains(&x)));
+        // Sotavento: entre el 20 y el 40 % de la llanura de barlovento, y algo más al alejarse.
+        assert!(sotavento.iter().all(|&x| (0.2..0.45).contains(&x)));
         assert!(sotavento.windows(2).all(|v| v[1] >= v[0]));
         assert!((5.0..=20.0).contains(&contraste), "contraste {contraste}");
     }

@@ -256,6 +256,32 @@ fn con_respuesta_funcional_la_poblacion_se_regula() {
 }
 
 #[test]
+fn en_equilibrio_la_densidad_sigue_la_ley_de_damuth() {
+    // Diseño §5.1 y decisión A1: f_com está calibrado para que la densidad de equilibrio del
+    // herbívoro de 70 kg con PPN 700 sea la de la ley de Damuth, 96·M^(−¾) = 3,97/km².
+    let mut c = cfg_base();
+    c.especies.truncate(1);
+    c.habitat.zonas[0].celdas = 2;
+    c.habitat.zonas[0].area_km2 = 100.0;
+    c.habitat.zonas[0].p_media_mm = 401.0; // PPN 700 (Miami) con 10 °C
+    c.run.total_ticks = 365 * 40;
+    c.run.metrics_every = 365;
+    let doc = run_biologia(&c).unwrap();
+    let tramo = &doc.anios[20..];
+    let densidad = tramo
+        .iter()
+        .map(|a| a.especies[0].densidad_km2)
+        .sum::<f64>()
+        / tramo.len() as f64;
+    let damuth = 96.0 * 70f64.powf(-0.75);
+    println!("densidad de equilibrio {densidad:.2}/km², Damuth {damuth:.2}/km²");
+    assert!(
+        (densidad / damuth - 1.0).abs() < 0.1,
+        "{densidad} frente a {damuth}"
+    );
+}
+
+#[test]
 fn con_forraje_de_rebrote_lento_hay_sobrepasamiento_y_colapso() {
     // Revisión 1 §2, prueba cualitativa: con un forraje que rebrota muy despacio (τ_c = 20 años,
     // tipo liquen), la respuesta funcional no impide el sobrepasamiento y el colapso (los renos de
@@ -377,7 +403,8 @@ fn en_la_sequia_las_hembras_no_colapsan() {
 fn en_la_hambruna_las_mujeres_resisten_mejor() {
     // Revisión 1 §3: en humanos, la mortalidad adulta de las mujeres en una hambruna es menor o
     // igual que la de los hombres (Zarulli et al., 2018), mueren más los niños que los adultos y la
-    // población se recupera. Sequía fuerte (rebrote al 30 % durante un año), solo humanos.
+    // población no colapsa y vuelve a crecer. Sequía fuerte (rebrote al 30 % durante un año), solo
+    // humanos.
     let mut c = cfg_base();
     c.especies.remove(0);
     c.habitat.zonas[0].celdas = 16;
@@ -408,9 +435,20 @@ fn en_la_hambruna_las_mujeres_resisten_mejor() {
         mh[0] > mh[2] && mm[0] > mm[2],
         "niños frente a adultos: {mh:?} {mm:?}"
     );
-    let antes = doc.anios[9].especies[0].poblacion_media;
-    let despues = doc.anios[29].especies[0].poblacion_media;
-    assert!(despues > 0.8 * antes, "{antes} → {despues}");
+    // No colapsa y vuelve a crecer, despacio: tras perder un 35 %, crece un ~0,6 % al año, como los
+    // cazadores-recolectores reales (tarda ~50 años en recuperarse; nota de revisión §9).
+    let pob: Vec<f64> = doc
+        .anios
+        .iter()
+        .map(|a| a.especies[0].poblacion_media)
+        .collect();
+    let fondo = pob[11..].iter().copied().fold(f64::INFINITY, f64::min);
+    assert!(fondo > 0.5 * pob[9], "colapsa: {} → {fondo}", pob[9]);
+    assert!(
+        pob[29] > 1.03 * fondo,
+        "no se recupera: {fondo} → {}",
+        pob[29]
+    );
 }
 
 #[test]

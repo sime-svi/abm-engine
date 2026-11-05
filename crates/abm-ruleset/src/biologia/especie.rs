@@ -59,6 +59,10 @@ pub struct Especie {
     /// Edad a la que la mortalidad senescente iguala a la de fondo (días): separa "adultos" de
     /// "viejos" en las métricas de mortalidad por edad.
     pub a_vejez: u32,
+    /// Gasto medio por individuo de la población estable (decisión A1, nota de revisión §9): la
+    /// parte metabólica (que en los ectotermos escala con la temperatura) y la del crecimiento,
+    /// en kcal/día. Ver [`Especie::gasto_medio`].
+    pub gasto_medio_partes: [f64; 2],
 }
 
 fn elegir(especie: Option<f64>, preset: Option<f64>, derivado: f64) -> f64 {
@@ -226,9 +230,60 @@ impl Especie {
             mu_est,
             sigma_est,
             a_vejez,
+            gasto_medio_partes: [0.0; 2],
         };
+        let mut esp = esp;
+        esp.gasto_medio_partes = esp.calcular_gasto_medio(en.c_crec, en.k_gest, en.eps_leche);
         esp.validar()?;
         Ok(esp)
+    }
+
+    /// Gasto medio por individuo de la población estable: edades repartidas como la supervivencia
+    /// de Siler `l(a)` (la misma de la génesis, D7) y sexos según `ρ_sexo`. Por edad y sexo:
+    /// - mantenimiento y actividad `B(m(a))·PAL` y crecimiento `c_crec·Δm(a)`, con la curva de su sexo;
+    /// - las crías, además, la pérdida al convertir en leche la parte de su gasto que les da la madre:
+    ///   `φ(a)·G·(1/ε_leche − 1)`;
+    /// - las hembras en edad fértil (de `a_rep` a `μ_est`), la gestación `k_gest·B(M_hembra)` en la
+    ///   fracción del ciclo que pasan gestantes, `d_gest / (d_gest + d_destete + 1/p_conc)`.
+    ///
+    /// Devuelve `[parte metabólica, parte de crecimiento]` (kcal/día).
+    fn calcular_gasto_medio(&self, c_crec: f64, k_gest: f64, eps_leche: f64) -> [f64; 2] {
+        let l = self.supervivencia();
+        let espera = if self.p_conc > 0.0 {
+            1.0 / self.p_conc
+        } else {
+            0.0
+        };
+        let f_gest = self.d_gest as f64 / (self.d_gest as f64 + self.d_destete as f64 + espera);
+        let gest = k_gest * self.basal(self.masa_sexo[0], 1.0) * f_gest;
+        let fin_fertil = (self.mu_est.round() as u32).clamp(self.a_rep, self.a_fin_rep);
+        let (mut metab, mut crec, mut peso) = (0.0, 0.0, 0.0);
+        for (a, &la) in l.iter().enumerate().take(self.a_max as usize) {
+            let a = a as u32;
+            let sobrecoste_leche = 1.0 + self.phi_leche(a) * (1.0 / eps_leche - 1.0);
+            for (s, w) in [(0, 1.0 - self.rho_sexo), (1, self.rho_sexo)] {
+                let m = self.masa_por_edad_s(s, a);
+                let mut g_metab = self.basal(m, 1.0) * self.pal * sobrecoste_leche;
+                let g_crec = c_crec * self.dm_west_s(s, m) * sobrecoste_leche;
+                if s == 0 && (self.a_rep..fin_fertil).contains(&a) {
+                    g_metab += gest;
+                }
+                metab += la * w * g_metab;
+                crec += la * w * g_crec;
+            }
+            peso += la;
+        }
+        [metab / peso, crec / peso]
+    }
+
+    /// Gasto medio por individuo de la población estable (kcal/día), con el factor de temperatura
+    /// de la celda (solo cuenta en los ectotermos).
+    pub fn gasto_medio(&self, f_ecto: f64) -> f64 {
+        let [metab, crec] = self.gasto_medio_partes;
+        match self.termico {
+            Termico::Endotermo => metab + crec,
+            Termico::Ectotermo => metab * f_ecto + crec,
+        }
     }
 
     fn validar(&self) -> Result<(), ConfigError> {
@@ -397,16 +452,12 @@ impl Especie {
         ((r - r_min) / (r_opt - r_min)).clamp(0.0, 1.0)
     }
 
-    /// Población máxima sostenible de una celda (§1): `f_com·PPN·A·ρ_veg·ε / (días·G_adulto)` (D6).
-    /// Con dimorfismo, `G_adulto` es la media de los dos sexos pesada por la proporción de sexos.
+    /// Población máxima sostenible de una celda (§1): `f_com·PPN·A·ρ_veg·ε / (días·G_medio)`, con
+    /// el gasto medio de la población estable, crías incluidas (decisión A1; sustituye a D6, que
+    /// contaba a todos como adultos).
     pub fn n_max(&self, area_m2: f64, ppn: f64, rho_veg: f64, f_ecto: f64) -> f64 {
-        let g = if self.dimorfico {
-            (1.0 - self.rho_sexo) * self.gasto_adulto_s(0, f_ecto)
-                + self.rho_sexo * self.gasto_adulto_s(1, f_ecto)
-        } else {
-            self.gasto_adulto(f_ecto)
-        };
-        self.f_com * ppn * area_m2 * rho_veg * self.eps / (self.dias_anio * g)
+        self.f_com * ppn * area_m2 * rho_veg * self.eps
+            / (self.dias_anio * self.gasto_medio(f_ecto))
     }
 
     /// Clases de edad de anchura `Δa` hasta `a_max` (pirámide y tablas de vida).
@@ -485,16 +536,32 @@ mod tests {
         assert!((ayuno_g - 22.0).abs() < 1.0, "ayuno genérico {ayuno_g}");
         let gest = en.k_gest * hum.basal(hum.masa, 1.0) * hum.d_gest as f64;
         assert!(cerca(gest, 81_500.0, 0.01), "coste de gestación {gest}");
-        // Densidad máxima con PPN 700: 3,9/km² (Damuth: 96·M^-¾) y 0,3/km² humanos.
+        // N_max con PPN 700 (decisión A1): con el gasto medio de la población estable, crías
+        // incluidas, que es menor que el del adulto. La densidad de equilibrio frente a la ley de
+        // Damuth se comprueba en la simulación (`en_equilibrio_la_densidad_sigue_la_ley_de_damuth`).
         let km2 = 1e6;
         let rho_veg = cfg.forraje.rho_veg;
-        let d_gen = g70.n_max(km2, 700.0, rho_veg, 1.0);
-        let damuth = 96.0 * 70f64.powf(-0.75);
-        assert!(
-            cerca(d_gen, 3.9, 0.03) && cerca(d_gen, damuth, 0.03),
-            "{d_gen} vs {damuth}"
-        );
-        assert!(cerca(hum.n_max(km2, 700.0, rho_veg, 1.0), 0.29, 0.05));
+        for e in [&g70, &hum] {
+            let g = e.gasto_medio(1.0);
+            assert!(
+                g < e.gasto_adulto(1.0),
+                "{}: las crías gastan menos",
+                e.nombre
+            );
+            let n = e.f_com * 700.0 * km2 * rho_veg * e.eps / (e.dias_anio * g);
+            assert!(cerca(e.n_max(km2, 700.0, rho_veg, 1.0), n, 1e-12));
+        }
+        assert!(cerca(
+            g70.gasto_medio(1.0) / g70.gasto_adulto(1.0),
+            0.953,
+            0.01
+        ));
+        assert!(cerca(
+            hum.gasto_medio(1.0) / hum.gasto_adulto(1.0),
+            0.871,
+            0.01
+        ));
+        assert!(cerca(hum.n_max(km2, 700.0, rho_veg, 1.0), 0.334, 0.02));
         // Modelo Miami (g/m²/año).
         for (t, p, ppn) in [
             (25.0, 2500.0, 2430.0),
@@ -599,9 +666,9 @@ mod tests {
             r.powf(0.25),
             0.01
         ));
-        // Equivalencia energética: densidad · gasto no depende de la masa.
-        let dg = g70.n_max(1e6, 700.0, 4.4, 1.0) * g70.gasto_adulto(1.0);
-        let dgr = grande.n_max(1e6, 700.0, 4.4, 1.0) * grande.gasto_adulto(1.0);
+        // Equivalencia energética: densidad · gasto medio de la población no depende de la masa.
+        let dg = g70.n_max(1e6, 700.0, 4.4, 1.0) * g70.gasto_medio(1.0);
+        let dgr = grande.n_max(1e6, 700.0, 4.4, 1.0) * grande.gasto_medio(1.0);
         assert!(cerca(dg, dgr, 1e-12));
         // Siler relativo: la supervivencia a la misma fracción de a_max coincide.
         let l1 = g70.supervivencia();
@@ -658,16 +725,17 @@ mod tests {
 
     #[test]
     fn la_edad_de_esterilidad_sigue_una_normal_truncada() {
-        // Revisión 1 §4: humano Normal(38, 4) años; genérico derivado de su vida reproductiva.
+        // Revisión 1 §4: humano Normal(40, 4) años (decisión A4); genérico derivado de su vida
+        // reproductiva. El recorte a [a_rep, a_fin_rep] baja algo la media del humano (~0,05 años).
         let (g70, hum) = especies();
-        for (e, mu, sigma) in [(&hum, 38.0, 4.0), (&g70, 17.95, 2.35)] {
+        for (e, mu, sigma) in [(&hum, 40.0, 4.0), (&g70, 17.95, 2.35)] {
             let n = 20_000;
             let xs: Vec<f64> = (0..n)
                 .map(|id| f64::from(e.a_est(42, id)) / e.dias_anio)
                 .collect();
             let media = xs.iter().sum::<f64>() / n as f64;
             let sd = (xs.iter().map(|x| (x - media).powi(2)).sum::<f64>() / n as f64).sqrt();
-            assert!((media - mu).abs() < 0.1, "{}: media {media}", e.nombre);
+            assert!((media - mu).abs() < 0.15, "{}: media {media}", e.nombre);
             assert!((sd / sigma - 1.0).abs() < 0.03, "{}: sd {sd}", e.nombre);
             let (lo, hi) = (e.a_rep, e.a_fin_rep);
             assert!((0..n).all(|id| (lo..=hi).contains(&e.a_est(42, id))));

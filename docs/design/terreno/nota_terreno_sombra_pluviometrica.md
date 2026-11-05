@@ -297,3 +297,95 @@ Frente al código de antes de la nota no puede salir idéntica: allí el fondo m
 | S3 | ¿Contar en `Λ` la subida del último tramo, que seca la propia ladera? | **Sí**, como la fórmula de la nota | §6.3, §6.6.2 |
 | S4 | `mar_plano`, que no está en la nota | **Encendido** (decisión técnica de Claude Code, reversible) | §6.6.5 |
 | S5 | `c_P`: referencia y alcance | **Sin orografía ni agotamiento y solo sobre la tierra** | §6.1 |
+
+---
+
+## 7. Decisiones del responsable y cambios (2026-11-05)
+
+### 7.1 Decisiones
+
+| # | Decisión del responsable | Qué se ha hecho |
+|---|---|---|
+| S1 | **Realismo primero:** no forzar `k_oro` para cumplir un objetivo; primero dudar del relieve (nuevo principio CLAUDE §2.8) | `k_oro` vuelve al valor físico de la nota, **40**. El relieve queda pendiente de hacerse realista: diagnóstico y propuesta en `propuesta_relieve_realista.md` |
+| S2 | Lo más realista | `L_recarga` = **3 000 km** (cumple el objetivo de sotavento del juguete; `H_v` sale de la física y no se toca) |
+| S3 | Lo más realista | `Λ` pasa a ser la **altura de saturación** del aire (§7.2) |
+| S4 | Mar plano, sí | Permanente |
+| S5 | Lo más realista | `c_P` se mantiene, pero como **apaño provisional** (CLAUDE §2.8). Lo realista es calibrar la lluvia de base con datos de la Tierra cuando el relieve sea realista (propuesta del relieve, §6) |
+
+**Interruptores retirados** (CLAUDE §5): `moisture_from_coast`, `agotamiento_humedad`, `conservar_lluvia` y `mar_plano` quedan siempre encendidos, y `d_oro_km` debe ser ≥ 10. La salida con la config por defecto quedó idéntica byte a byte a la de antes de retirarlos.
+
+### 7.2 La altura de saturación (S3)
+
+La fórmula de §3 sumaba cada subida del camino. Sobre terreno ondulado, eso seca el aire en cada loma, aunque en la realidad el aire solo vuelve a soltar agua si sube por encima de lo que ya subió. Al bajar, se calienta pero conserva su humedad, así que su nivel de condensación se queda donde estaba.
+
+Regla nueva, recorriendo el camino a favor del viento desde el mar (o desde `L_traj` atrás):
+
+```
+z = nivel del mar                                      (sobre el mar, el aire está fresco)
+z ← h + max(0, z − h) · e^(−paso / L_recarga)          (en cada paso sobre tierra)
+Λ = z − nivel del mar          w = e^(−Λ / H_v)
+```
+
+Lo que hace:
+- si el terreno sube por encima de `z`, el aire suelta vapor y `z` sube con él;
+- en llano o al bajar, `z` se conserva y se acerca al suelo con la recarga;
+- sobre una meseta alta el aire lleva menos vapor, como en la realidad: el vapor de agua se concentra en los 2–3 km más bajos de la atmósfera.
+
+Para una cordillera que se alza sobre un llano da casi lo mismo que antes; sobre terreno ondulado, las lomas pequeñas ya no secan el aire.
+
+Efecto en el planeta (con `k_oro` = 150 y `L_recarga` = 3 000, para aislarlo):
+
+| | Fórmula anterior | Altura de saturación |
+|---|---|---|
+| Lluvia en las laderas de barlovento de las cordilleras grandes | 408 mm | **548 mm** |
+| Sotavento | 135 mm | 191 mm |
+| Tierra con `w` < 0,5 | 19,9 % | 16,2 % |
+| Secado global (desvío antes de `c_P`) | −19,8 % | −16,0 % |
+
+### 7.3 Escenario de juguete con los valores definitivos
+
+Valores: `k_oro` = 40, `H_v` = 2 500 m, `L_recarga` = 3 000 km.
+
+| | Pie de barlovento → cresta | Sotavento a 200 / 300 / 400 / 500 km | Contraste |
+|---|---|---|---|
+| Objetivo de la nota | ~2–3 | 0,2–0,4 | 5–20 |
+| Resultado | 1,75 · 1,72 · 1,18 · 0,35 | 0,35 · 0,36 · 0,37 · 0,38 | 5,1 |
+
+Se cumplen el sotavento y el contraste. El barlovento se queda en ×1,75: la propia ladera ya seca el aire, y el paso de 25 km suaviza el pie. Con valores físicos y una cordillera realista no se fuerza más.
+
+### 7.4 El planeta con los valores definitivos (frente a la salida de bb6a8c0)
+
+| Medida | Referencia | Definitivo |
+|---|---|---|
+| Lluvia sobre tierra | — | +0,20 % |
+| Secado antes de `c_P` / `c_P` | — | −17,1 % / 1,207 |
+| Tierra con `w` < 0,5 | 0 % | 16,0 % |
+| Desierto | 5,60 % | 6,08 % |
+| Pradera | 3,35 % | 2,91 % |
+| Sabana | 5,10 % | 5,55 % |
+| Bosque templado | 6,83 % | 5,66 % |
+| Selva | 2,07 % | 2,73 % |
+| Lagos | 51 | 42 |
+| PPN media (Miami) | 727,9 g/m²/año | −3,3 % |
+| Sotavento de las cordilleras grandes (lat. medias): lluvia | 688 mm | 251 mm |
+| Sotavento: desierto | 7,6 % | 16,0 % |
+| Laderas de barlovento de las cordilleras grandes: `m_oro` medio | 1,00 | 1,34–1,37 |
+| Laderas de barlovento: lluvia | 563 mm | 318 mm |
+| Contraste barlovento / sotavento | 0,9 | 1,4 |
+
+- **Barlovento flojo, a propósito.** Con `k_oro` físico, las laderas de barlovento reciben poco extra (×1,37 de media, frente al objetivo de 2–3) y el contraste queda en 1,4. Es la consecuencia honesta de un relieve ~4 veces más suave que el real. Se corregirá con el relieve, no con `k_oro`.
+- **El sotavento sí se seca:** el desierto se duplica detrás de las cordilleras grandes.
+
+**Independencia de la malla:**
+- **Lluvia:**
+  - de 208 a 104 km, +0,70 %, con `w` invariante en el interior (−2,5·10⁻⁵);
+  - de 52 a 26 km, la escala del Foco, −0,13 %;
+  - en la prueba de independencia del camino (celdas de 834/417 km), 0,6 · 1,5 · 2,1 %, mejor que antes de la nota (1,4 · 2,3 · 3,6 %).
+- **Erosión** en esa prueba: 0,5 · 3,9 · 4,4 %. Sigue vigilada; la tolerancia de (a)/(b) pasa del 4 al 5 %.
+
+### 7.5 Pendiente (obligatorio, por realismo)
+
+1. **Relieve realista** (`propuesta_relieve_realista.md`), antes de que los agentes pasen al planeta.
+2. Con el relieve realista:
+   - comprobar que `k_oro` = 40 da 2–3 veces más lluvia en barlovento;
+   - **calibrar la lluvia de base con datos de la Tierra** (unos 1 000 mm/año en todo el planeta y unos 800 sobre tierra) y **retirar `c_P`**.

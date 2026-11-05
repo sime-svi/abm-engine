@@ -204,3 +204,13 @@ Cada cosa tiene su interruptor en `config/terreno.toml`. Con los cuatro apagados
   Con un "juguete" (una cordillera de 3 000 m dibujada a mano) sí sale un contraste de 7. Ajustar los dos parámetros del secado lo acercaría al objetivo. Lo decide el responsable, con los datos de la nota (§6.3).
 - **La lluvia no depende del zoom donde importa.** Al pasar de 52 a 26 km, que es lo que hará el Foco de los agentes, la lluvia de la zona cambia un 0,00 %. A escalas mucho más gruesas (cientos de km) la lluvia sí cambia algo más que antes con la resolución (hasta un 6,7 % en la prueba con celdas de 834 km), porque esas celdas usan su propia pendiente y ahora `k_oro` es grande.
 - **Decisiones pendientes del responsable** (nota §6.7): el valor de `k_oro` (150 calibrado, frente al 40 propuesto), los dos parámetros del secado, cómo contar la subida de la propia ladera, el mar plano y cómo se calcula `c_P`.
+
+### Decisiones del responsable: realismo primero (05-11-2026)
+
+El responsable fijó un principio nuevo para todo el proyecto (CLAUDE §2.8): **si algo no sale realista, primero se duda de la base, no se fuerza un número**.
+
+- **`k_oro` vuelve a 40,** su valor físico. Subirlo a 150 cumplía el objetivo de lluvia en las montañas, pero compensaba otro problema: **el relieve no es realista**. Dos tercios de los continentes son llanuras casi a nivel del mar (en la Tierra, una cuarta parte), y las montañas son manchas sueltas en vez de cordilleras. La propuesta para arreglarlo, con tectónica de placas, está en `propuesta_relieve_realista.md`, a falta de que el responsable la apruebe. Mientras, las montañas apenas aumentan la lluvia: es lo honesto con este relieve.
+- **El aire se seca de forma más realista.** Antes cada loma del camino le quitaba humedad. Ahora solo la pierde cuando sube por encima de lo que ya había subido: al bajar se calienta, pero conserva su humedad. Sobre las mesetas altas lleva menos vapor, como en la realidad.
+- **El aire tarda más en recuperar la humedad sobre tierra** (3 000 km en vez de 1 000): con eso, detrás de una cordillera de juguete llueve un 35–38 % de lo de delante, en el rango de lo real.
+- **El factor `c_P`,** que devuelve la lluvia que quita el secado, queda como **apaño provisional**. Lo realista será calibrar la lluvia con datos de la Tierra cuando el relieve sea realista.
+- **Resultado en el planeta:** detrás de las cordilleras grandes la lluvia baja de 688 a 251 mm y el desierto se duplica. La comida del planeta, medida con el modelo Miami, baja un 3,3 %.

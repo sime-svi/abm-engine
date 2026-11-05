@@ -36,7 +36,7 @@ f_neo          = 0.06      # masa al nacer / masa adulta
 f_grasa_max    = 0.15      # fracción máxima de masa en grasa
 k_ap           = 2.0       # apetito / gasto (en energía asimilada: D1, confirmada en la revisión 1 §1)
 eps            = 0.5       # eficiencia digestiva del forraje
-f_com          = 0.004     # fracción de la PPN accesible a la especie (Damuth)
+f_com          = 0.00324   # fracción de la PPN accesible: densidad de equilibrio = ley de Damuth (A1; antes 0,004)
 p_conc         = 0.03      # prob. diaria de concepción (hembra disponible, con macho, en buena condición)
 rho_par        = 0.1       # machos maduros por hembra disponible (modo población, incr. 2)
 c_dup          = 0.08      # tiempo de duplicación de la mortalidad senescente / a_max
@@ -98,7 +98,7 @@ f_neo           = 0.055
 camada          = 1.0
 eps             = 0.85
 f_com           = 1.1e-4
-p_conc          = 0.007
+p_conc          = 0.005     # fecundabilidad ~0,13 por ciclo de 28 días (decisión A4; antes 0,007)
 rho_par         = 1.0
 rho_sexo        = 0.512
 p_huerf         = 0.5
@@ -113,7 +113,7 @@ masa_kg_macho      = 64.0
 f_grasa_max_hembra = 0.25
 f_grasa_max_macho  = 0.15
 # Revisión 1 §4: edad de esterilidad a_est ~ Normal(mu_est, sigma_est), truncada a [a_rep, a_fin_rep].
-mu_est_anios       = 38.0
+mu_est_anios       = 40.0     # decisión A4: el último parto a ~39 años y la caída por edad de Coale-Trussell
 sigma_est_anios    = 4.0
 
 [[especies]]

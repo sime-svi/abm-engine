@@ -422,10 +422,10 @@ fn la_lluvia_no_depende_de_la_resolucion() {
     // numérico. Con la resolución real (cara 0 de 208 a 104 km), medido el 2026-11-05:
     // - `w` (agotamiento de humedad) no cambia en la tierra que ya existía: es función del relieve
     //   de referencia, no de la malla;
-    // - la lluvia total de la zona cambia un +0,6 %: la tierra que aparece en la costa al afinar es
-    //   más húmeda que el interior, que el agotamiento seca (nota de sombra pluviométrica §6.5).
+    // - la lluvia total de la zona cambia un +0,7 %: la tierra que aparece en la costa al afinar es
+    //   más húmeda que el interior, que el agotamiento seca (nota de sombra pluviométrica §7.4).
     //   Sin el agotamiento era un +0,03 %, y +3,9 % midiendo la humedad desde el centro de la celda
-    //   de mar, como hasta el incremento 3. A la escala del Foco, de 52 a 26 km, un 0,00 %.
+    //   de mar, como hasta el incremento 3. A la escala del Foco, de 52 a 26 km, un −0,13 %.
     let mut cfg = TerrenoConfig::default();
     cfg.run.seed = 7;
     cfg.run.genesis_cache = String::new();

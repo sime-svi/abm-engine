@@ -98,3 +98,20 @@ Escribe `output/<nombre>_agentes.json` con:
 - los parámetros derivados de cada especie;
 - un registro cada 30 días: población, nacimientos, muertes por causa, condición, forraje y balance de energía; con la revisión 1, también destetes forzosos y condición de las lactantes;
 - un resumen por año: esperanza de vida, fecundidad, intervalo entre partos, pirámide de edades y densidad frente a la capacidad; con la revisión 1, también fecundidad por grupos de edad, edad del último parto y mortalidad por edad y sexo.
+
+### Decisiones del responsable: realismo primero (05-11-2026)
+
+Las siete decisiones pendientes se tomaron con un criterio: **lo que más se parezca a la realidad** (CLAUDE §2.8).
+
+- **La capacidad de carga cuenta la población real.** Antes se calculaba como si todos los animales fueran adultos, y no lo son: las crías gastan menos. Ahora se usa el gasto medio de una población con sus crías, jóvenes y viejos. Al hacerlo, salió que el herbívoro vivía un 23 % por encima de la densidad real de los animales de su tamaño (la ley de Damuth), y se corrigió su acceso a la comida para que cuadre.
+- **La fecundidad humana se parece a la real:** cada mujer deja de ser fértil hacia los 40 años, con una probabilidad de quedarse embarazada algo menor que antes (la de las cazadoras-recolectoras, que tienen menos reservas que una población bien alimentada). Resultado:
+  - 6,8 hijos por mujer;
+  - el último hacia los 38 años;
+  - una caída de la fertilidad con la edad casi igual a la de los pueblos sin anticoncepción.
+- **En las hambrunas humanas mueren menos mujeres que hombres** (0,07 frente a 0,54 al año), y la población se recupera despacio, en unos 50 años, como en la realidad.
+- **Quedan apuntados, obligatorios, porque hoy no pueden hacerse bien:**
+  - la **competencia con jerarquía**: en la realidad los fuertes comen primero, y en las hambrunas mueren antes crías y viejos, en vez de todos a la vez;
+  - el **coste del celo** de los machos, que en los ciervos reales los hace morir más en los inviernos duros;
+  - **otras causas de muerte**: enfermedad, accidentes, violencia;
+  - la **fertilidad que baja con la edad** y los abortos espontáneos;
+  - los **individuos persistentes**: la visión del proyecto es poder seguir a un humano desde que nace hasta que muere y subir hasta ver toda su población, así que alguien a quien se sigue no puede "disolverse" en una población cuando su zona deja de observarse de cerca. Pasa a ser un requisito del paso 2.

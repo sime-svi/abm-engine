@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-05 — interruptores decididos retirados (CLAUDE §5) y principio de realismo (CLAUDE §2.8)
+Última actualización: 2026-11-05 — decisiones del responsable sobre la sombra pluviométrica y la revisión 1 de agentes (realismo primero)
 
 ---
 
@@ -125,14 +125,15 @@ abm/
 │       │   ├── [x] incremento-2-diseno.md                 # Diseño LOD dinámico v1.1 (IMPLEMENTADO)
 │       │   ├── [x] incremento-3-diseno.md                 # Diseño relieve vivo v1.2 (IMPLEMENTADO)
 │       │   ├── [x] nota_terreno_lluvia_orografica.md      # Lluvia independiente de la resolución (IMPLEMENTADA, §8)
-│       │   └── [x] nota_terreno_sombra_pluviometrica.md   # k_oro calibrado + agotamiento de humedad + c_P (IMPLEMENTADA, §6)
+│       │   ├── [x] nota_terreno_sombra_pluviometrica.md   # Agotamiento de humedad + c_P (IMPLEMENTADA, §6; decisiones §7)
+│       │   └── [x] propuesta_relieve_realista.md          # Diagnóstico del relieve y propuesta tectónica (PENDIENTE del responsable)
 │       ├── paquetes/              # Fase: código dividido en el workspace de paquetes
 │       │   └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)
 │           ├── [x] README.md                      # Explicación llana + hallazgos
 │           ├── [x] diseno_biologia_agentes.md     # Diseño del responsable v1.0 (madre)
 │           ├── [x] incremento-1-diseno.md         # Individuos en un hábitat de prueba (IMPLEMENTADO)
-│           └── [x] nota_agentes_revision_1.md     # Revisión 1: los cuatro cambios (IMPLEMENTADA para individuos, §8)
+│           └── [x] nota_agentes_revision_1.md     # Revisión 1 (IMPLEMENTADA para individuos, §8; decisiones §9)
 │
 └── output/                        # Volcados JSON locales y caché de la génesis (IGNORADO por git)
     └── [ ] .gitkeep
@@ -172,19 +173,20 @@ Estado:
 - **Biología de los agentes (incremento 1 + revisión 1):** individuos con energía en kcal, crecimiento de West,
   reproducción sexual y mortalidad de Siler calibrada (humano: e0 30,9 años; genérico: l(1) = 0,6),
   sobre un hábitat de prueba. Balance de energía cerrado a 10⁻⁶ kcal. Con la revisión 1:
-  - la respuesta funcional de Holling regula las poblaciones (herbívoro 1,23·`N_max`, humanos 0,90);
+  - la respuesta funcional de Holling regula las poblaciones: herbívoro 1,17·`N_max`, con `N_max` contando la población real y su densidad en la ley de Damuth; humanos 0,96;
   - el apetito se refiere al gasto total;
   - hay destete forzoso y dimorfismo (en una hambruna mueren menos mujeres que hombres);
-  - cada mujer tiene su edad de esterilidad (6,6 hijos por mujer).
+  - cada mujer tiene su edad de esterilidad (~40 años): 6,8 hijos por mujer, el último hacia los 38.
 - **Lluvia independiente de la resolución** (nota de lluvia orográfica): relieve de referencia a
   25 km para el efecto orográfico y distancia de humedad medida desde la costa. Al afinar una zona a
   la resolución real, su lluvia cambia un 0,03 % (antes +3,9 %).
-- **Sombra pluviométrica** (nota de sombra pluviométrica):
-  - `k_oro = 150`, calibrado por el objetivo de la nota;
-  - agotamiento de humedad a favor del viento (`w`), con `c_P = 1,18` para conservar la lluvia total;
+- **Sombra pluviométrica** (nota de sombra pluviométrica, decisiones del 2026-11-05):
+  - `k_oro = 40`, su valor físico;
+  - agotamiento de humedad con la altura de saturación del aire y `L_recarga` = 3 000 km;
+  - `c_P = 1,21`, provisional;
   - el aire ve el mar plano.
 
-  A sotavento de las cordilleras grandes, en latitudes medias, la lluvia baja de 688 a 231 mm y el desierto se duplica. Con todo apagado, salida idéntica a la de antes.
+  A sotavento de las cordilleras grandes, en latitudes medias, la lluvia baja de 688 a 251 mm y el desierto se duplica. El barlovento queda flojo porque el **relieve no es realista** (propuesta pendiente).
 - **Terreno:** balance de agua a ~1e-12 con LOD y erosión; balance de material cerrado (el
   acondicionamiento también, exacto); 9 biomas emergentes, ríos y ~50 lagos; ~195 000–205 000 celdas
   con la config por defecto.
@@ -198,11 +200,20 @@ nacimientos y muertes continuos, gracias a la relación `g < m < apetito` (regen
 metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
 
 **Pendiente (fases siguientes):**
-- biología de los agentes: decisiones A1–A7 del responsable (revisión 1 §8.9); incremento 2 (cohortes y
-  conversión, con la versión de poblaciones de la revisión 1), incremento 3 (planeta, forraje del terreno
-  y Foco), incremento 4 (eventos y BD);
+- **Pendientes obligatorios de realismo** (CLAUDE §2.8; responsable, 2026-11-05):
+  - **relieve realista** (tectónica de placas; `docs/design/terreno/propuesta_relieve_realista.md`), antes
+    de que los agentes pasen al planeta; después, calibrar la lluvia con datos de la Tierra y retirar `c_P`;
+  - **competencia con jerarquía** entre agentes (los fuertes comen primero; en las hambrunas mueren antes
+    crías y viejos);
+  - **coste del celo** de los machos y estacionalidad reproductiva (P3), y dimorfismo por especie (Q2);
+  - **otras causas de muerte** (enfermedad, accidentes, violencia) y recalibrar Siler (P4);
+  - **fecundabilidad por edad** y abortos espontáneos (Q1, Q3);
+  - **individuos persistentes** (P6): seguir a un humano desde que nace hasta que muere y subir a su
+    población (visión del responsable), requisito del incremento 2;
+- biología de los agentes: incremento 2 (cohortes y conversión, con la versión de poblaciones de la
+  revisión 1 y P6), incremento 3 (planeta, forraje del terreno y Foco), incremento 4 (eventos y BD);
 - terreno incremento 4 (lagos dinámicos, flujo multidireccional, fertilidad dinámica, eventos);
-- sombra pluviométrica: decisiones S1–S5 del responsable (valor de `k_oro`, parámetros del secado, mar plano, `c_P`; nota de sombra §6.7);
+- terreno: incremento 4 = relieve tectónico (propuesta pendiente del responsable);
 - tablas `events` y `agent_snapshots` (LOD micro) con su sink;
 - volcar las métricas del terreno a la BD.
 

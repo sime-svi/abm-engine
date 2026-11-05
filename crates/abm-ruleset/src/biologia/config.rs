@@ -295,7 +295,10 @@ impl Default for ReferenciaCfg {
             f_grasa_max: 0.15,
             k_ap: 2.0,
             eps: 0.5,
-            f_com: 0.004,
+            // Calibrado para que la densidad de equilibrio siga la ley de Damuth (3,97/km² con 70 kg
+            // y PPN 700). Con N_max contando a los adultos (D6) era 0,004; con la población real
+            // en equilibrio (decisión A1), 0,00324.
+            f_com: 0.00324,
             p_conc: 0.03,
             rho_par: 0.1,
             c_dup: 0.08,
@@ -390,7 +393,9 @@ pub fn preset_humano() -> AjustesCfg {
         camada: Some(1.0),
         eps: Some(0.85),
         f_com: Some(1.1e-4),
-        p_conc: Some(0.007),
+        // Revisión 1, decisión A4: 0,13 por ciclo de 28 días (en cazadoras-recolectoras, la
+        // fecundabilidad es menor que la de poblaciones bien alimentadas).
+        p_conc: Some(0.005),
         rho_par: Some(1.0),
         rho_sexo: Some(0.512),
         p_huerf: Some(0.5),
@@ -404,7 +409,7 @@ pub fn preset_humano() -> AjustesCfg {
         masa_kg_macho: Some(64.0),
         f_grasa_max_hembra: Some(0.25),
         f_grasa_max_macho: Some(0.15),
-        mu_est_anios: Some(38.0),
+        mu_est_anios: Some(40.0),
         sigma_est_anios: Some(4.0),
         ..AjustesCfg::default()
     }

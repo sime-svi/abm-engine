@@ -158,18 +158,17 @@ impl Default for ClimateCfg {
             // Reescalado mecánico daría 2.6; se calibra a 5.0 (≈1825 mm/año en el ecuador) para que
             // emerja la selva tropical, que necesita lluvia alta. Ver README de la fase.
             p_ref: 5.0,
-            // Nota de sombra pluviométrica §2: con 0,5 (la visión madre) el factor orográfico
-            // quedaba en 0,99–1,01 y no había sombra de lluvia. La nota propone 40 y pide calibrar
-            // por objetivos: con el relieve de este planeta, la media en las laderas de barlovento
-            // de las cordilleras de más de 2 000 m llega a 2–3 con ~150 (nota §6.2).
-            k_oro: 150.0,
+            // Nota de sombra pluviométrica §2: el valor físico (laderas reales de ~0,04 dan ×2,5 en
+            // barlovento). Con este planeta solo da ×1,4 porque su relieve es ~4 veces más suave que
+            // el real; por realismo (CLAUDE §2.8) no se fuerza k_oro: se corregirá el relieve (§7).
+            k_oro: 40.0,
             m_oro_min: 0.2,
             m_oro_max: 3.0,
             moisture_length_km: 1500.0,
             seas_precip_amp: 0.0,
             d_oro_km: 25.0,
             h_v_m: 2500.0,
-            l_recarga_km: 1000.0,
+            l_recarga_km: 3000.0,
             l_traj_km: 2000.0,
             tol_lluvia: 0.05,
         }

@@ -737,3 +737,49 @@ Formato de entrada:
   - Los campos nuevos de la salida pasan a ser normales (siempre presentes). Se borran las configs "todo apagado" de `config/experiments/`.
 - **Por qué:** el responsable no quiere mantener ni decidir interruptores ("si no es imprescindible y molesta, se va fuera"). La referencia del pasado es el commit anterior, con `herramientas/no_regresion.sh`.
 - **Verificación:** la salida por defecto es **idéntica byte a byte** a la de `5be42fa` (agentes y terreno). `fmt`, `clippy --workspace --all-targets -D warnings` y `cargo test --workspace` en verde; el test de biología del diseño v1.0, que ya no tiene camino, se retira (14 de simulación).
+
+## [2026-11-05] Decisiones del responsable sobre la sombra pluviométrica (S1–S5) y la revisión 1 de agentes (A1–A7)
+
+- **Qué:** criterio del responsable: lo más realista (CLAUDE §2.8).
+  - **Terreno** (nota de sombra §7):
+    - `k_oro` vuelve a su valor físico, **40**: el problema es el relieve, no `k_oro`;
+    - `L_recarga` = **3 000 km**;
+    - el secado del aire usa la **altura de saturación**: el aire solo pierde vapor al subir por encima de lo que ya subió, y las lomas no lo secan;
+    - el mar plano se mantiene;
+    - `c_P` queda como **apaño provisional** hasta calibrar la lluvia con datos de la Tierra.
+  - **Agentes** (nota de revisión §9):
+    - `N_max` cuenta la **población real**: gasto medio de la población estable, crías incluidas, sustituyendo a D6;
+    - `f_com` del herbívoro pasa de 0,004 a **0,00324**, para que la densidad de equilibrio siga la ley de Damuth;
+    - fecundidad humana: `μ_est` = **40**, `p_conc` = **0,005**;
+    - la variante "proporcional" (D16) queda retirada.
+  - **Propuesta de relieve realista** (`docs/design/terreno/propuesta_relieve_realista.md`), con diagnóstico y opciones; recomienda tectónica de placas.
+  - **Pendientes obligatorios de realismo** en TREE.md: relieve; competencia con jerarquía; coste del celo y estacionalidad; otras causas de muerte; fecundabilidad por edad; individuos persistentes (P6).
+- **Por qué:** el responsable pidió no construir nada irreal aunque cumpla un objetivo escrito: "habría que haber dudado del relieve desde el principio".
+- **Decisiones / problemas:**
+  - **El relieve no es realista.**
+    - La tierra está a 407 m de media, frente a ~840 en la Tierra.
+    - El 68 % está por debajo de 200 m, frente a ~25–30 %.
+    - Las laderas de barlovento tienen una pendiente de ~0,009, frente a 0,02–0,05.
+    - La curva `lf³` aplasta los continentes, y el ruido igual en todas direcciones da manchas en vez de cordilleras.
+    - Con `k_oro` físico, el barlovento recibe solo ×1,37 de lluvia (objetivo ×2–3). Se deja así a propósito, hasta arreglar el relieve.
+  - **La altura de saturación** aumenta la lluvia de barlovento de las cordilleras grandes (408 → 548 mm con `k_oro` = 150) y reduce el secado global (−19,8 → −16 %).
+  - **Planeta definitivo:**
+    - lluvia en tierra +0,2 %, `c_P` 1,207;
+    - a sotavento de las cordilleras grandes, 688 → 251 mm y desierto del 7,6 al 16 %;
+    - PPN −3,3 %, lagos 51 → 42.
+  - **Independencia de la malla:** lluvia +0,7 % de 208 a 104 km y −0,13 % de 52 a 26. La erosión en la prueba de independencia del camino sube a 3,9 % · 4,4 %, y su tolerancia pasa del 4 al 5 %.
+  - **N_max real:**
+    - gasto medio / gasto adulto: 0,953 en el herbívoro y 0,871 en humanos;
+    - con `f_com` 0,004, la densidad de equilibrio del herbívoro quedaba un 23 % por encima de Damuth; con 0,00324, 4,04/km² (Damuth: 3,97);
+    - `N/N_max` en equilibrio: herbívoro 1,17, humanos 0,96 (0,309/km² a PPN 700).
+  - **Fecundidad humana:**
+    - 6,83 hijos, último parto a 38,2 años, caída por edad 1,00 / 0,87 / 0,94 / 0,68 / 0,30 / 0,03 (Coale-Trussell: 1,00 / 0,94 / 0,86 / 0,70 / 0,36 / 0,05);
+    - bajar a ~6 hijos sin estropear la forma pide la fecundabilidad por edad y los abortos (Q1, Q3).
+  - **Hambruna humana:**
+    - la mortalidad adulta de las mujeres es 0,07 al año, frente a 0,54 la de los hombres;
+    - la población pierde un 35 % y se recupera a ~0,6 % al año, en ~50 años;
+    - el test `en_la_hambruna_las_mujeres_resisten_mejor` pasa a exigir "no colapsa y vuelve a crecer", porque la recuperación al 80 % en 20 años no es realista con 6,8 hijos.
+- **Verificación:**
+  - `fmt`, `clippy --workspace --all-targets -D warnings` y `cargo test --workspace` en verde (biología: 8 unitarios + 15 de simulación, con el nuevo `en_equilibrio_la_densidad_sigue_la_ley_de_damuth`).
+  - Medidas del planeta y de 100 años de agentes, en las notas.
+- **Estado tras el cambio:** decisiones S1–S5 y A1–A7 aplicadas. Siguiente: las herramientas de escalabilidad (batería de escenarios, tiempos por sistema, medidas en `herramientas/`). Después, el relieve realista, cuando el responsable apruebe la propuesta.
