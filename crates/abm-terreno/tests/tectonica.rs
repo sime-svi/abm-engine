@@ -661,3 +661,29 @@ fn el_planeta_tectonico_sale_de_la_cache_bit_a_bit() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn mover_las_placas_conserva_exactamente_la_corteza() {
+    // Adenda de balance §0: la corteza continental de las placas solo cambia por procesos con
+    // nombre (arcos, choques, rifts, erosión, sedimento); el remuestreo no crea ni destruye nada.
+    let cfg = TectonicaCfg {
+        t_deriva_myr: 80.0,
+        t_rodaje_myr: 10.0,
+        tau_rift_myr: 60.0, // fuerza rifts, suturas y absorciones en una deriva corta
+        ..TectonicaCfg::default()
+    };
+    let mut d = Deriva::nueva(&cfg, 9, Malla::new(12, 2, 6371.0));
+    d.correr();
+    let c = d.cuentas;
+    let rel = c.remuestreo_km3.abs() / c.inventario_inicial_km3;
+    assert!(
+        rel < 1e-9,
+        "fuga de conservación: {:.3e} km³ ({rel:.2e} del volumen); cuentas {c:?}",
+        c.remuestreo_km3
+    );
+    let tipos: Vec<&str> = d.eventos.iter().map(|e| e.tipo.as_str()).collect();
+    assert!(
+        tipos.contains(&"rift"),
+        "la prueba debe pasar por rifts: {tipos:?}"
+    );
+}

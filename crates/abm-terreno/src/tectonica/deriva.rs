@@ -1404,15 +1404,12 @@ impl Deriva {
                 if self.dueno[k2] != pi {
                     continue;
                 }
-                let c = if self.hueco[k2] {
-                    Corteza::oceanica(cfg.h_oc_km)
-                } else {
-                    match self.placas[pi as usize].get(self.rep[k2]) {
-                        Some(c) => *c,
-                        None => continue,
-                    }
-                };
-                self.placas[pi as usize].insertar(l2, c, k2 as u32);
+                // Solo se tapa con corteza nueva (la celda del mundo era un hueco): copiar corteza
+                // existente crearía material (adenda §0, conservación exacta).
+                if !self.hueco[k2] {
+                    continue;
+                }
+                self.placas[pi as usize].insertar(l2, Corteza::oceanica(cfg.h_oc_km), k2 as u32);
             }
         }
         for p in self.placas.iter_mut().filter(|p| p.viva) {
@@ -1455,32 +1452,50 @@ impl Deriva {
         (off, lista)
     }
 
-    /// Aplica `f` a todas las muestras del dueño de la celda del mundo `k` (y devuelve el área local
-    /// tocada). Si ninguna muestra cae en `k`, se aplica a su representante.
+    /// Reparte el volumen `vol` (km³) entre las muestras del dueño de la celda del mundo `k`:
+    /// todas reciben el mismo espesor `vol / Σ área`, así que lo repartido es exactamente `vol`
+    /// (conservación, adenda §0). Si ninguna muestra cae en `k`, va a su representante. `f` recibe la
+    /// muestra, su área y el espesor que le toca. Devuelve el volumen repartido (0 sin dueño).
     fn en_celda(
         &mut self,
         inv: &(Vec<u32>, Vec<u32>),
         k: usize,
-        mut f: impl FnMut(&mut Corteza, f64),
-    ) {
+        vol: f64,
+        solo_cont: bool,
+        mut f: impl FnMut(&mut Corteza, f64, f64),
+    ) -> f64 {
         let pi = self.dueno[k];
         if pi == NADA {
-            return;
+            return 0.0;
         }
         let (off, lista) = inv;
         let (a, b) = (off[k] as usize, off[k + 1] as usize);
         let p = &mut self.placas[pi as usize];
-        if a == b {
+        let vale = |c: &Corteza| !solo_cont || c.cont;
+        let total: f64 = lista[a..b]
+            .iter()
+            .filter(|&&s| vale(&p.cort[s as usize]))
+            .map(|&s| self.malla.area[p.celda[s as usize] as usize])
+            .sum();
+        if total <= 0.0 {
+            // Ninguna muestra (que valga) cae en `k`: va a su representante, si vale.
             let l = self.rep[k];
-            if let Some(c) = p.get_mut(l) {
-                f(c, self.malla.area[l as usize]);
-            }
-            return;
+            let ar = self.malla.area[l as usize];
+            return match p.get_mut(l) {
+                Some(c) if vale(c) => {
+                    f(c, ar, vol / ar);
+                    vol
+                }
+                _ => 0.0,
+            };
         }
         for &s in &lista[a..b] {
-            let l = p.celda[s as usize];
-            f(&mut p.cort[s as usize], self.malla.area[l as usize]);
+            if vale(&p.cort[s as usize]) {
+                let ar = self.malla.area[p.celda[s as usize] as usize];
+                f(&mut p.cort[s as usize], ar, vol / total);
+            }
         }
+        vol
     }
 
     // --- Bordes (para las fuerzas y los arcos) -------------------------------------------------
@@ -1680,11 +1695,12 @@ impl Deriva {
             if a_f <= 0.0 {
                 continue;
             }
-            let dh = cfg.q_arco * b.largo_km * cfg.dt_myr / a_f;
+            // Volumen del tramo de fosa que toca a esta celda de la franja (por su área).
+            let vol = cfg.q_arco * b.largo_km * cfg.dt_myr * self.malla.area[k as usize] / a_f;
             let mut arcos = 0.0;
             let mut acr = 0.0;
             let mut acr_a = 0.0;
-            self.en_celda(&inv, k as usize, |c, a| {
+            self.en_celda(&inv, k as usize, vol, false, |c, a, dh| {
                 if c.sed > 0.0 {
                     c.h += c.sed * rs / rc;
                     c.sed = 0.0;
@@ -1805,9 +1821,10 @@ impl Deriva {
         self.cuentas.choque_sin_sitio_km3 += sin_sitio;
         dh_mundo.sort_unstable_by_key(|x| x.0);
         let inv = self.indice_inverso();
-        for (k, dh) in dh_mundo {
-            let mut puesto = 0.0;
-            self.en_celda(&inv, k as usize, |c, a| {
+        for (k, dh_k) in dh_mundo {
+            let vol = dh_k * self.malla.area[k as usize];
+            // Un choque apila corteza continental: solo las muestras continentales.
+            let puesto = self.en_celda(&inv, k as usize, vol, true, |c, _, dh| {
                 if c.sed > 0.0 {
                     c.h += c.sed * rs / rc;
                     c.sed = 0.0;
@@ -1815,9 +1832,9 @@ impl Deriva {
                 c.h += dh;
                 c.dh_dt += dh / cfg.dt_myr;
                 c.edad_orog = 0.0;
-                puesto += dh * a;
             });
             self.cuentas.choque_engrosamiento_km3 += puesto;
+            self.cuentas.choque_sin_sitio_km3 += vol - puesto;
         }
     }
 
@@ -1964,14 +1981,13 @@ impl Deriva {
         deposito.sort_unstable_by_key(|x| x.0);
         let inv = self.indice_inverso();
         for (k, v) in deposito {
-            let a_k = self.malla.area[k as usize];
-            let ds = v / a_k * cfg.rho_c / cfg.rho_s;
-            let mut puesto = 0.0;
-            self.en_celda(&inv, k as usize, |c, a| {
-                c.sed += ds;
-                puesto += ds * a * cfg.rho_s / cfg.rho_c;
-            });
-            self.cuentas.sedimento_km3 += puesto;
+            // `v` es roca; como sedimento ocupa `v·ρ_c/ρ_s` (se conserva la masa).
+            let vol_sed = v * cfg.rho_c / cfg.rho_s;
+            // El sedimento va al margen continental: solo las muestras continentales.
+            let puesto = self.en_celda(&inv, k as usize, vol_sed, true, |c, _, ds| c.sed += ds);
+            let roca = puesto * cfg.rho_s / cfg.rho_c;
+            self.cuentas.sedimento_km3 += roca;
+            self.cuentas.sedimento_perdido_km3 += v - roca;
         }
     }
 
@@ -2003,43 +2019,92 @@ impl Deriva {
         a
     }
 
-    /// Funde la placa `b` en la `a`: su corteza pasa al sistema de `a` (una sola vez) y se tapan los
-    /// agujeros del mapa de `a`.
+    /// Funde la placa `b` en la `a`: cada muestra de `b` pasa (no se copia) a la celda local libre de
+    /// `a` más cercana a su posición; si no hay ninguna libre a dos anillos, su volumen se suma a la
+    /// muestra que ya ocupa su sitio. Así la corteza se conserva exactamente (adenda §0).
     fn fundir(&mut self, a: usize, b: usize) {
-        let num = self.malla.num;
-        let mut nuevas: Vec<u32> = Vec::new();
-        for k in 0..num {
-            if self.dueno[k] != b as u32 {
-                continue;
+        let (rs, rc) = (self.cfg.rho_s, self.cfg.rho_c);
+        let muestras: Vec<(u32, Corteza)> = {
+            let pb = &self.placas[b];
+            pb.celda
+                .iter()
+                .copied()
+                .zip(pb.cort.iter().copied())
+                .collect()
+        };
+        let rot_b = self.placas[b].rot;
+        for (lb, c) in muestras {
+            let x = aplicar(&rot_b, self.malla.dir[lb as usize]);
+            let ar_b = self.malla.area[lb as usize];
+            let pa = &self.placas[a];
+            let l0 = self.malla.localizar(aplicar_t(&pa.rot, x)) as u32;
+            // Celda libre más cercana: la propia, o sus vecinas a uno y dos anillos (orden fijo).
+            let mut libre = (pa.mapa[l0 as usize] == NADA).then_some(l0);
+            if libre.is_none() {
+                'buscar: for &v1 in &self.malla.vec[l0 as usize] {
+                    if v1 == NADA {
+                        continue;
+                    }
+                    if pa.mapa[v1 as usize] == NADA {
+                        libre = Some(v1);
+                        break 'buscar;
+                    }
+                }
             }
-            let c = match self.placas[b].get(self.rep[k]) {
-                Some(c) => *c,
-                None => continue,
-            };
-            let pa = &mut self.placas[a];
-            let l = self.malla.localizar(aplicar_t(&pa.rot, self.malla.dir[k])) as u32;
-            if pa.mapa[l as usize] == NADA {
-                pa.insertar(l, c, k as u32);
-                nuevas.push(l);
+            if libre.is_none() {
+                'buscar2: for &v1 in &self.malla.vec[l0 as usize] {
+                    if v1 == NADA {
+                        continue;
+                    }
+                    for &v2 in &self.malla.vec[v1 as usize] {
+                        if v2 != NADA && pa.mapa[v2 as usize] == NADA {
+                            libre = Some(v2);
+                            break 'buscar2;
+                        }
+                    }
+                }
             }
-            self.dueno[k] = a as u32;
-            self.rep[k] = l;
+            let mundo = self.malla.localizar(x) as u32;
+            match libre {
+                Some(l) => {
+                    // Mismo volumen en una celda de otra área: se ajusta el espesor.
+                    let f = ar_b / self.malla.area[l as usize];
+                    let c2 = Corteza {
+                        h: if c.cont { c.h * f } else { c.h },
+                        sed: c.sed * f,
+                        ..c
+                    };
+                    self.placas[a].insertar(l, c2, mundo);
+                }
+                None => {
+                    // Sin sitio cerca: su volumen se suma a la muestra que ocupa su posición.
+                    let ar_a = self.malla.area[l0 as usize];
+                    if let Some(d) = self.placas[a].get_mut(l0) {
+                        if c.cont {
+                            let vol = c.h_eq(rs, rc) * ar_b;
+                            if d.cont {
+                                d.h += vol / ar_a;
+                            } else {
+                                // Corteza continental sobre una celda oceánica: pasa a continental
+                                // con todo su volumen (el oceánico de debajo no cuenta).
+                                d.cont = true;
+                                d.h = vol / ar_a;
+                                d.sed = 0.0;
+                            }
+                        } else {
+                            d.sed += c.sed * ar_b / ar_a;
+                        }
+                    }
+                }
+            }
         }
-        // Agujeros: celdas locales de a cuyo centro cae en lo que era de b.
-        for l in nuevas {
-            for j in 0..8 {
-                let l2 = self.malla.vec[l as usize][j];
-                if l2 == NADA || self.placas[a].mapa[l2 as usize] != NADA {
-                    continue;
-                }
-                let x = aplicar(&self.placas[a].rot, self.malla.dir[l2 as usize]);
-                let k2 = self.malla.localizar(x);
-                if self.dueno[k2] != a as u32 {
-                    continue;
-                }
-                if let Some(c) = self.placas[a].get(self.rep[k2]).copied() {
-                    self.placas[a].insertar(l2, c, k2 as u32);
-                }
+        for k in 0..self.malla.num {
+            if self.dueno[k] == b as u32 {
+                self.dueno[k] = a as u32;
+                self.rep[k] = self
+                    .malla
+                    .localizar(aplicar_t(&self.placas[a].rot, self.malla.dir[k]))
+                    as u32;
             }
         }
         self.placas[b].morir();

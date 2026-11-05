@@ -929,3 +929,28 @@ Formato de entrada:
   - batería: todas las métricas y presupuestos dentro (el escenario `planeta`, rehecho con 34 métricas (51 en total) y notas frente a la Tierra; 13 s con la génesis en caché, ~95 s sin ella);
   - **no regresión:** con `worldgen.relieve = "ruido"` (`config/experiments/terreno_relieve_ruido.toml`), salida idéntica byte a byte a la de `main`; agentes, sin cambios.
 - **Estado tras el cambio:** relieve tectónico implementado y medido, por defecto en la config, con interruptor. Pendiente del responsable: la adenda de sumideros y las decisiones de `incremento-4-diseno.md` §7.
+
+## [2026-11-05] Conservación exacta de la deriva y respuestas a la adenda de balance de la corteza
+
+- **Qué:** el responsable respondió al resumen anterior y entregó `docs/design/terreno/adenda_balance_corteza.md`, que llegó directamente a esa carpeta con un `Zone.Identifier` de Windows, borrado.
+  - **Prioridad 0, el 5 % de remuestreo:** es una fuga de conservación. Ahora mover las placas conserva la corteza a error de redondeo (2·10⁻¹⁵ del volumen en 500 Myr).
+    - los agujeros de los mapas se tapan solo con corteza nueva, nunca copiando;
+    - `en_celda` reparte un volumen exacto por áreas, y choques y sedimento solo en la corteza continental;
+    - `fundir` traslada cada muestra a la celda libre más cercana.
+  - Test nuevo: `mover_las_placas_conserva_exactamente_la_corteza`. Métrica nueva de la batería: `tect_remuestreo_rel`.
+  - Las tres preguntas del §11 de la adenda, respondidas en `incremento-4-diseno.md` §8:
+    1. sí hay erosión durante la deriva (τ_orog), pero pierde el sedimento como sumidero sin nombre y relaja despacio (~345 Myr);
+    2. los arcos van a 40 km³/Myr/km, constantes;
+    3. la corteza de arco no cuenta hasta 20 km, y entonces entra entera: no hay `a_i`.
+- **Hallazgo nuevo:** las fosas del modelo miden ~100 000 km (la Tierra, ~43 500 de márgenes convergentes oceánicos) y las dorsales ~101 500 (la Tierra ~65 000). Con las tasas por km de la adenda, los flujos de fosa saldrían ~2,3 veces los reales. Hay que decidir antes de implementarla.
+- **Decisiones del responsable:**
+  - sí al inicio de subducción en márgenes viejos y sí al fondo oceánico real (llegan en notas próximas);
+  - lluvia: no cambiar el objetivo; el objetivo debe salir de lluvia observada (WorldClim o CHELSA) a 25 km, y revisar `c_P`. Aclarado: el ×1,36 es el modelo de lluvia sobre el relieve real, no lluvia observada;
+  - rifts: se revisan en la próxima nota;
+  - el interruptor del relieve lo decide Claude: quitarlo cuando el relieve tectónico pase la comparación con la Tierra;
+  - la polaridad por par vale de momento, anotada en TREE.md (en la Tierra puede cambiar a lo largo de un borde).
+- **Efecto en el planeta:**
+  - tierra emergida 29,8 % (la Tierra 28,4 %); altura media de la tierra 1 544 m (671); océano 3 753 m (3 667);
+  - corteza continental 0,40 → 0,304 (antes 0,334: las copias la inflaban); nivel del mar −1 184 m.
+  - Márgenes de la batería actualizados, con nota.
+- **Estado tras el cambio:** deriva con conservación exacta. Pendiente: decidir la longitud de los bordes, implementar la adenda, medir la lluvia observada a 25 km, y las notas próximas (inicio de subducción, fondo oceánico, rifts).

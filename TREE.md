@@ -150,7 +150,8 @@ abm/
 │       │   ├── [x] nota_terreno_sombra_pluviometrica.md   # Agotamiento de humedad + c_P (IMPLEMENTADA, §6; decisiones §7)
 │       │   ├── [x] propuesta_relieve_realista.md          # Diagnóstico del relieve (DECIDIDA: opción C con deriva)
 │       │   ├── [x] diseno_relieve_tectonico.md            # Diseño del responsable: relieve tectónico con deriva de placas (v1.0)
-│       │   └── [x] incremento-4-diseno.md                 # Diseño técnico, calibraciones, resultados frente a la Tierra y hallazgos (IMPLEMENTADO, en medida)
+│       │   ├── [x] incremento-4-diseno.md                 # Diseño técnico, calibraciones, resultados frente a la Tierra y hallazgos (IMPLEMENTADO, en medida)
+│       │   └── [x] adenda_balance_corteza.md              # Adenda del responsable: balance de la corteza continental (§11 respondido; PENDIENTE)
 │       ├── paquetes/              # Fase: código dividido en el workspace de paquetes
 │       │   └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)
@@ -246,7 +247,8 @@ metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
     2. inicio de subducción en márgenes pasivos viejos (hoy sobrevive un 15 % de fondo de más de 200 Myr);
     3. fondo oceánico real (sedimento abisal, mesetas y montes submarinos, puntos calientes) y márgenes continentales sumergidos: con 1–3, el nivel del mar debería volver al dato sin forzar `H_nivel`;
     4. acortamiento andino, ciclo de Wilson (rifts por suturas viejas), flexión de la litosfera (cuencas de antepaís), microplacas;
-    5. reducir el remuestreo de la deriva (5 % del volumen continental en 500 Myr);
+    5. ~~reducir el remuestreo de la deriva~~ hecho: conservación exacta (2·10⁻¹⁵); la polaridad de la subducción y los papeles de un choque se deciden **por par de placas**, provisional: en la Tierra quién se hunde puede cambiar a lo largo de un mismo borde;
+    5b. adenda de balance de la corteza (`docs/design/terreno/adenda_balance_corteza.md`): §11 respondido en `incremento-4-diseno.md` §8; falta implementarla. Antes, decidir la longitud de los bordes (fosas ~2,3 veces las de la Tierra);
     6. revisar el objetivo de la lluvia de barlovento (la Tierra a 25 km da ×1,36 con `k_oro` = 40); después, calibrar la lluvia con datos de la Tierra y retirar `c_P`;
   - **casquetes polares** (relieve de hielo; con ellos, el agua total pasa a ser océano + hielo);
   - **competencia con jerarquía** entre agentes (los fuertes comen primero; en las hambrunas mueren antes

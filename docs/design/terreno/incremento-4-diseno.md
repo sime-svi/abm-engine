@@ -105,15 +105,41 @@ La tierra demasiado alta lo explica casi todo.
 3. **El ×2–3 de lluvia en barlovento con `k_oro = 40` no lo da ni la Tierra:** su relieve real a 26 km da ×1,36 con la regla del modelo (pendiente de barlovento ~9 m/km). El realce real de la lluvia debe venir de escalas menores de 25 km o de otra física. Hay que revisar el objetivo o la escala de la lluvia orográfica, no el relieve.
 4. **El ritmo de rifts del §6.5 es bajo:** `p_rift ∝ A_cont,p/A_cont,total` da un rift cada ~150 Myr en total, sea cual sea la fragmentación (3 en 500 Myr). La ruptura de Pangea tuvo ~6–10 rifts en 150 Myr.
 5. **La corteza continental baja un 17 % en 500 Myr**, sobre todo por los choques (2,1 km³/año al manto) y por el sedimento que no cabe en los márgenes (1,3 km³/año). Pendiente de la adenda (R7).
-6. **Remuestreo del 5 %** del volumen continental en 500 Myr: copias de corteza al tapar agujeros de los mapas junto a márgenes con dorsal. Es del orden de lo que crean los arcos; hay que reducirlo antes de calibrar el balance.
+6. **Remuestreo del 5 %** (resuelto el mismo día: conservación exacta, §7) del volumen continental en 500 Myr: copias de corteza al tapar agujeros de los mapas junto a márgenes con dorsal. Es del orden de lo que crean los arcos; hay que reducirlo antes de calibrar el balance.
 7. **Cuencas cerradas:** con el relieve tectónico, el 4,4 % de la tierra está en cuencas cerradas (la Tierra, 10,4 % a 26 km). El planeta de ruido anterior (42 lagos) estaba más drenado que la Tierra.
 
-## 7. Pendientes (en orden)
+## 7. Conservación exacta de la deriva (adenda de balance §0, 2026-11-05)
+
+El responsable pidió arreglar el 5 % de remuestreo antes de evaluar el balance: es una fuga de conservación. Tenía tres causas, todas corregidas:
+- **Tapar agujeros copiando corteza.** Al crear corteza nueva, los agujeros del mapa de la placa se tapaban con una copia de la corteza vecina, que podía ser continental. Ahora solo se tapan con corteza nueva cuando la celda del mundo era un hueco; nunca se copia.
+- **Repartos por celda del mundo.** Arcos, choques y sedimento ponían un espesor en todas las muestras locales que caían en la celda, y el volumen repartido dependía de cuántas fueran. Ahora se reparte exactamente el volumen calculado, por áreas. Choques y sedimento van solo a la corteza continental: antes también engrosaban muestras oceánicas ocultas, que no cuentan en el inventario.
+- **Fundir placas.** Antes se copiaba la corteza vista desde el mundo. Ahora cada muestra pasa a la celda libre más cercana de la otra placa, con su volumen.
+
+El inventario de corteza continental de las placas (todas sus muestras) cierra a error de redondeo: 2·10⁻¹⁵ del volumen en 500 Myr (test `mover_las_placas_conserva_exactamente_la_corteza` y métrica `tect_remuestreo_rel` de la batería). La diferencia con el volumen que ve el mundo (muestras ocultas o repetidas) es del orden del 0,1 %.
+
+**Efecto en el planeta** (antes → ahora):
+- corteza continental final 0,334 → 0,304: las copias la inflaban;
+- tierra emergida 33,1 → 29,8 % (la Tierra 28,4 %);
+- altura media de la tierra 1 459 → 1 544 m;
+- océano 3 945 → 3 753 m;
+- nivel del mar −1 079 → −1 184 m.
+
+## 8. Respuestas a las preguntas de la adenda de balance (§11)
+
+1. **¿Hay erosión durante la deriva? Sí:** la erosión tectónica del diseño principal (§6.6). El exceso de espesor sobre `H_0` decae con `τ_orog` = 150 Myr, en toda corteza continental más gruesa que `H_0`, esté o no emergida.
+   - Arranca ~1,3 AU, del orden de la exportación al mar de la adenda (≈1,8 AU).
+   - El sedimento solo cabe en los márgenes continentales: en 500 Myr se depositaron 0,06 AU y se perdieron 1,28 AU como sumidero sin nombre. Según la adenda, ese material debe acabar en el mar como capa S (traslado interno, no pérdida).
+   - La relajación es lenta: de 65 a 38 km tarda `150·ln 10` ≈ 345 Myr (objetivo 100–200). Con la delaminación de la adenda (por encima de 50 km, τ = 50 Myr) bajará; se valida con la prueba de relajación.
+   - Su forma (exceso de espesor) no es la de la regla 6.7 (`κ·z^n`), que hace crecer la erosión con la altura, como en la Tierra.
+2. **Tasa de los arcos hoy: 40 km³/Myr por km de fosa**, constante, sin depender de la velocidad de convergencia ni del tipo de arco. La adenda pide 96 (oceánico) y 64 (continental), escalados por `v/v̄`. **Ojo con la longitud de las fosas:** las del modelo miden ~100 000 km de media (la Tierra, ~43 500 km de márgenes convergentes oceánicos) y las dorsales ~101 500 km (la Tierra ~65 000). Con tasas por km, todos los flujos de fosa saldrían ~2,3 veces los reales. Los bordes son demasiado largos (ondulados por la deformación inicial y dentados por el crecimiento en las dorsales).
+3. **¿Cuenta la corteza de arco sobre litosfera oceánica? No.** Mientras no pasa de `H_cont_min` (20 km) es oceánica y no cuenta; al pasar, la columna entera (con los 7 km basálticos) entra en el volumen continental. No hay marca de origen de arco: hay que crear `a_i` y contar solo lo añadido (`h_c`), como pide la adenda.
+
+## 9. Pendientes (en orden)
 
 1. Adenda del responsable: sumideros reales de corteza (erosión por subducción, sedimento subducido) y η_col de India–Asia (Ingalls et al., 2016: ~50 % reciclado).
 2. Inicio de subducción en márgenes pasivos viejos (cierra el fondo de más de 200 Myr).
 3. Fondo oceánico real: sedimento abisal, mesetas y montes submarinos (puntos calientes, P2 del diseño), y márgenes continentales sumergidos. Con 1–3 debería volver ζ ≈ 0 sin forzar `H_nivel`.
 4. Acortamiento andino (el §6.3 cuenta con él); ciclo de Wilson (rifts por suturas viejas); flexión de la litosfera (cuencas de antepaís); microplacas (Bird).
-5. Reducir el remuestreo (hallazgo 6).
+5. ~~Reducir el remuestreo (hallazgo 6)~~: hecho, §7.
 6. Revisar el objetivo de la lluvia de barlovento (hallazgo 3) y, con el relieve ya realista, calibrar la lluvia de base con datos de la Tierra y retirar `c_P`.
 7. Casquetes polares (R6); con ellos, el agua total pasa a ser océano + hielo.
