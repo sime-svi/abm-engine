@@ -1,0 +1,15 @@
+[package]
+name = "abm-ruleset"
+description = "Las reglas del modelo de forrajeo: componentes, cuadrícula, parámetros, sistemas, génesis y orden del tick."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+abm-core.workspace = true
+bevy_ecs.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+serde.workspace = true
+toml.workspace = true

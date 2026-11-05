@@ -1,0 +1,15 @@
+[package]
+name = "abm-persistence"
+description = "La salida: esquema de métricas, trait de destino (Sink), volcado JSON y sink a PostgreSQL/TimescaleDB."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+bevy_ecs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+postgres.workspace = true
+uuid.workspace = true

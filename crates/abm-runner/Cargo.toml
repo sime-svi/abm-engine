@@ -1,0 +1,32 @@
+[package]
+name = "abm-runner"
+description = "Los ejecutables (abm, terreno): leen la config, montan motor + reglas + métricas + persistencia y corren."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+# Dos binarios (`abm`, el motor de forrajeo, y `terreno`): `cargo run` sin `--bin` ejecuta `abm`.
+default-run = "abm"
+
+[[bin]]
+name = "abm"
+path = "src/main.rs"
+
+[[bin]]
+name = "terreno"
+path = "src/bin/terreno.rs"
+
+[dependencies]
+abm-core.workspace = true
+abm-ruleset.workspace = true
+abm-persistence.workspace = true
+abm-metrics.workspace = true
+abm-terreno.workspace = true
+bevy_ecs.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+dotenvy.workspace = true
+
+[dev-dependencies]
+postgres.workspace = true

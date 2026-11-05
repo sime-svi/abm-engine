@@ -1,0 +1,17 @@
+[package]
+name = "abm-terreno"
+description = "El sustrato físico del planeta: cubo esférico con LOD dinámico, clima, agua, vegetación, erosión y suelo."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[dependencies]
+abm-core.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true

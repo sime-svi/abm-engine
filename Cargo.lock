@@ -3,20 +3,77 @@
 version = 4
 
 [[package]]
-name = "abm"
+name = "abm-core"
 version = "0.1.0"
 dependencies = [
+ "bevy_ecs",
+ "rand_chacha",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
+name = "abm-metrics"
+version = "0.1.0"
+dependencies = [
+ "abm-core",
+ "abm-persistence",
+ "abm-ruleset",
+ "bevy_ecs",
+]
+
+[[package]]
+name = "abm-persistence"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "postgres",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "abm-ruleset"
+version = "0.1.0"
+dependencies = [
+ "abm-core",
+ "bevy_ecs",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "toml",
+]
+
+[[package]]
+name = "abm-runner"
+version = "0.1.0"
+dependencies = [
+ "abm-core",
+ "abm-metrics",
+ "abm-persistence",
+ "abm-ruleset",
+ "abm-terreno",
  "anyhow",
  "bevy_ecs",
  "dotenvy",
  "postgres",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "abm-terreno"
+version = "0.1.0"
+dependencies = [
+ "abm-core",
  "rand",
  "rand_chacha",
  "serde",
  "serde_json",
  "thiserror",
  "toml",
- "uuid",
 ]
 
 [[package]]

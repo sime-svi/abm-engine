@@ -1,0 +1,13 @@
+[package]
+name = "abm-metrics"
+description = "Observadores y agregación: métricas macroscópicas por tick (LOD de almacenamiento)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+abm-core.workspace = true
+abm-ruleset.workspace = true
+abm-persistence.workspace = true
+bevy_ecs.workspace = true

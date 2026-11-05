@@ -1,14 +1,29 @@
-[package]
-name = "abm"
+# Workspace de Cargo (CLAUDE §3): un paquete ("crate") por responsabilidad. Las dependencias entre
+# paquetes apuntan hacia `abm-core`, que no depende de ninguno de los demás.
+[workspace]
+resolver = "3"
+members = [
+    "crates/abm-core",
+    "crates/abm-ruleset",
+    "crates/abm-persistence",
+    "crates/abm-metrics",
+    "crates/abm-terreno",
+    "crates/abm-runner",
+]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.97.0"
-# Hay dos binarios (`abm`, el motor de forrajeo, y `terreno`): `cargo run` sin `--bin` ejecuta `abm`.
-default-run = "abm"
-description = "Motor de simulación masiva basada en agentes (ABM), headless y determinista"
 license = "MIT OR Apache-2.0"
 
-[dependencies]
+[workspace.dependencies]
+# Paquetes del propio proyecto.
+abm-core = { path = "crates/abm-core" }
+abm-ruleset = { path = "crates/abm-ruleset" }
+abm-persistence = { path = "crates/abm-persistence" }
+abm-metrics = { path = "crates/abm-metrics" }
+abm-terreno = { path = "crates/abm-terreno" }
 # ECS standalone de Bevy (sin render). default-features = false quita el executor
 # multihilo (feature `multi_threaded`): así el paralelismo no puede romper el determinismo.
 bevy_ecs = { version = "0.19", default-features = false, features = ["std"] }
@@ -21,11 +36,8 @@ serde_json = "1"
 toml = "1.1"
 # Errores de librería.
 thiserror = "2"
-# Errores en el binario (solo main.rs).
+# Errores en el binario (solo abm-runner).
 anyhow = "1"
 postgres = { version = "0.19.14", features = ["with-serde_json-1", "with-uuid-1"] }
 uuid = { version = "1.23.5", features = ["v4"] }
 dotenvy = "0.15.7"
-
-[dev-dependencies]
-postgres = "0.19.14"

@@ -1,0 +1,13 @@
+[package]
+name = "abm-core"
+description = "El motor: tiempo (tick), RNG determinista, planificador de un solo hilo y errores de config. Sin reglas de dominio."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+bevy_ecs.workspace = true
+rand_chacha.workspace = true
+thiserror.workspace = true
+toml.workspace = true

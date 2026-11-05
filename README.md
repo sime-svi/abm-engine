@@ -64,14 +64,24 @@ con migraciones (`infra/migrations/`) que aplica el propio binario.
 
 ## Estructura del repositorio
 
+El código es un *workspace* de Cargo: un paquete por responsabilidad, con las dependencias apuntando
+hacia el motor (`CLAUDE.md` §3).
+
 ```
-src/            # el motor: core/ (motor) · domain/ (reglas) · metrics/ · persistence/ · terreno/ (planeta)
+crates/
+  abm-core/         # el motor: tick y bucle de tiempo, RNG sembrado, planificador de un solo hilo
+  abm-ruleset/      # las reglas del modelo de forrajeo (agentes, cuadrícula, sistemas del tick)
+  abm-terreno/      # el planeta: esfera con LOD, clima, agua, vegetación, erosión y suelo
+  abm-metrics/      # observadores: métricas agregadas por tick
+  abm-persistence/  # la salida: esquema de métricas, JSON y PostgreSQL
+  abm-runner/       # los binarios `abm` y `terreno`
 config/         # parámetros de simulación (.toml)
 docs/design/    # diseño + explicación llana, una carpeta por fase
 infra/          # Docker (PostgreSQL/TimescaleDB + Grafana), migraciones y provisioning
-tests/          # tests de integración (determinismo, y persistencia con #[ignore])
-output/         # volcados JSON (ignorado por git)
+output/         # volcados JSON y caché de la génesis (ignorado por git)
 ```
+
+Cada paquete lleva sus tests (`crates/*/tests/`). `cargo test` desde la raíz los corre todos.
 
 El árbol detallado y qué está implementado está en [`TREE.md`](TREE.md).
 
@@ -103,7 +113,8 @@ solo en `infra/.env`. Los datos persisten en volúmenes de Docker (`abm-db-data`
 ```bash
 cargo run --release -- config/default.toml   # ejecutar una simulación
 cargo test                                    # tests
-cargo fmt && cargo clippy -- -D warnings      # formato y linter
+cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings   # formato y linter
+cargo test -p abm-runner --test persistence_pg -- --ignored              # test de la BD (con infra/.env exportado)
 cd infra && docker compose up -d              # levantar BD + Grafana
 cd infra && docker compose down               # parar (conserva los datos)
 ```

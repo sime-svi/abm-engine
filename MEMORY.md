@@ -487,3 +487,43 @@ Formato de entrada:
   - el responsable rehace la **biología de los agentes por días** (vida, metabolismo, apetito,
     rebrote: es su diseño);
   - Claude divide el código en **paquetes** (CLAUDE §3).
+
+## [2026-11-05] Fase «paquetes»: el código dividido en el workspace de crates (CLAUDE §3)
+
+- **Qué:** El paquete único `abm` pasa a ser un **workspace de seis paquetes** en `crates/`:
+  - `abm-core`: `Tick` + `run_ticks`, planificador de un solo hilo, `RootRng`, `ConfigError`;
+  - `abm-ruleset`: reglas del forrajeo, config, génesis, orden del tick;
+  - `abm-terreno`: el planeta, con su `build.rs` y sus tests;
+  - `abm-metrics`: `collect_metrics`;
+  - `abm-persistence`: esquema de métricas, trait `MetricsSink`, JSON, PostgreSQL, migraciones;
+  - `abm-runner`: binarios `abm` y `terreno`, `run_simulation`, tests de determinismo y de BD.
+
+  Versiones de dependencias externas fijadas una vez en `[workspace.dependencies]`. Ficheros movidos
+  con `git mv` (conservan historial). `CLAUDE.md` §3 actualizado con `abm-terreno`, opción
+  confirmada por el responsable ("sí, me parece bien"). Nueva carpeta `docs/design/paquetes/`.
+- **Por qué:** La base es estable y el siguiente paso es juntar agentes y planeta. La regla de
+  dependencias pasa de norma a vigilar a garantía del compilador.
+- **Decisiones / problemas — tres nudos que el paquete único escondía:**
+  1. **El motor conocía el dominio:** montaba el orden de los sistemas del forrajeo y creaba el mundo
+     con sus agentes y su `Sink`. → El orden del modelo y la génesis van a `abm-ruleset`; el motor
+     da `schedule::deterministic()` y `run_ticks`; el `Sink` lo inserta `abm-runner`.
+  2. **Ciclo métricas ↔ persistencia** (las métricas escribían en el `Sink` de la persistencia y la
+     persistencia usaba el esquema de las métricas). → Esquema y trait en `abm-persistence`, como
+     decía CLAUDE §7.
+  3. **La BD recibía la `Config` entera del forrajeo.** → `pg_sink::write_run(&RunRecord, &doc)`,
+     con solo los datos que guarda; la versión del ruleset sale de `abm_ruleset::VERSION`.
+
+  Además:
+  - un error por paquete (`ConfigError` en core; `PersistenceError`, `TerrenoError`, `SimError`);
+  - los tests leen `config/default.toml` con una ruta anclada al workspace, porque Cargo los corre
+    desde la carpeta del paquete;
+  - `cargo run --release -- config/default.toml` sigue lanzando `abm` (`default-run` del runner);
+  - la huella del código del terreno cambió con las rutas, así que la caché de la génesis se rehace
+    una vez.
+- **Verificación:** `fmt` + `clippy --workspace --all-targets -D warnings` limpios; `cargo test`
+  desde la raíz recorre los seis paquetes en verde (12 + 3 + 14 + 13; BD `#[ignore]`, que pasa con
+  `--ignored`). Dependencias comprobadas con `cargo tree` (todas apuntan a `abm-core`, que no depende
+  de nadie). Los dos binarios dan una salida **idéntica byte a byte** a la de antes de la división
+  (`baseline.json` y `terreno_terreno.json`).
+- **Estado tras el cambio:** Workspace operativo. Siguiente: el responsable rehace la biología de los
+  agentes por días; después, acoplar agentes y planeta.

@@ -32,13 +32,14 @@ El proyecto es un **workspace de Cargo** con crates de responsabilidad única. E
 
 - **`abm-core`** — El motor. Bucle de tiempo (tick), scheduler de sistemas, gestión de mundo/entidades, RNG determinista, paralelismo. No contiene ninguna regla del dominio.
 - **`abm-ruleset`** — Las reglas. Ecuaciones, parámetros, lógica de estados, componentes del dominio (recursos, salud, población, etc.). Depende de `abm-core` pero no al revés.
+- **`abm-terreno`** — El sustrato físico del planeta: cubo esférico con LOD dinámico, clima, agua, vegetación, erosión y suelo. Paquete propio (no dentro de `abm-ruleset`) porque es grande, tiene su propio ejecutable y no depende del motor de agentes. Depende solo de `abm-core`. *(Añadido el 2026-11-05 con confirmación del responsable.)*
 - **`abm-persistence`** — La salida. Serialización a JSON y sink a PostgreSQL. Aislada tras un trait para poder cambiar el destino sin tocar el motor.
 - **`abm-metrics`** — Observadores y agregación. Aplica el LOD de almacenamiento: decide qué se registra a nivel de agente y qué se colapsa en métricas agregadas.
-- **`abm-runner`** — El binario ejecutable. Lee configuración, monta core + ruleset + persistence, ejecuta la simulación y gestiona la CLI.
+- **`abm-runner`** — Los binarios ejecutables (`abm`, el motor de agentes, y `terreno`, el planeta). Lee configuración, monta core + ruleset + metrics + persistence, ejecuta la simulación y gestiona la CLI.
 
-Regla de dependencias: las flechas apuntan hacia `abm-core`. Nada en `abm-core` puede depender de `abm-ruleset`, `abm-persistence` ni `abm-metrics`. Si necesitas que el core "sepa" algo del dominio, es señal de que la abstracción está mal y hay que revisarla.
+Regla de dependencias: las flechas apuntan hacia `abm-core`. Nada en `abm-core` puede depender de `abm-ruleset`, `abm-terreno`, `abm-persistence` ni `abm-metrics`. Si necesitas que el core "sepa" algo del dominio, es señal de que la abstracción está mal y hay que revisarla.
 
-> **Nota de arranque incremental:** NO crees los cinco crates el primer día. Empieza con un único binario que tenga cuadrícula + agentes mínimos funcionando. Refactoriza hacia esta estructura solo cuando la base sea estable (ver metodología). El TREE.md marca qué existe hoy frente al objetivo.
+> **Nota de arranque incremental:** NO crees los cinco crates el primer día. Empieza con un único binario que tenga cuadrícula + agentes mínimos funcionando. Refactoriza hacia esta estructura solo cuando la base sea estable (ver metodología). El TREE.md marca qué existe hoy frente al objetivo. *(Hecho el 2026-11-05: el código vive en `crates/`, un paquete por responsabilidad; ver `docs/design/paquetes/`.)*
 
 ---
 
