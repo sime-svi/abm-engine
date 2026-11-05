@@ -27,7 +27,9 @@ abm/
 │   ├── [x] agentes.toml           # Biología de los agentes (especies, energética, forraje, hábitat)
 │   ├── [x] terreno.toml           # Parámetros del planeta ([lod], [erosion], [soil], [tectonica]…)
 │   ├── referencias/
-│   │   └── [x] tierra_relieve.toml # Tablas de la Tierra (ETOPO 2022, Paxman 2022, Seton 2020, Bird 2003) a las resoluciones del planeta
+│   │   ├── [x] tierra_relieve.toml # Tablas de la Tierra (ETOPO 2022, Paxman 2022, Seton 2020, Bird 2003) a las resoluciones del planeta
+│   │   ├── [x] tierra_bordes.toml  # Bordes de placa de Bird (2003) medidos en la malla tectónica como los del modelo
+│   │   └── [x] tierra_lluvia.toml  # Lluvia observada (WorldClim, CHELSA) a 26 km con las definiciones del planeta
 │   └── experiments/
 │       └── [x] terreno_relieve_ruido.toml # Relieve de ruido: referencia de la no regresión mientras se mide (se borra con el interruptor)
 │
@@ -119,7 +121,10 @@ abm/
 │       ├── [x] agentes.py         # Resumen de una corrida de agentes (N/N_max, fecundidad, e0, mortalidad…)
 │       ├── [x] terreno.py         # Resumen y comparación de planetas (biomas, diagnóstico, tectónica, sombra pluviométrica)
 │       ├── [x] referencia_tierra.py # Tablas de la Tierra para el relieve (config/referencias/tierra_relieve.toml)
-│       └── [x] h5mini.py          # Lector mínimo de HDF5 por peticiones parciales (rejillas de Paxman et al.)
+│       ├── [x] h5mini.py          # Lector mínimo de HDF5 por peticiones parciales (rejillas de Paxman et al.)
+│       ├── [x] bordes_bird.py     # Bordes de Bird (2003) en la malla tectónica, medidos y clasificados como el modelo
+│       ├── [x] lluvia_observada.py # Lluvia observada de la Tierra a 26 km, frente a la del planeta
+│       └── [x] tiffmini.py        # Lector mínimo de GeoTIFF (tiras, Deflate) también por peticiones parciales
 │
 ├── infra/
 │   ├── [x] docker-compose.yml     # Postgres/TimescaleDB (host :25432) + Grafana (host :23000), subred fija
@@ -151,7 +156,7 @@ abm/
 │       │   ├── [x] propuesta_relieve_realista.md          # Diagnóstico del relieve (DECIDIDA: opción C con deriva)
 │       │   ├── [x] diseno_relieve_tectonico.md            # Diseño del responsable: relieve tectónico con deriva de placas (v1.0)
 │       │   ├── [x] incremento-4-diseno.md                 # Diseño técnico, calibraciones, resultados frente a la Tierra y hallazgos (IMPLEMENTADO, en medida)
-│       │   └── [x] adenda_balance_corteza.md              # Adenda del responsable: balance de la corteza continental (§11 respondido; PENDIENTE)
+│       │   └── [x] adenda_balance_corteza.md              # Adenda del responsable (v2): balance de la corteza continental (IMPLEMENTADA; incremento-4-diseno.md §9)
 │       ├── paquetes/              # Fase: código dividido en el workspace de paquetes
 │       │   └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)
@@ -237,19 +242,21 @@ metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
   - deriva de placas de 500 Myr en la malla de nivel 2 (~52 km), ~35 s, en la caché de la génesis (`ABMGEN04`);
   - placas a 4,36 cm/año (la Tierra 4,39), con las correlaciones de Forsyth y Uyeda; India–Asia frena a 1/3 (`c_col` calibrado);
   - océano de 3 945 m (la Tierra 3 667), pero tierra demasiado alta (1 459 m, la Tierra 671): el mar queda 1 079 m bajo el dato;
+  - **balance de la corteza continental** (adenda v2, `incremento-4-diseno.md` §9): arcos y erosión por subducción por km² de placa que se hunde, régimen del margen, prisma, choques con `η_col`/`η_arco`, delaminación, sedimento al mar (y a cuencas cerradas) y balance exacto por paso; tope `H_max` = 80 km para toda corteza; `τ_ero` = 63 Myr calibrado con la relajación;
+    - en la Tierra se hunden 2,7–3,4 km²/año y en el modelo 6,3: los bordes miden 1,7 veces los de una Tierra de 15 placas medida igual (`tierra_bordes.toml`) y un tercio del consumo ocurre en bordes divergentes y transformantes;
   - referencia de la Tierra en `config/referencias/tierra_relieve.toml`;
   - interruptor `worldgen.relieve`: con `"ruido"`, salida idéntica byte a byte a la de `main`.
 
 **Pendiente (fases siguientes):**
 - **Pendientes obligatorios de realismo** (CLAUDE §2.8; responsable, 2026-11-05), en orden:
   - **relieve tectónico, lo que falta para que sea el de la Tierra** (hallazgos de `incremento-4-diseno.md` §6–§7):
-    1. adenda del responsable: sumideros reales de corteza continental (erosión por subducción, sedimento subducido) y η_col de India–Asia;
+    1. ~~adenda del responsable: sumideros reales de corteza continental~~ hecho (adenda v2). **Próxima nota del responsable:** forma de los bordes (el modelo hunde el doble de placa y sus choques destruyen 7–12 veces más corteza que la Tierra), con los datos de `incremento-4-diseno.md` §9.3 y §10; rifts que estiren conservando (hoy `F_rift`, 0,11 AU, es un sumidero provisional). Después, calibrar `τ_del` y revisar `f_acr`;
     2. inicio de subducción en márgenes pasivos viejos (hoy sobrevive un 15 % de fondo de más de 200 Myr);
     3. fondo oceánico real (sedimento abisal, mesetas y montes submarinos, puntos calientes) y márgenes continentales sumergidos: con 1–3, el nivel del mar debería volver al dato sin forzar `H_nivel`;
     4. acortamiento andino, ciclo de Wilson (rifts por suturas viejas), flexión de la litosfera (cuencas de antepaís), microplacas;
     5. ~~reducir el remuestreo de la deriva~~ hecho: conservación exacta (2·10⁻¹⁵); la polaridad de la subducción y los papeles de un choque se deciden **por par de placas**, provisional: en la Tierra quién se hunde puede cambiar a lo largo de un mismo borde;
-    5b. adenda de balance de la corteza (`docs/design/terreno/adenda_balance_corteza.md`): §11 respondido en `incremento-4-diseno.md` §8; falta implementarla. Antes, decidir la longitud de los bordes (fosas ~2,3 veces las de la Tierra);
-    6. revisar el objetivo de la lluvia de barlovento (la Tierra a 25 km da ×1,36 con `k_oro` = 40); después, calibrar la lluvia con datos de la Tierra y retirar `c_P`;
+    5b. el umbral de las fallas transformantes del modelo es 15° (`f_transformante`, decisión técnica I4); Bird separa sus clases a ~20°;
+    6. lluvia: medida la observada a 26 km (`tierra_lluvia.toml`): con la definición actual de barlovento, la Tierra da ×0,7–1,2, no ×2–3, porque la definición coge mesetas. Revisar la definición (decisión del responsable); corregir la sombra pluviométrica (×0,79, la Tierra ×0,58) y el reparto por latitud; calibrar la lluvia de base con la media observada (CHELSA ~920 mm sin casquetes) y retirar `c_P`;
   - **casquetes polares** (relieve de hielo; con ellos, el agua total pasa a ser océano + hielo);
   - **competencia con jerarquía** entre agentes (los fuertes comen primero; en las hambrunas mueren antes
     crías y viejos);

@@ -1,0 +1,202 @@
+# Lluvia observada de la Tierra a la escala del planeta (~26 km): el objetivo de la lluvia de barlovento
+# y la revisión de c_P (decisión del responsable, 2026-11-05).
+# Generado por herramientas/analisis/lluvia_observada.py el 2026-11-05. No editar a mano: se regenera.
+#
+# Conjuntos de datos:
+# - WorldClim 2.1 (Fick y Hijmans, 2017, Int. J. Climatol. 37, 4302–4315, doi:10.1002/joc.5086), versión
+#   de enero de 2020: lluvia mensual media de 1970–2000 a 10' (wc2.1_10m_prec.zip), sumada en el año.
+#   Interpola pluviómetros, que escasean en las montañas: ahí se queda corto.
+# - CHELSA 2.1 (Karger et al., 2017, Sci. Data 4, 170122, doi:10.1038/sdata.2017.122; datos
+#   doi:10.16904/envidat.228): bio12, lluvia anual de 1981–2010 a 30''. Modela el viento y el relieve.
+#   Leída 1 de cada 8 filas (cada 4') en bloques de 4 columnas (2'), solo sobre la tierra de
+#   ETOPO (superficie). Satura en 6553,5 mm.
+# - El relieve de config/referencias/tierra_relieve.toml: roca rebotada sin hielo (ETOPO 2022 y Paxman
+#   et al., 2022).
+#
+# Celdas: las de nivel 3 del cubo esférico del planeta (n0 = 48, ~26 km), con la media por área de los
+#   píxeles de tierra con dato de cada una (WorldClim: cada píxel partido en 4×4 trozos).
+#   Tierra = celdas con h ≥ 0 en la roca rebotada (144.7 millones de km²).
+# Barlovento: las laderas de barlovento de las cordilleras grandes de referencia_tierra.pendientes y
+#   terreno.py: m_oro > 1 (k_oro = 40, viento del oeste en 30–60° de latitud y del este en el resto),
+#   h ≥ 300 m y cresta > 2000 m a 0–150 km a favor del viento. En las mesetas altas (Tíbet, Altiplano,
+#   Irán) la cresta siempre está cerca y entran casi enteras: el barlovento llueve menos que la tierra baja.
+# Factor de barlovento observado (lo que en el modelo es m_oro): lluvia de cada celda de barlovento entre
+#   una lluvia de referencia sin montaña:
+#   - factor_arriba: media de los puntos de tierra baja (h < 300 m) a 50–300 km contra el
+#     viento del modelo, por el mismo paralelo y cada 10 km; sin tierra baja delante (p. ej., el mar),
+#     se omite;
+#   - factor_franja: media de la tierra baja (h < 300 m) de su franja de 1° de latitud.
+# Sombra: tierra de 30–60° bajo 2000 m con cresta > 2000 m a 200–500 km a barlovento (sotavento) o sin ella
+#   (resto), como terreno.py.
+# Antártida = tierra al sur de 60° S; Groenlandia = tierra dentro de un polígono por los estrechos que la
+#   separan de Baffin, Ellesmere e Islandia. Su barlovento se elige por la roca bajo el hielo, que no es
+#   el relieve que ve la lluvia: por eso se da también sin ellas.
+
+[franjas_10]
+# Límite sur de cada franja de 10° de latitud.
+lat_sur = [-90, -80, -70, -60, -50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50, 60, 70, 80]
+# Fracción de la tierra de la Tierra en cada franja.
+area_frac = [0.0191368, 0.0405838, 0.00888872, 0.00174526, 0.00710296, 0.0288919, 0.0644685, 0.0655589, 0.0721902, 0.069833, 0.0777421, 0.104392, 0.106974, 0.110136, 0.101379, 0.0933503, 0.0248191, 0.00280689]
+
+[worldclim.tierra]
+# Lluvia anual media de la tierra (celdas con h ≥ 0 en la roca rebotada), por área.
+lluvia_media_mm = 744.421
+# Lo mismo sin la Antártida ni Groenlandia.
+lluvia_media_sin_antartida_ni_groenlandia_mm = 794.347
+# Fracción del área con dato del conjunto.
+con_dato_frac = 1
+
+[worldclim.tierra.franjas_10]
+# Lluvia anual media (mm) de la tierra de cada franja de 10°.
+lluvia_mm = [59.4452, 110.895, 196.425, 1006.91, 973.163, 612.984, 582.884, 1132.28, 1897.95, 1714.04, 756.926, 548.853, 520.16, 542.541, 596.268, 444.788, 326.477, 187.942]
+# Lo mismo sin la Antártida ni Groenlandia.
+lluvia_sin_antartida_ni_groenlandia_mm = [nan, nan, nan, 1006.91, 973.163, 612.984, 582.884, 1132.28, 1897.95, 1714.04, 756.926, 548.853, 520.16, 542.541, 596.219, 417.981, 235.6, 159.665]
+
+[worldclim.barlovento]
+# Área de las laderas de barlovento.
+area_km2 = 8.67767e+06
+# Lluvia anual media (mm) por área.
+lluvia_mm = 628.508
+# Media de m_oro con la regla del modelo (k_oro = 40) en el relieve real: no es lluvia observada.
+m_oro_regla = 1.35769
+
+[worldclim.barlovento.factor_arriba]
+# Lluvia media del barlovento entre la media de su referencia (la cifra robusta).
+cociente_de_medias = 0.898537
+# Mediana (por área) del cociente de cada celda.
+mediana = 1.01133
+# Media (por área) del cociente de cada celda: la homóloga de la media de m_oro, sensible a las referencias muy secas.
+media = 1.19424
+# Lluvia media del barlovento en las celdas con referencia.
+lluvia_mm = 1088.34
+# Lluvia media de la referencia en esas celdas.
+referencia_mm = 1211.24
+# Media de m_oro con la regla del modelo en esas celdas.
+m_oro_regla = 1.55725
+# Fracción del barlovento con dato sin referencia (omitida).
+omitida_frac = 0.728485
+
+[worldclim.barlovento.factor_franja]
+cociente_de_medias = 0.722802
+mediana = 0.556063
+media = 0.750942
+lluvia_mm = 628.508
+referencia_mm = 869.543
+m_oro_regla = 1.35769
+omitida_frac = 0
+
+[worldclim.barlovento.por_altura]
+# Límite inferior de cada franja de altura (la última sin techo).
+limites_m = [300, 1000, 2000, 3000]
+# Fracción del barlovento en cada franja de altura.
+area_frac = [0.151415, 0.405155, 0.217539, 0.225892]
+# Lluvia anual media (mm) de cada franja de altura.
+lluvia_mm = [1017.42, 620.641, 597.266, 412.02]
+# Factor ii (cociente de medias) en cada franja de altura.
+factor_franja = [1.00543, 0.724821, 0.72641, 0.488469]
+
+[worldclim.barlovento_sin_antartida_ni_groenlandia]
+area_km2 = 8.08063e+06
+lluvia_mm = 662.41
+m_oro_regla = 1.35524
+
+[worldclim.barlovento_sin_antartida_ni_groenlandia.factor_arriba]
+cociente_de_medias = 0.893865
+mediana = 1.0121
+media = 1.19967
+lluvia_mm = 1131.68
+referencia_mm = 1266.05
+m_oro_regla = 1.55962
+omitida_frac = 0.72465
+
+[worldclim.barlovento_sin_antartida_ni_groenlandia.factor_franja]
+cociente_de_medias = 0.719453
+mediana = 0.567652
+media = 0.725051
+lluvia_mm = 662.41
+referencia_mm = 920.713
+m_oro_regla = 1.35524
+omitida_frac = 0
+
+[worldclim.sombra]
+# Tierra de 30–60° bajo 2000 m con cresta > 2000 m a 200–500 km a barlovento.
+sotavento_lluvia_mm = 362.367
+# Su área.
+sotavento_area_km2 = 6.3475e+06
+# El resto de esa tierra de latitudes medias.
+resto_lluvia_mm = 624.213
+# Su área.
+resto_area_km2 = 4.04342e+07
+# Cociente de las dos lluvias.
+sotavento_entre_resto = 0.580519
+
+[chelsa.tierra]
+lluvia_media_mm = 874.078
+lluvia_media_sin_antartida_ni_groenlandia_mm = 923.904
+con_dato_frac = 1
+
+[chelsa.tierra.franjas_10]
+lluvia_mm = [102.733, 231.773, 901.774, 1813.31, 1451.38, 682.143, 654.648, 1212.51, 2081.72, 1889.21, 825.691, 657.078, 630.579, 627.678, 757.089, 660.03, 369.092, 251.764]
+lluvia_sin_antartida_ni_groenlandia_mm = [nan, nan, nan, 1813.31, 1451.38, 682.143, 654.648, 1212.51, 2081.72, 1889.21, 825.691, 657.078, 630.579, 627.678, 757.043, 638.172, 405.946, 280.576]
+
+[chelsa.barlovento]
+area_km2 = 8.67767e+06
+lluvia_mm = 906.693
+m_oro_regla = 1.35769
+# Fracción del barlovento en píxeles de CHELSA saturados (≥ 6553,5 mm): la lluvia real es mayor.
+saturada_frac = 0.00234175
+
+[chelsa.barlovento.factor_arriba]
+cociente_de_medias = 1.18242
+mediana = 1.22209
+media = 1.56545
+lluvia_mm = 1532.95
+referencia_mm = 1296.46
+m_oro_regla = 1.55725
+omitida_frac = 0.728485
+
+[chelsa.barlovento.factor_franja]
+cociente_de_medias = 0.960384
+mediana = 0.720535
+media = 0.980152
+lluvia_mm = 906.693
+referencia_mm = 944.094
+m_oro_regla = 1.35769
+omitida_frac = 0
+
+[chelsa.barlovento.por_altura]
+limites_m = [300, 1000, 2000, 3000]
+area_frac = [0.151415, 0.405155, 0.217539, 0.225892]
+lluvia_mm = [1197.1, 823.425, 930.951, 838.022]
+factor_franja = [1.09049, 0.878337, 1.04201, 0.929326]
+
+[chelsa.barlovento_sin_antartida_ni_groenlandia]
+area_km2 = 8.08063e+06
+lluvia_mm = 954.103
+m_oro_regla = 1.35524
+saturada_frac = 0.00251477
+
+[chelsa.barlovento_sin_antartida_ni_groenlandia.factor_arriba]
+cociente_de_medias = 1.19055
+mediana = 1.25075
+media = 1.60735
+lluvia_mm = 1601.25
+referencia_mm = 1344.97
+m_oro_regla = 1.55962
+omitida_frac = 0.72465
+
+[chelsa.barlovento_sin_antartida_ni_groenlandia.factor_franja]
+cociente_de_medias = 0.963571
+mediana = 0.74114
+media = 0.997593
+lluvia_mm = 954.103
+referencia_mm = 990.174
+m_oro_regla = 1.35524
+omitida_frac = 0
+
+[chelsa.sombra]
+sotavento_lluvia_mm = 425.721
+sotavento_area_km2 = 6.3475e+06
+resto_lluvia_mm = 740.602
+resto_area_km2 = 4.04342e+07
+sotavento_entre_resto = 0.574831

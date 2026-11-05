@@ -9,7 +9,8 @@ pub struct EventoTectonico {
     /// Tiempo (Myr; negativo = antes del final de la deriva).
     pub myr: f64,
     /// `rift`, `inicio_subduccion`, `inicio_colision`, `sutura`, `absorcion`, `salto_dorsal`,
-    /// `acrecion_arco`, `supercontinente_formado` o `supercontinente_roto`.
+    /// `acrecion_arco`, `supercontinente_formado`, `supercontinente_roto`, `inicio_choque`,
+    /// `fin_choque`, `cambio_regimen` o `retroceso_margen` (adenda de balance §7).
     pub tipo: String,
     /// Placas implicadas (madre e hijas, las dos del borde, absorbida y receptora…).
     pub placas: Vec<u64>,
@@ -20,6 +21,18 @@ pub struct EventoTectonico {
     /// Punto representativo (grados).
     pub lat_deg: f64,
     pub lon_deg: f64,
+    /// Detalle de los choques y de los márgenes (adenda de balance §7): `arco_continente` o
+    /// `continente_continente` en un choque; `erosivo` o `acrecionario` en un cambio de régimen.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clase: Option<String>,
+    /// Eficacia del choque: fracción de la corteza solapada que se queda en la placa de arriba.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eta: Option<f64>,
+    /// Volumen solapado y volumen perdido al manto durante todo el choque (km³), en su fin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solapado_km3: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub perdido_km3: Option<f64>,
 }
 
 /// Métricas agregadas de un paso de la deriva (§8, «cada Myr»).
@@ -34,6 +47,7 @@ pub struct MetricaMyr {
     pub dorsales_km: f64,
     pub fosas_km: f64,
     pub colisiones_km: f64,
+    pub transformantes_km: f64,
     pub edad_media_oceano_myr: f64,
     pub edad_max_oceano_myr: f64,
     /// Volumen de corteza continental (km³; el sedimento, con su masa de roca).
@@ -44,53 +58,106 @@ pub struct MetricaMyr {
     pub supercontinente: f64,
     /// Nivel del mar respecto al dato (m).
     pub nivel_mar_m: f64,
+    // --- Balance de la corteza continental (adenda de balance §8) ---
+    /// Flujos del paso (AU = km³/año): arcos, erosión por subducción, sedimento subducido, choques
+    /// (al manto), delaminación y sedimento que llega al mar.
+    pub f_arc_au: f64,
+    pub f_se_au: f64,
+    pub f_sed_au: f64,
+    pub f_col_au: f64,
+    pub f_del_au: f64,
+    pub f_den_au: f64,
+    /// Adelgazamiento de los rifts (AU): sumidero provisional, hasta la nota de rifts.
+    pub f_rift_au: f64,
+    /// Sedimento de fosa que se pega al margen (AU; traslado interno).
+    pub f_acr_au: f64,
+    /// Material continental de las placas (km³): `V_cont` de la adenda, todas las muestras.
+    pub inventario_km3: f64,
+    /// Espesor máximo de la corteza y espesor medio de la continental (km).
+    pub espesor_max_km: f64,
+    pub espesor_medio_cont_km: f64,
+    /// Fracción de la corteza continental de más de 70 km (en la Tierra, el centro del Tíbet y
+    /// del Altiplano: del orden del 0,5 %).
+    pub area_mas_70km_frac: f64,
+    /// Fondo oceánico que se hunde y que se crea (km²/año).
+    pub area_subducida_km2_anio: f64,
+    pub area_creada_km2_anio: f64,
+    /// Fracción del área subducida que entra por márgenes de régimen erosivo.
+    pub fosa_erosiva_frac: f64,
+    /// Sedimento total (km³, como roca) y espesor medio del sedimento sobre el fondo oceánico (km).
+    pub sedimento_km3: f64,
+    pub sedimento_medio_oceano_km: f64,
+    /// Error relativo del balance del paso (§6.9).
+    pub error_balance_rel: f64,
 }
 
-/// Cuentas de la corteza continental (km³) a lo largo de la deriva (§8, conservación).
+/// Cuentas del material continental (km³) a lo largo de la deriva (adenda de balance §6 y §8).
+///
+/// `V_cont = Σ (h_c + S·ρ_s/ρ_c)·A`: la corteza de tipo continental (también la que un arco añade
+/// sobre fondo oceánico, sin los 7 km basálticos de base) y el sedimento con su masa de roca.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct CuentasCorteza {
     pub volumen_inicial_km3: f64,
-    /// Engrosamiento de corteza continental en los arcos.
+    /// Corteza que fabrican los arcos (`F_arc`, §6.1).
     pub arcos_km3: f64,
-    /// Corteza oceánica de arco que pasa a continental (su volumen entero).
-    pub acrecion_km3: f64,
-    /// Corteza de la placa de abajo que engruesa a la de arriba en los choques.
+    /// Producción de arcos sin franja donde ponerla (placa de arriba más estrecha que la franja).
+    pub arcos_sin_franja_km3: f64,
+    /// Erosión por subducción (`F_SE`, §6.3): pasa al manto.
+    pub erosion_subduccion_km3: f64,
+    /// Erosión por subducción sin corteza continental cerca de la fosa (no ocurre).
+    pub erosion_subduccion_sin_corteza_km3: f64,
+    /// Sedimento que llega a las fosas (§6.4): el que se pega al margen y el que va al manto
+    /// (`F_sed`).
+    pub sedimento_a_fosa_km3: f64,
+    pub sedimento_acrecionado_km3: f64,
+    pub sedimento_subducido_km3: f64,
+    /// Choques (§6.5): corteza continental solapada, la que engruesa la placa de arriba, la que va
+    /// al manto (`F_col`) y la que no cupo bajo `H_max` (también al manto).
+    pub choque_solapado_km3: f64,
     pub choque_engrosamiento_km3: f64,
-    /// Corteza de la placa de abajo que se pierde al manto en los choques.
     pub choque_perdida_km3: f64,
-    /// Corteza que no encontró sitio en la placa de arriba (todo a `H_max`).
     pub choque_sin_sitio_km3: f64,
-    /// Corteza continental arrastrada bajo otra placa sin choque (no debería haber).
-    pub subducida_km3: f64,
-    /// Adelgazamiento de los rifts (H ← f_rift·H).
+    /// Delaminación (`F_del`, §6.6).
+    pub delaminacion_km3: f64,
+    /// Adelgazamiento de los rifts (`H ← f_rift·H`): sumidero provisional. En la Tierra estirar
+    /// conserva el volumen; se revisa en la nota de rifts.
     pub rift_km3: f64,
-    /// Erosión tectónica de las cordilleras (roca).
+    /// Erosión de la génesis (§6.7, traslado interno): llega al mar (`F_den`) o a cuencas cerradas.
     pub erosion_km3: f64,
-    /// Sedimento depositado en los márgenes (masa de roca).
-    pub sedimento_km3: f64,
-    /// Sedimento que no cabe en los márgenes y sale al fondo oceánico (se pierde).
-    pub sedimento_perdido_km3: f64,
+    pub sedimento_al_mar_km3: f64,
+    pub sedimento_en_cuencas_km3: f64,
+    /// Sedimento sin celda donde ponerse (sin dueño; no debería haber): se pierde.
+    pub sedimento_sin_destino_km3: f64,
+    /// Área de arcos oceánicos que pasa a corteza continental (más de `H_cont_min`; km²).
+    pub arco_a_continental_km2: f64,
     pub volumen_final_km3: f64,
     /// Inventario de las placas (todas sus muestras, también las que el mundo no ve este paso): es
-    /// lo que tocan todos los procesos, así que su balance cierra salvo las copias de corteza.
+    /// lo que tocan todos los procesos, así que su balance cierra exactamente.
     pub inventario_inicial_km3: f64,
     pub inventario_final_km3: f64,
-    /// Lo que no explican las cuentas en el inventario: el remuestreo de la malla (§8), es decir,
-    /// la corteza que se copia al tapar agujeros de los mapas de las placas y al fundir placas.
+    /// Lo que no explican las cuentas en el inventario: debe ser error de redondeo (§0).
     pub remuestreo_km3: f64,
+    /// Peor error relativo del balance de un paso (§6.9).
+    pub error_balance_max_rel: f64,
+    /// Diagnóstico de la forma de los bordes: fondo oceánico consumido (km²) y corteza continental
+    /// solapada en choques (km³) según el tipo del borde donde ocurre: 0 sin borde, 1 divergente,
+    /// 2 subducción, 3 colisión, 4 transformante.
+    pub area_subducida_por_borde_km2: [f64; 5],
+    pub choque_solapado_por_borde_km3: [f64; 5],
 }
 
 impl CuentasCorteza {
-    /// Cambio que explican las cuentas. El engrosamiento de los choques es un traspaso de la placa
-    /// de abajo a la de arriba: no cambia el total.
+    /// Cambio que explican las cuentas (§6.9): fuentes menos sumideros. El engrosamiento de los
+    /// choques, el sedimento que se pega al margen y la erosión con su sedimento solo trasladan.
     pub fn explicado(&self) -> f64 {
-        self.arcos_km3 + self.acrecion_km3
+        self.arcos_km3
+            - self.erosion_subduccion_km3
+            - self.sedimento_subducido_km3
             - self.choque_perdida_km3
             - self.choque_sin_sitio_km3
-            - self.subducida_km3
+            - self.delaminacion_km3
             - self.rift_km3
-            - self.erosion_km3
-            + self.sedimento_km3
+            - self.sedimento_sin_destino_km3
     }
 }
 
@@ -138,7 +205,42 @@ pub struct ResumenTectonica {
     /// (Forsyth y Uyeda: positiva) y su fracción continental (negativa), sin el rodaje.
     pub forsyth_uyeda_fosa: f64,
     pub forsyth_uyeda_continente: f64,
+    /// Medias del balance de la corteza sin el rodaje (adenda de balance §8 y §10).
+    pub balance: BalanceMedio,
     pub placas_final: Vec<PlacaFinal>,
     pub eventos: Vec<EventoTectonico>,
     pub metricas: Vec<MetricaMyr>,
+}
+
+/// Medias del balance de la corteza continental tras el rodaje (adenda de balance §10).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct BalanceMedio {
+    /// Flujos medios (AU).
+    pub arcos_au: f64,
+    pub erosion_subduccion_au: f64,
+    pub sedimento_subducido_au: f64,
+    pub sedimento_acrecionado_au: f64,
+    pub choques_au: f64,
+    pub delaminacion_au: f64,
+    pub sedimento_al_mar_au: f64,
+    pub rift_au: f64,
+    /// Fondo oceánico que se hunde y que se crea (km²/año).
+    pub area_subducida_km2_anio: f64,
+    pub area_creada_km2_anio: f64,
+    pub fosa_erosiva_frac: f64,
+    /// Longitud media de los bordes por tipo (km), medida como `tierra_bordes.toml`.
+    pub dorsales_km: f64,
+    pub fosas_km: f64,
+    pub colisiones_km: f64,
+    pub transformantes_km: f64,
+    /// Espesor máximo de la corteza: medio y al final (km).
+    pub espesor_max_medio_km: f64,
+    pub espesor_max_final_km: f64,
+    /// Fracción de la corteza continental de más de 70 km: media y al final.
+    pub area_mas_70km_frac: f64,
+    pub area_mas_70km_final_frac: f64,
+    /// Cambio relativo de `V_cont` desde el final del rodaje hasta el final de la deriva.
+    pub v_cont_cambio_frac: f64,
+    /// Espesor medio del sedimento sobre el fondo oceánico al final (km).
+    pub sedimento_medio_oceano_km: f64,
 }

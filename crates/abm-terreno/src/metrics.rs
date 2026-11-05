@@ -33,7 +33,7 @@ pub const N_BANDS: usize = 6;
 pub const SCHEMA_VERSION: u32 = 5;
 
 /// Versión del esquema con el relieve tectónico o el diagnóstico ampliado del relieve.
-pub const SCHEMA_VERSION_RELIEVE: u32 = 6;
+pub const SCHEMA_VERSION_RELIEVE: u32 = 7;
 
 /// Franjas de profundidad del océano (m, positivas) del diagnóstico ampliado.
 pub const HIPSOMETRIA_OCEANO_LIMITES_M: [f64; 8] =

@@ -17,7 +17,7 @@ pub mod malla;
 use crate::config::{TectonicaCfg, TerrenoConfig};
 use crate::geometry::{V3, dot};
 use deriva::{Deriva, TipoBorde};
-use historia::{EdadesOceano, PlacaFinal, ResumenTectonica};
+use historia::{BalanceMedio, EdadesOceano, MetricaMyr, PlacaFinal, ResumenTectonica};
 use malla::{Malla, NADA};
 
 /// Distancia a una fosa cuando no hay ninguna cerca (km).
@@ -411,8 +411,53 @@ fn resumen(d: &Deriva, t: &Tectonica) -> ResumenTectonica {
         v_rms_media_cm_anio: media_de(d.v_rms_acum),
         forsyth_uyeda_fosa: media_de(d.fu_fosa),
         forsyth_uyeda_continente: media_de(d.fu_cont),
+        balance: balance_medio(&d.metricas),
         placas_final,
         eventos: d.eventos.clone(),
         metricas: d.metricas.clone(),
+    }
+}
+
+/// Medias del balance de la corteza sin el rodaje (adenda de balance §10).
+fn balance_medio(metricas: &[MetricaMyr]) -> BalanceMedio {
+    let val: Vec<&MetricaMyr> = metricas.iter().filter(|m| !m.rodaje).collect();
+    let Some(ultima) = val.last() else {
+        return BalanceMedio::default();
+    };
+    let n = val.len() as f64;
+    let media = |f: fn(&MetricaMyr) -> f64| val.iter().map(|m| f(m)).sum::<f64>() / n;
+    // V_cont al acabar el rodaje: el del último paso de rodaje (o el primero válido si no hay).
+    let v_inicio = metricas
+        .iter()
+        .rev()
+        .find(|m| m.rodaje)
+        .unwrap_or(val[0])
+        .inventario_km3;
+    BalanceMedio {
+        arcos_au: media(|m| m.f_arc_au),
+        erosion_subduccion_au: media(|m| m.f_se_au),
+        sedimento_subducido_au: media(|m| m.f_sed_au),
+        sedimento_acrecionado_au: media(|m| m.f_acr_au),
+        choques_au: media(|m| m.f_col_au),
+        delaminacion_au: media(|m| m.f_del_au),
+        sedimento_al_mar_au: media(|m| m.f_den_au),
+        rift_au: media(|m| m.f_rift_au),
+        area_subducida_km2_anio: media(|m| m.area_subducida_km2_anio),
+        area_creada_km2_anio: media(|m| m.area_creada_km2_anio),
+        fosa_erosiva_frac: media(|m| m.fosa_erosiva_frac),
+        dorsales_km: media(|m| m.dorsales_km),
+        fosas_km: media(|m| m.fosas_km),
+        colisiones_km: media(|m| m.colisiones_km),
+        transformantes_km: media(|m| m.transformantes_km),
+        espesor_max_medio_km: media(|m| m.espesor_max_km),
+        espesor_max_final_km: ultima.espesor_max_km,
+        area_mas_70km_frac: media(|m| m.area_mas_70km_frac),
+        area_mas_70km_final_frac: ultima.area_mas_70km_frac,
+        v_cont_cambio_frac: if v_inicio > 0.0 {
+            ultima.inventario_km3 / v_inicio - 1.0
+        } else {
+            0.0
+        },
+        sedimento_medio_oceano_km: ultima.sedimento_medio_oceano_km,
     }
 }

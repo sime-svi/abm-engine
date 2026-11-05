@@ -61,7 +61,8 @@ def resumen_salida(doc):
     diag = dict(doc.get('diagnostico') or {})
     rel = diag.pop('relieve', None)
     r.update(diag)
-    # Relieve tectónico (esquema v6): historia de la génesis y diagnóstico ampliado del relieve.
+    # Relieve tectónico (esquema v6; v7 añade el balance de la corteza): historia de la génesis y
+    # diagnóstico ampliado del relieve.
     t = doc['run'].get('tectonica')
     if t:
         r.update({
@@ -81,6 +82,10 @@ def resumen_salida(doc):
             'tect_suturas': sum(1 for e in t['eventos'] if e['tipo'] == 'sutura'),
             'tect_remuestreo_rel': t['cuentas']['remuestreo_km3'] / t['cuentas']['volumen_inicial_km3'],
         })
+        # Balance de la corteza continental (adenda de balance, esquema v7): medias sin el rodaje.
+        if 'balance' in t:
+            r.update({f'tect_bal_{k}': v for k, v in t['balance'].items()})
+            r['tect_error_balance_max_rel'] = t['cuentas']['error_balance_max_rel']
     if rel:
         pend = {int(p['sobre_m']): p for p in rel['pendientes_25km']}
         r.update({
@@ -123,6 +128,20 @@ def _hay_cresta(c, rel, dmin, dmax, sentido, paso=0.25, umbral=2000.0):
     return False
 
 
+def laderas_barlovento(tierra, rel):
+    """Laderas de barlovento de las cordilleras grandes: suben con el viento (m_oro > 1), h ≥ 300 m y
+    cresta > 2000 m a 0–150 km a favor del viento."""
+    return [c for c in tierra if c['m_oro'] > 1.0 and c['h'] >= 300.0 and _hay_cresta(c, rel, 0.0, 150.0, +1)]
+
+
+def sotavento_y_resto(tierra, rel):
+    """Tierra de latitudes medias (30–60°) por debajo de 2000 m, partida en sotavento (cresta > 2000 m
+    a 200–500 km a barlovento) y resto."""
+    banda = [c for c in tierra if 30.0 <= abs(c['lat_deg']) < 60.0 and c['h'] < 2000.0]
+    marca = [_hay_cresta(c, rel, 200.0, 500.0, -1) for c in banda]
+    return [c for c, m in zip(banda, marca) if m], [c for c, m in zip(banda, marca) if not m]
+
+
 def resumen_celdas(celdas, rel):
     """Medidas del volcado por celda: lluvia, `w`, `m_oro`, sombra pluviométrica."""
     tierra = [c for c in celdas if c['surface'] != 'oceano']
@@ -136,17 +155,11 @@ def resumen_celdas(celdas, rel):
         'tierra_w_bajo_pct': 100.0 * sum(x for x, ww in zip(a, w) if ww < 0.5) / at,
         'm_oro_percentiles': percentiles(mo, a, [0.01, 0.1, 0.5, 0.9, 0.99]),
     }
-    # Laderas de barlovento de las cordilleras grandes: suben con el viento (m_oro > 1), h ≥ 300 m y
-    # cresta > 2000 m a 0–150 km a favor del viento.
-    lad = [c for c in tierra if c['m_oro'] > 1.0 and c['h'] >= 300.0 and _hay_cresta(c, rel, 0.0, 150.0, +1)]
+    lad = laderas_barlovento(tierra, rel)
     al = sum(c['area_km2'] for c in lad)
     r['barlovento_m_oro'] = sum(c['m_oro'] * c['area_km2'] for c in lad) / al if al else float('nan')
     r['barlovento_lluvia_mm'] = sum(c['lluvia_anual_mm'] * c['area_km2'] for c in lad) / al if al else float('nan')
-    # Sotavento en latitudes medias: tierra < 2000 m con cresta > 2000 m a 200–500 km a barlovento.
-    banda = [c for c in tierra if 30.0 <= abs(c['lat_deg']) < 60.0 and c['h'] < 2000.0]
-    marca = [_hay_cresta(c, rel, 200.0, 500.0, -1) for c in banda]
-    dentro = [c for c, m in zip(banda, marca) if m]
-    fuera = [c for c, m in zip(banda, marca) if not m]
+    dentro, fuera = sotavento_y_resto(tierra, rel)
 
     def zona(cs):
         ar = sum(c['area_km2'] for c in cs)

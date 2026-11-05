@@ -421,17 +421,17 @@ def relieve_por_escala(madres, hijas, sub=None):
             for (t, l), (v, a) in clases.items()}
 
 
-def pendientes(cel):
-    """Pendiente a 25 km como en el planeta: diferencias centrales a ±d_oro de la altura de nivel 3
-    (el aire ve el mar plano), y factor orográfico de barlovento con k_oro = 40 y el viento del
-    modelo (alisios y vientos polares del este, oestes en 30–60°)."""
+def factor_orografico(cel):
+    """Celdas de tierra de nivel 3 con su pendiente a 25 km como en el planeta (diferencias centrales
+    a ±d_oro; el aire ve el mar plano) y su factor orográfico con k_oro = 40 y el viento del modelo
+    (alisios y vientos polares del este, oestes en 30–60°): lista de (k, lat, lon, h, m_oro, área,
+    |∇h|)."""
     n = cel.n
     delta = D_ORO_KM / R_KM
     alturas = [cel.media(k) for k in range(len(cel.w))]
 
     def h_en(p):
         return alturas[localizar(p[0], p[1], p[2], n)]
-    por_clase = {l: [] for l in (0.0, 500.0, 1000.0, 2000.0)}
     filas = []
     for k in range(len(cel.w)):
         h = alturas[k]
@@ -450,30 +450,21 @@ def pendientes(cel):
         viento = 1.0 if 30.0 <= abs(lat) < 60.0 else -1.0
         m_oro = min(max(1.0 + K_ORO * ge_aire * viento, M_ORO_MIN), M_ORO_MAX)
         lon = math.degrees(math.atan2(d[1], d[0]))
-        filas.append((k, lat, lon, h, m_oro, cel.w[k]))
-        for l in por_clase:
-            if h >= l:
-                por_clase[l].append((s, cel.w[k]))
-    out = {}
-    for l, v in por_clase.items():
-        v.sort()
-        tot = sum(a for _, a in v)
-        qs = []
-        for q in (0.5, 0.75, 0.9, 0.95, 0.99):
-            acc = 0.0
-            for s, a in v:
-                acc += a
-                if acc >= q * tot:
-                    qs.append(s)
-                    break
-        out[f'tierra_sobre_{int(l)}'] = {'media': sum(s * a for s, a in v) / tot, 'percentiles': qs}
-    # Barlovento de las cordilleras grandes, con la misma definición que herramientas/analisis/terreno.py.
+        filas.append((k, lat, lon, h, m_oro, cel.w[k], s))
+    return filas
+
+
+def laderas_barlovento(filas):
+    """Las filas de `factor_orografico` que son laderas de barlovento de las cordilleras grandes, con
+    la misma definición que herramientas/analisis/terreno.py: suben con el viento (m_oro > 1),
+    h ≥ 300 m y cresta > 2000 m a 0–150 km a favor del viento (casillas de 0,25°)."""
     rel = {}
-    for k, lat, lon, h, _, _ in filas:
+    for k, lat, lon, h, _, _, _ in filas:
         kk = (math.floor(lat / 0.25), math.floor(lon / 0.25))
         rel[kk] = max(rel.get(kk, -1e9), h)
-    lad_a = lad_m = 0.0
-    for k, lat, lon, h, m_oro, a in filas:
+    lad = []
+    for fila in filas:
+        k, lat, lon, h, m_oro, a, _ = fila
         if m_oro <= 1.0 or h < 300.0:
             continue
         coslat = max(math.cos(math.radians(lat)), 1e-3)
@@ -487,8 +478,36 @@ def pendientes(cel):
             hay = any(rel.get((kl + dk, ko), -1e9) > 2000.0 for dk in (-1, 0, 1))
             dd += 10.0
         if hay:
-            lad_a += a
-            lad_m += m_oro * a
+            lad.append(fila)
+    return lad
+
+
+def pendientes(cel):
+    """Pendiente a 25 km como en el planeta en la tierra por encima de 0/500/1000/2000 m, y factor
+    orográfico medio de las laderas de barlovento de las cordilleras grandes (`factor_orografico`)."""
+    filas = factor_orografico(cel)
+    por_clase = {l: [] for l in (0.0, 500.0, 1000.0, 2000.0)}
+    for _, _, _, h, _, a, s in filas:
+        for l in por_clase:
+            if h >= l:
+                por_clase[l].append((s, a))
+    out = {}
+    for l, v in por_clase.items():
+        v.sort()
+        tot = sum(a for _, a in v)
+        qs = []
+        for q in (0.5, 0.75, 0.9, 0.95, 0.99):
+            acc = 0.0
+            for s, a in v:
+                acc += a
+                if acc >= q * tot:
+                    qs.append(s)
+                    break
+        out[f'tierra_sobre_{int(l)}'] = {'media': sum(s * a for s, a in v) / tot, 'percentiles': qs}
+    lad_a = lad_m = 0.0
+    for _, _, _, _, m_oro, a, _ in laderas_barlovento(filas):
+        lad_a += a
+        lad_m += m_oro * a
     out['barlovento_m_oro'] = lad_m / lad_a if lad_a else float('nan')
     return out
 
@@ -751,20 +770,17 @@ def escribir_toml(ruta, secciones, cabecera):
                 f.write(f'{k} = {toml_valor(v)}\n')
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--datos', default=os.path.join(RAIZ, 'output', 'referencias'))
-    ap.add_argument('--salida', default=os.path.join(RAIZ, 'config', 'referencias', 'tierra_relieve.toml'))
-    args = ap.parse_args()
-    os.makedirs(args.datos, exist_ok=True)
-    d = lambda n: os.path.join(args.datos, n)  # noqa: E731
+F_SUR, F_NORTE = 30 * 60, 149 * 60   # latitud −60° y +59° en filas de 1' (franjas de la roca)
 
-    log('Descargas (solo la primera vez)…')
+
+def descargar(datos):
+    """Descarga a `datos` los conjuntos que falten (solo la primera vez)."""
+    os.makedirs(datos, exist_ok=True)
+    d = lambda n: os.path.join(datos, n)  # noqa: E731
     etopo(ETOPO_SUP, d('etopo2022_superficie_2m.f32be'), 0, FILAS)
     # La roca solo difiere bajo los casquetes: franjas polares.
-    f_sur, f_norte = 30 * 60, 149 * 60   # latitud −60° y +59° en filas de 1'
-    etopo(ETOPO_ROCA, d('etopo2022_roca_sur_2m.f32be'), 0, f_sur)
-    etopo(ETOPO_ROCA, d('etopo2022_roca_norte_2m.f32be'), f_norte, FILAS)
+    etopo(ETOPO_ROCA, d('etopo2022_roca_sur_2m.f32be'), 0, F_SUR)
+    etopo(ETOPO_ROCA, d('etopo2022_roca_norte_2m.f32be'), F_NORTE, FILAS)
     paxman(PAXMAN_ANT, d('paxman2022v3_antartida_5km.bin'), 10)
     paxman(PAXMAN_GRE, d('paxman2022v3_groenlandia_4p5km.bin'), 30)
     if not os.path.exists(d('seton2020_edades_6m.grd')):
@@ -772,6 +788,11 @@ def main():
     if not os.path.exists(d('bird2003_PB2002_plates.dig.txt')):
         bajar(BIRD, d('bird2003_PB2002_plates.dig.txt'))
 
+
+def relieve_nivel3(datos):
+    """Las tres versiones del relieve en celdas de nivel 3 ({'superficie', 'roca', 'roca_rebote'}) y
+    el nº de celdas que Paxman et al. sustituyen en la Antártida y en Groenlandia."""
+    d = lambda n: os.path.join(datos, n)  # noqa: E731
     log('ETOPO a celdas de nivel 3…')
     nc = COLS // PASO_ETOPO
 
@@ -788,7 +809,7 @@ def main():
     filas_roca = [None] * filas_sup
     for r in range(len(roca_s) // nc):
         filas_roca[r] = roca_s[r * nc:(r + 1) * nc]
-    r0n = f_norte // PASO_ETOPO
+    r0n = F_NORTE // PASO_ETOPO
     for r in range(len(roca_n) // nc):
         filas_roca[r0n + r] = roca_n[r * nc:(r + 1) * nc]
     cel3 = acumular_etopo(sup, (0, filas_roca), N3)
@@ -796,6 +817,19 @@ def main():
     log('Paxman et al. sobre la Antártida y Groenlandia…')
     n_ant = sustituir_paxman(cel3['roca_rebote'], d('paxman2022v3_antartida_5km.bin'), -71.0, 0.0, True, N3)
     n_gre = sustituir_paxman(cel3['roca_rebote'], d('paxman2022v3_groenlandia_4p5km.bin'), 70.0, -45.0, False, N3)
+    return cel3, n_ant, n_gre
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    ap.add_argument('--datos', default=os.path.join(RAIZ, 'output', 'referencias'))
+    ap.add_argument('--salida', default=os.path.join(RAIZ, 'config', 'referencias', 'tierra_relieve.toml'))
+    args = ap.parse_args()
+    d = lambda n: os.path.join(args.datos, n)  # noqa: E731
+
+    log('Descargas (solo la primera vez)…')
+    descargar(args.datos)
+    cel3, n_ant, n_gre = relieve_nivel3(args.datos)
 
     secciones = []
     for version, c3 in cel3.items():

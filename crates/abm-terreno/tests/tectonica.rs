@@ -188,13 +188,18 @@ fn exploracion_de_la_deriva() {
 }
 
 fn corteza(cont: bool, h: f64, edad: f64) -> abm_terreno::tectonica::deriva::Corteza {
-    abm_terreno::tectonica::deriva::Corteza {
-        cont,
-        h,
-        sed: 0.0,
-        edad_oc: edad,
-        edad_orog: 0.0,
-        dh_dt: 0.0,
+    use abm_terreno::tectonica::deriva::Corteza;
+    if cont {
+        Corteza {
+            edad_orog: 0.0,
+            ..Corteza::continental(h)
+        }
+    } else {
+        Corteza {
+            h,
+            edad_oc: edad,
+            ..Corteza::oceanica(h)
+        }
     }
 }
 
@@ -307,15 +312,20 @@ fn dos_placas_que_se_separan_hacen_una_dorsal_limpia() {
 /// bajo Asia y tira de ella hacia el norte; al llegar la India, choca. Devuelve, en cada paso, la
 /// velocidad hacia el norte de la India (cm/año), el frente de colisión India–Asia (km) y la latitud
 /// del borde norte de la corteza india.
-fn india_asia(c_col: f64, nivel: u32, n0: u32, pasos: u64) -> Vec<(f64, f64, f64)> {
-    let cfg = TectonicaCfg {
-        c_col,
+/// Configuración del escenario India–Asia: tres placas, sin rifts ni absorciones.
+fn cfg_india_asia() -> TectonicaCfg {
+    TectonicaCfg {
         a_min_frac: 0.0,
         tau_rift_myr: 1e12,
         n_min: 2,
         recalibrar_myr: 1e9, // c_b se calibra una vez, al principio
         ..TectonicaCfg::default()
-    };
+    }
+}
+
+/// India (continental, 0–15°N, 70–90°E) en una placa oceánica que va al norte a ~10 cm/año contra
+/// Asia (todo lo que está al norte de 25°N).
+fn choque_india_asia(cfg: &TectonicaCfg, nivel: u32, n0: u32) -> Deriva {
     let malla = Malla::new(n0, nivel, 6371.0);
     let dirs = malla.dir.clone();
     let geo = |d: [f64; 3]| {
@@ -323,7 +333,7 @@ fn india_asia(c_col: f64, nivel: u32, n0: u32, pasos: u64) -> Vec<(f64, f64, f64
         (la.to_degrees(), lo.to_degrees())
     };
     let india = |la: f64, lo: f64| (0.0..=15.0).contains(&la) && (70.0..=90.0).contains(&lo);
-    let mut d = Deriva::desde(&cfg, 7, malla, 0.0, &[1, 2, 3], |k| {
+    let mut d = Deriva::desde(cfg, 7, malla, 0.0, &[1, 2, 3], |k| {
         let (la, lo) = geo(dirs[k]);
         if la > 25.0 {
             (1, corteza(true, 35.0, 0.0))
@@ -341,6 +351,37 @@ fn india_asia(c_col: f64, nivel: u32, n0: u32, pasos: u64) -> Vec<(f64, f64, f64
     let lo = (80.0f64 - 90.0).to_radians();
     let w = 100.0 / 6371.0;
     d.arrancar_con(&[[w * lo.cos(), w * lo.sin(), 0.0], [0.0; 3], [0.0; 3]]);
+    d
+}
+
+/// Relajación (adenda de balance §10, prueba 2): el choque India–Asia durante `t_choque` Myr y,
+/// con la convergencia detenida, cuánto tarda el espesor máximo de la corteza en bajar de 38 km.
+/// Devuelve (espesor máximo al detenerla, Myr hasta bajar de 38 km).
+fn relajacion(cfg: &TectonicaCfg, nivel: u32, n0: u32, t_choque: u64) -> (f64, f64) {
+    let mut d = choque_india_asia(cfg, nivel, n0);
+    for _ in 0..t_choque {
+        d.dar_paso();
+    }
+    let h0 = d.espesor_max_continental();
+    for i in 1..=2000u64 {
+        d.paso_sin_movimiento();
+        if d.espesor_max_continental() < 38.0 {
+            return (h0, i as f64 * cfg.dt_myr);
+        }
+    }
+    (h0, f64::INFINITY)
+}
+
+fn india_asia(c_col: f64, nivel: u32, n0: u32, pasos: u64) -> Vec<(f64, f64, f64)> {
+    let cfg = TectonicaCfg {
+        c_col,
+        ..cfg_india_asia()
+    };
+    let mut d = choque_india_asia(&cfg, nivel, n0);
+    let geo = |d: [f64; 3]| {
+        let (la, lo) = lat_lon(d);
+        (la.to_degrees(), lo.to_degrees())
+    };
     let mut out = Vec::new();
     for _ in 0..pasos {
         d.dar_paso();
@@ -485,7 +526,7 @@ fn una_placa_rigida_que_gira_no_se_deforma() {
 }
 
 #[test]
-fn sin_corteza_continental_todo_es_oceano_con_profundidad_por_edad() {
+fn sin_cratones_solo_los_arcos_hacen_corteza_continental() {
     let cfg = TectonicaCfg {
         f_cont: 0.0,
         ..cfg_rapida()
@@ -497,11 +538,13 @@ fn sin_corteza_continental_todo_es_oceano_con_profundidad_por_edad() {
     let z = d.alturas();
     for (k, &zk) in z.iter().enumerate() {
         let c = d.corteza(k).expect("corteza");
+        // Sin cratones, la única corteza continental posible es la de los arcos (adenda de
+        // balance: un arco oceánico rápido llega a ~20 km en unas decenas de Myr).
         assert!(
-            !c.cont,
-            "no puede haber corteza continental en 30 Myr sin cratones"
+            !c.cont || c.arco,
+            "corteza continental que no viene de un arco en un planeta sin cratones"
         );
-        if c.h == cfg.h_oc_km {
+        if c.h == cfg.h_oc_km && c.hc == 0.0 && c.sed == 0.0 {
             let esperada =
                 -abm_terreno::tectonica::isostasia::profundidad_por_edad(&cfg, c.edad_oc);
             assert!(
@@ -686,4 +729,183 @@ fn mover_las_placas_conserva_exactamente_la_corteza() {
         tipos.contains(&"rift"),
         "la prueba debe pasar por rifts: {tipos:?}"
     );
+    // Adenda de balance §6.9: en cada paso, el cambio de V_cont son fuentes menos sumideros.
+    assert!(
+        c.error_balance_max_rel < 1e-9,
+        "balance de un paso: error {:.2e}",
+        c.error_balance_max_rel
+    );
+    // Los traslados internos no pierden nada: la erosión acaba en el mar o en cuencas cerradas, y
+    // el sedimento de fosa se pega al margen o se hunde.
+    let erosion = c.sedimento_al_mar_km3 + c.sedimento_en_cuencas_km3;
+    assert!(
+        (erosion - c.erosion_km3).abs() <= 1e-9 * c.erosion_km3.max(1.0),
+        "erosión {:.6e} frente a sedimento {erosion:.6e}",
+        c.erosion_km3
+    );
+    let fosa = c.sedimento_acrecionado_km3 + c.sedimento_subducido_km3;
+    assert!(
+        (fosa - c.sedimento_a_fosa_km3).abs() <= 1e-9 * c.sedimento_a_fosa_km3.max(1.0),
+        "sedimento de fosa {:.6e} frente a {fosa:.6e}",
+        c.sedimento_a_fosa_km3
+    );
+    assert_eq!(c.sedimento_sin_destino_km3, 0.0);
+    assert!(c.arcos_km3 > 0.0 && c.erosion_subduccion_km3 > 0.0 && c.delaminacion_km3 >= 0.0);
+    for m in &d.metricas {
+        assert!(
+            m.f_arc_au.is_finite()
+                && m.error_balance_rel < 1e-9
+                && m.espesor_max_km <= cfg.h_max_km + 1e-9,
+            "métrica del paso {m:?}"
+        );
+    }
+}
+
+#[test]
+fn la_relajacion_de_un_orogeno_tarda_entre_100_y_200_myr() {
+    // Adenda de balance §10, prueba 2: tras el choque India–Asia se detiene la convergencia y el
+    // espesor máximo vuelve a menos de 38 km en 100–200 Myr (con τ_ero calibrado así: ~148 Myr).
+    let (h0, t) = relajacion(&cfg_india_asia(), 1, 48, 50);
+    assert!(h0 > 60.0, "el choque debe engrosar la corteza: {h0:.1} km");
+    assert!((100.0..=200.0).contains(&t), "relajación en {t} Myr");
+}
+
+#[test]
+fn un_planeta_sin_fosas_solo_delamina_y_erosiona() {
+    // Adenda de balance §10, caso límite: una sola placa no tiene bordes; no hay arcos ni
+    // sumideros de fosa, solo la delaminación y la erosión (con su sedimento, que no se pierde).
+    let cfg = TectonicaCfg {
+        n_min: 1,
+        tau_rift_myr: 1e12,
+        a_min_frac: 0.0,
+        ..TectonicaCfg::default()
+    };
+    let malla = Malla::new(12, 1, 6371.0);
+    let dirs = malla.dir.clone();
+    let mut d = Deriva::desde(&cfg, 3, malla, 0.0, &[1], |k| {
+        let (la, _) = lat_lon(dirs[k]);
+        if la.to_degrees() > 40.0 {
+            (0, corteza(true, 70.0, 0.0))
+        } else {
+            (0, corteza(false, 7.0, 60.0))
+        }
+    });
+    let v0 = d.inventario_continental();
+    for _ in 0..20 {
+        d.dar_paso();
+    }
+    let c = d.cuentas;
+    assert_eq!(
+        (
+            c.arcos_km3,
+            c.erosion_subduccion_km3,
+            c.sedimento_a_fosa_km3,
+            c.choque_solapado_km3
+        ),
+        (0.0, 0.0, 0.0, 0.0),
+        "sin fosas no hay procesos de fosa"
+    );
+    assert!(c.delaminacion_km3 > 0.0 && c.erosion_km3 > 0.0);
+    let dv = d.inventario_continental() - v0;
+    assert!(
+        (dv + c.delaminacion_km3).abs() <= 1e-9 * v0,
+        "V_cont cambia {dv:.4e} km³ y la delaminación es {:.4e}",
+        c.delaminacion_km3
+    );
+}
+
+#[test]
+fn las_reglas_del_margen_y_de_la_delaminacion() {
+    use abm_terreno::tectonica::deriva::{margen_erosivo, tras_delaminar};
+    let cfg = TectonicaCfg::default();
+    // Un margen con mucho sedimento es siempre acrecionario, por rápido que converja.
+    assert!(!margen_erosivo(&cfg, 20.0, 5.0));
+    assert!(margen_erosivo(&cfg, 10.0, 0.5));
+    assert!(!margen_erosivo(&cfg, 3.0, 0.0));
+    // Sin exceso sobre h_del no delamina.
+    assert_eq!(tras_delaminar(45.0, 50.0, 1.0, 50.0), 45.0);
+    assert_eq!(tras_delaminar(50.0, 50.0, 1e6, 50.0), 50.0);
+    // Con un paso enorme la forma exponencial sigue siendo estable: no baja de h_del.
+    let h = tras_delaminar(80.0, 50.0, 1e6, 50.0);
+    assert!((50.0..50.0 + 1e-9).contains(&h), "{h}");
+    let h = tras_delaminar(80.0, 50.0, 50.0, 50.0);
+    assert!((h - (50.0 + 30.0 / std::f64::consts::E)).abs() < 1e-12);
+}
+
+/// Dos placas oceánicas: la del oeste (más vieja) va al este a `v` cm/año contra la del este, quieta,
+/// a lo largo del borde `lon = borde(lat)` (grados). Área consumida en `pasos` Myr (km²), con solo la
+/// cinemática (sin fuerzas: compara la geometría del remuestreo).
+fn area_consumida(borde: impl Fn(f64) -> f64, v: f64, pasos: u64) -> f64 {
+    let cfg = TectonicaCfg::default();
+    let malla = Malla::new(48, 1, 6371.0);
+    let dirs = malla.dir.clone();
+    let mut d = Deriva::desde(&cfg, 5, malla, 0.0, &[1, 2], |k| {
+        let (la, lo) = lat_lon(dirs[k]);
+        let (la, lo) = (la.to_degrees(), lo.to_degrees());
+        if lo < borde(la) && lo > -150.0 {
+            (0, corteza(false, 7.0, 120.0))
+        } else {
+            (1, corteza(false, 7.0, 40.0))
+        }
+    });
+    d.placas[0].omega = [0.0, 0.0, v * 10.0 / 6371.0];
+    let mut total = 0.0;
+    for _ in 0..pasos {
+        d.paso_cinematico();
+        total += d.area_subducida_km2;
+    }
+    total
+}
+
+#[test]
+fn un_borde_dentado_consume_la_misma_area_que_uno_recto() {
+    // Adenda de balance §10, caso límite: para placas rígidas, el área que cruza un borde es la
+    // misma sea recto o en zigzag (si todos sus dientes convergen).
+    let recto = area_consumida(|_| 0.0, 5.0, 20);
+    let zigzag = area_consumida(
+        |la: f64| {
+            let f = (la / 20.0).rem_euclid(1.0);
+            5.0 * (1.0 - 4.0 * (f - 0.5).abs())
+        },
+        5.0,
+        20,
+    );
+    // Sin dientes, lo que entra por el ecuador en 20 Myr a 5 cm/año a lo largo de 180° de meridiano.
+    let teorica = 5.0 * 10.0 * 20.0 * 2.0 * 6371.0;
+    println!(
+        "área consumida: recto {:.4} y zigzag {:.4} de la teórica",
+        recto / teorica,
+        zigzag / teorica
+    );
+    assert!(
+        (recto / teorica - 1.0).abs() < 0.05,
+        "recto {recto:.4e} km², teórica {teorica:.4e}"
+    );
+    assert!(
+        (zigzag / recto - 1.0).abs() < 0.05,
+        "zigzag {zigzag:.4e} km² frente a recto {recto:.4e}"
+    );
+}
+
+#[test]
+#[ignore = "exploratoria: calibración de tau_orog (τ_ero) con la relajación de la adenda de balance"]
+fn calibracion_relajacion() {
+    let lista: Vec<f64> = std::env::var("TAU_ERO")
+        .ok()
+        .map(|x| x.split(',').filter_map(|v| v.parse().ok()).collect())
+        .unwrap_or(vec![150.0]);
+    let t_choque: u64 = std::env::var("T_CHOQUE")
+        .ok()
+        .and_then(|x| x.parse().ok())
+        .unwrap_or(50);
+    for &tau in &lista {
+        let cfg = TectonicaCfg {
+            tau_orog_myr: tau,
+            ..cfg_india_asia()
+        };
+        let (h0, t) = relajacion(&cfg, 1, 48, t_choque);
+        println!(
+            "tau_ero = {tau:>5}: espesor máximo al detener {h0:.1} km, baja de 38 km en {t:.0} Myr"
+        );
+    }
 }

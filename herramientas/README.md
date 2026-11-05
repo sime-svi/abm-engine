@@ -11,6 +11,9 @@ Programas fuera del motor para verificar, medir y consultar las corridas (CLAUDE
 | `analisis/terreno.py` | Resume y compara corridas del planeta: biomas, diagnóstico, `c_P`, relieve tectónico y, con el volcado por celda, la sombra pluviométrica |
 | `analisis/referencia_tierra.py` | Calcula las tablas de la Tierra con las que se compara el relieve (`config/referencias/tierra_relieve.toml`) |
 | `analisis/h5mini.py` | Lector mínimo de HDF5 (sin librerías): lee filas sueltas de rejillas contiguas por peticiones parciales |
+| `analisis/lluvia_observada.py` | Mide la lluvia observada de la Tierra (WorldClim y CHELSA) a la escala y con las definiciones del planeta, y la compara con la del planeta (`config/referencias/tierra_lluvia.toml`) |
+| `analisis/tiffmini.py` | Lector mínimo de GeoTIFF (sin librerías): una banda en tiras, con Deflate y predictor; también fila a fila por peticiones parciales |
+| `analisis/bordes_bird.py` | Mide los bordes de placa de la Tierra (Bird 2003) en la malla tectónica, con el método y la regla de clasificación del modelo (`config/referencias/tierra_bordes.toml`) |
 
 ## Ajustes desde la línea de comandos
 
@@ -68,6 +71,37 @@ Calcula a las resoluciones del planeta (niveles 0 a 3 del cubo, ~208 a 26 km), c
 - edades del fondo y tamaños de las placas.
 
 La versión de referencia es la **roca sin hielo con el rebote isostático** (decisión del responsable): roca desnuda como la del planeta, con el agua del océano actual.
+
+## Lluvia observada
+
+```bash
+python3 -I herramientas/analisis/lluvia_observada.py   # ~30 s con las cachés; la primera vez, unos minutos más
+```
+
+El objetivo de la lluvia de barlovento sale de lluvia observada, a la misma escala (~26 km) y con la misma definición de barlovento que el planeta (decisión del responsable). El ×1,36 de la referencia del relieve es la regla del modelo sobre el relieve real, no lluvia medida. El programa escribe `config/referencias/tierra_lluvia.toml`, solo con la Tierra. Al lado muestra lo mismo medido en el volcado del planeta con la lluvia del modelo (`output/escenarios/planeta_world.json`, de `escenarios.py --solo planeta`).
+
+Datos, descargados una vez a `output/referencias/`:
+- **WorldClim 2.1:** lluvia mensual de 1970–2000 a 10' (~7 MB). Interpola pluviómetros, así que se queda corto en las montañas, y en los casquetes de hielo no sirve.
+- **CHELSA 2.1:** bio12, la lluvia anual de 1981–2010 a 30''. No tiene reducciones internas: `tiffmini.py` lee 1 de cada 8 filas con peticiones parciales (~20 MB). Modela el viento y el relieve; satura en 6 553,5 mm.
+- **El relieve:** el de `referencia_tierra.py` (roca rebotada sin hielo), guardado en caché en `output/cache/`.
+
+Mide, en la Tierra y en el planeta, sobre las celdas de nivel 3:
+- la lluvia de las laderas de barlovento de las cordilleras grandes, con la selección de `referencia_tierra.pendientes` y `terreno.py`;
+- el factor de barlovento observado, lo que en el modelo es `m_oro`: la lluvia de cada celda de barlovento entre la de la tierra baja (h < 300 m) a 50–300 km contra el viento, o entre la de la tierra baja de su franja de 1° de latitud;
+- el sotavento de las cordilleras grandes en latitudes medias y el resto, como `terreno.py`;
+- la lluvia media de la tierra, con y sin la Antártida y Groenlandia, y por franjas de 10° (para revisar `c_P`).
+
+## Bordes de placa de la Tierra en la malla del modelo
+
+```bash
+python3 -I herramientas/analisis/bordes_bird.py   # ~3 min; baja PB2002_steps de Bird la primera vez
+```
+
+Una malla de 52 km no puede dibujar una línea más fina que sus celdas, así que la longitud de los bordes del modelo se compara con la Tierra medida igual (adenda de balance §10). El programa reconstruye las placas de Bird (2003) como regiones de la malla tectónica (nivel 2) y mide cada borde con el método de `clasificar_bordes` (`L = 2·A·|∇χ|`). Da el tipo de dos maneras:
+- **por la clase de Bird** del tramo más cercano (dorsal, rift, fosa, convergencia oceánica, choque, transformante oceánica y continental);
+- **con la regla del modelo:** la normal de la malla y la velocidad relativa del tramo de Bird. Es transformante si la velocidad normal es menor que 0,26 (≈15°) de la relativa; también se mide con 20°, el umbral que separa las clases de Bird. La corteza oceánica es la que tiene edad en Seton et al. (2020).
+
+Lo hace con las 52 placas de Bird y con una Tierra reducida a las 15 mayores (las pequeñas, fundidas con su vecina de más borde), como el modelo.
 
 ## La batería de escenarios
 

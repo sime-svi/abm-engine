@@ -112,12 +112,8 @@ mod tests {
 
     fn cont(h: f64) -> Corteza {
         Corteza {
-            cont: true,
-            h,
-            sed: 0.0,
-            edad_oc: 0.0,
             edad_orog: 0.0,
-            dh_dt: 0.0,
+            ..Corteza::continental(h)
         }
     }
 
@@ -159,12 +155,11 @@ mod tests {
         for i in 0..400 {
             let h = 7.0 + i as f64 * 0.1;
             let k = Corteza {
-                cont: false,
                 h,
-                sed: 0.0,
+                hc: h - 7.0,
+                arco: true,
                 edad_oc: 30.0,
-                edad_orog: 0.0,
-                dh_dt: 0.0,
+                ..Corteza::oceanica(7.0)
             };
             let z = altura(&c, &k);
             assert!(z > prev && (prev == f64::NEG_INFINITY || z - prev < 30.0));

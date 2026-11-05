@@ -1,0 +1,89 @@
+# Bordes de placa de la Tierra medidos como los del modelo (adenda de balance v2 §10).
+# Generado por herramientas/analisis/bordes_bird.py a partir de Bird (2003, PB2002_steps) y
+# Seton et al. (2020) para el tipo de corteza. Malla tectónica de nivel 2 (~52 km).
+# Longitudes en km: dorsales, choques y transformantes, la mitad de cada lado; fosas, el lado
+# que se hunde. "malla_clases": clase de Bird del tramo más cercano. "regla_modelo_15": tipo
+# con la regla de clasificar_bordes (f_transformante 0,26); "regla_bird_20", con 20°.
+# "mayores_15": las placas pequeñas fundidas con su vecina hasta quedar 15.
+
+[bordes.vectorial_km]
+OSR = 67335.4
+CRB = 27470.5
+SUB = 51309.2
+OCB = 17447.3
+CCB = 23003.4
+OTF = 47784.8
+CTF = 26132.8
+total = 260483
+
+[bordes.oblicuidad_grados]
+p95_transformantes = 17.8402
+p5_resto = 24.444
+
+[bordes.todas.malla_clases_km]
+OSR = 51443.2
+CRB = 26091
+SUB = 49275.4
+OCB = 16195.8
+CCB = 21203.3
+OTF = 46487.5
+CTF = 24413
+total = 235109
+
+[bordes.todas.malla_por_tipo_km]
+dorsal = 77534.2
+fosa = 65471.1
+choque = 21203.3
+transformante = 70900.5
+
+[bordes.todas.regla_modelo_15_km]
+dorsal = 103189
+fosa = 53292.9
+choque = 39048.6
+transformante = 38508.6
+total = 234039
+
+[bordes.todas.regla_bird_20_km]
+dorsal = 98719.7
+fosa = 51433
+choque = 35817.5
+transformante = 48357.4
+total = 234328
+
+[bordes.todas.malla]
+placas = 58
+ambiguas_frac = 0.036885
+
+[bordes.mayores_15.malla_clases_km]
+OSR = 45350.9
+CRB = 19429
+SUB = 33721.1
+OCB = 11827
+CCB = 14850.4
+OTF = 40231
+CTF = 17526.3
+total = 182936
+
+[bordes.mayores_15.malla_por_tipo_km]
+dorsal = 64779.9
+fosa = 45548.1
+choque = 14850.4
+transformante = 57757.3
+
+[bordes.mayores_15.regla_modelo_15_km]
+dorsal = 87445.5
+fosa = 39521
+choque = 25596.3
+transformante = 29625.6
+total = 182188
+
+[bordes.mayores_15.regla_bird_20_km]
+dorsal = 84159.2
+fosa = 38102.8
+choque = 23205.3
+transformante = 36924.8
+total = 182392
+
+[bordes.mayores_15.malla]
+placas = 15
+ambiguas_frac = 0.0425363

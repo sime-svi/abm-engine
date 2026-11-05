@@ -1,11 +1,13 @@
 # Incremento 4 del terreno: relieve tectónico (diseño técnico y resultados)
 
 **Estado:** primera implementación (2026-11-05), con interruptor `worldgen.relieve = "tectonico" | "ruido"`
-mientras se mide. **Diseño del responsable:** `diseno_relieve_tectonico.md` (manda sobre este documento).
+mientras se mide, más la adenda de balance v2 (§9). **Diseño del responsable:** `diseno_relieve_tectonico.md`
+y `adenda_balance_corteza.md` (mandan sobre este documento).
 **Código:** `crates/abm-terreno/src/tectonica/` (`malla`, `deriva`, `isostasia`, `historia`, `mod`), más
 `statics.rs` (G5), `erosion.rs` y `lod.rs` (G6), `worldgen.rs`, `cache.rs` (`ABMGEN04`) y `metrics.rs`
-(esquema v6). **Referencia de la Tierra:** `config/referencias/tierra_relieve.toml`
-(`herramientas/analisis/referencia_tierra.py`).
+(esquema v6; v7 con el balance de la corteza). **Referencia de la Tierra:** `config/referencias/tierra_relieve.toml`
+(`herramientas/analisis/referencia_tierra.py`), `tierra_bordes.toml` (`bordes_bird.py`) y `tierra_lluvia.toml`
+(`lluvia_observada.py`).
 
 ---
 
@@ -134,12 +136,149 @@ El inventario de corteza continental de las placas (todas sus muestras) cierra a
 2. **Tasa de los arcos hoy: 40 km³/Myr por km de fosa**, constante, sin depender de la velocidad de convergencia ni del tipo de arco. La adenda pide 96 (oceánico) y 64 (continental), escalados por `v/v̄`. **Ojo con la longitud de las fosas:** las del modelo miden ~100 000 km de media (la Tierra, ~43 500 km de márgenes convergentes oceánicos) y las dorsales ~101 500 km (la Tierra ~65 000). Con tasas por km, todos los flujos de fosa saldrían ~2,3 veces los reales. Los bordes son demasiado largos (ondulados por la deformación inicial y dentados por el crecimiento en las dorsales).
 3. **¿Cuenta la corteza de arco sobre litosfera oceánica? No.** Mientras no pasa de `H_cont_min` (20 km) es oceánica y no cuenta; al pasar, la columna entera (con los 7 km basálticos) entra en el volumen continental. No hay marca de origen de arco: hay que crear `a_i` y contar solo lo añadido (`h_c`), como pide la adenda.
 
-## 9. Pendientes (en orden)
+## 9. Adenda de balance v2: implementación (2026-11-05)
 
-1. Adenda del responsable: sumideros reales de corteza (erosión por subducción, sedimento subducido) y η_col de India–Asia (Ingalls et al., 2016: ~50 % reciclado).
-2. Inicio de subducción en márgenes pasivos viejos (cierra el fondo de más de 200 Myr).
-3. Fondo oceánico real: sedimento abisal, mesetas y montes submarinos (puntos calientes, P2 del diseño), y márgenes continentales sumergidos. Con 1–3 debería volver ζ ≈ 0 sin forzar `H_nivel`.
-4. Acortamiento andino (el §6.3 cuenta con él); ciclo de Wilson (rifts por suturas viejas); flexión de la litosfera (cuencas de antepaís); microplacas (Bird).
-5. ~~Reducir el remuestreo (hallazgo 6)~~: hecho, §7.
-6. Revisar el objetivo de la lluvia de barlovento (hallazgo 3) y, con el relieve ya realista, calibrar la lluvia de base con datos de la Tierra y retirar `c_P`.
+El responsable entregó la versión 2 de `adenda_balance_corteza.md`. Las tasas de los arcos y de la erosión por subducción pasan a ser **por km² de placa que se hunde**, el área consumida que da exacta el remuestreo. Se implementó entera, sin interruptor: es un cambio de mecanismo, y la referencia del comportamiento anterior es el commit anterior.
+
+### 9.1 Estado nuevo de cada muestra
+
+- `hc`: corteza de tipo continental (km). Toda la de un continente; en el fondo oceánico, solo lo que añaden los arcos y la acreción, sin los 7 km basálticos. `0 ≤ hc ≤ h`.
+- `arco`: la marca `a_i`. La columna es de arco si toda su corteza continental la hizo una zona de subducción. Al unirse a corteza continental sin marca (un choque, un arco que crece sobre un continente) pasa a 0.
+- `sed`: el sedimento, ya existente, ahora también sobre el fondo oceánico.
+- `V_cont = Σ (hc + sed·ρ_s/ρ_c)·A` sobre todas las muestras. Que un arco oceánico pase de `H_cont_min` (pasa a `cont`) no cambia `V_cont`: ya contaba desde que se creó.
+
+### 9.2 Orden del paso (§9 de la adenda) y decisiones técnicas
+
+1. **Remuestreo con `A_sub`.** Cada muestra oceánica consumida en un solape apunta su área, su sedimento y su edad a la celda del mundo donde se perdió (el frente). Si lleva corteza continental (arco o prisma), esa parte va al choque (6.5). **Tramo de fosa:** el consumo de cada frente se agrupa en la celda de borde más cercana de la placa de arriba, sin salir de ella. Cuando la placa de abajo pierde dos filas en un paso, las dos son de la misma fosa.
+2. Clasificación de los bordes (la del documento principal).
+3. **Régimen** (6.2), por tramo. `v_j` es la convergencia normal del borde del tramo, y `S_fosa,j` el espesor medio del sedimento consumido allí (`margen_erosivo`).
+4. **Arcos** (6.1), en la franja `d_arco ± w_arco/2`. Cada celda usa `p_arc,cont` si su corteza es continental sin marca de arco y `p_arc,oc` si no.
+   - **Reparto (decisión técnica).** En un borde dentado, las celdas de franja se las quedan los tramos de los dientes; con un reparto por tramo, la mitad de la producción se quedaba sin franja. Por eso cada placa de arriba recibe exactamente `Σ A_sub` de sus tramos, repartido por su franja con el peso de la convergencia normal `v_n` del tramo de cada celda.
+   - Un peso `A_sub/L` concentraba el arco hasta 223 km, porque las celdas de esquina tienen `L` casi nula. Se descartó.
+5. **Erosión por subducción** (6.3): `p_SE·A_sub` desde la celda de la placa de arriba más cercana a la fosa hacia dentro, en orden de distancia y por índice.
+   - "Junto a la fosa" es a menos de `d_arco + w_arco/2`. Lo que no encuentra corteza continental ahí no se erosiona: 0,15 AU, en fosas intraoceánicas sin arco.
+   - Una celda que se queda sin corteza continental pasa a fondo oceánico, con la edad del fondo que se hunde en ese tramo (evento `retroceso_margen`).
+   - Los tramos de muesca erosionan desde el tramo con franja más cercano.
+6. **Sedimento en la fosa** (6.4). En un margen acrecionario, `f_acr·V_llega` forma el **prisma**: desde la celda del frente hacia dentro, por la región del tramo y sin pasar de `H_max`. El resto, y todo el de un margen erosivo, pasa al manto (`F_sed`).
+7. **Choques** (6.5). Se usa `η_arco` si la corteza solapada tiene marca de arco y `η_col` si no.
+   - La corteza de un continente solo engruesa corteza continental de la placa de arriba; la de un arco o un prisma, cualquier corteza.
+   - Lo que no cabe en la cuenca de su frente pasa al resto de la placa de arriba, de lo más cercano a lo más lejano. Antes se perdía: 1,2 AU de "sin sitio" que solo eran un artefacto.
+8. **Delaminación** (6.6): `tras_delaminar`, la forma exponencial exacta, en todas las muestras.
+9. **Erosión** (§6.6 del principal, con 6.7). El exceso del espesor equivalente sobre `H_0` decae con `τ_ero`, primero el sedimento y luego `hc`. El sedimento va así (decisión técnica; la adenda pide "la primera celda marina" y el resto llega en la nota del fondo):
+   - **Hasta el mar:** inundación por prioridad desde la costa (Barnes et al. 2014). Da a cada celda de tierra su cota de desagüe y la celda hacia la que drena.
+   - **En una cuenca cerrada** se queda hasta llenarla y el resto sigue hacia el desagüe. Una cuenca no se convierte en una torre de sedimento.
+   - **En el mar**, desde cada desembocadura, llena las celdas más cercanas por el mar hasta la plataforma (−130 m) y sigue mar adentro. Echarlo todo en la primera celda marina apilaba la erosión de un continente en una sola celda.
+10. Nivel del mar (una vez por paso, antes del sedimento, como antes).
+11. **Balance del paso** (6.9): `|ΔV_cont − (F_arc − F_SE − F_sed − F_col − F_del − F_rift)| / V_cont`. `F_col` incluye lo que no cupo bajo `H_max`. `F_rift` es el adelgazamiento de los rifts, sumidero provisional hasta la nota de rifts (en la Tierra estirar conserva el volumen).
+
+**Tope `H_max` (decisión de realismo, avisada).** El documento principal lo tenía en 65 km y solo para los choques. La adenda pide un espesor máximo de 70–80 km. `H_max` pasa a **80 km**, lo más grueso de la Tierra (Tíbet), y vale para toda corteza: arcos, prisma y choques. Es el tope del colapso gravitatorio, que no distingue el origen de la corteza.
+- Se comprueba con la muestra receptora más gruesa, y lo planeado se lleva por muestra. `en_celda` reparte entre las muestras que caen en la celda, cuya área puede ser hasta la mitad de la celda del mundo, y una muestra puede recibir por dos celdas. Con la comprobación por celda del mundo, algunas muestras llegaban a 120–150 km.
+- Al fundir placas, una muestra sin sitio libre va a la más delgada de las cercanas.
+
+**Calibración de `τ_ero` (tipo b).** La prueba de relajación de la adenda (§10, prueba 2) usa el choque India–Asia de 50 Myr y luego detiene la convergencia (`paso_sin_movimiento`):
+
+| τ_ero (Myr) | 150 | 100 | 80 | 65 | **63** | 60 |
+|---|---|---|---|---|---|---|
+| bajar de 38 km (Myr) | 322 | 225 | 184 | 153 | **148** | 142 |
+
+El objetivo es 100–200 Myr; se toma su centro, `τ_ero = 63 Myr`, que no depende de la duración del choque (30 Myr dan 147). Con él, una cordillera de 70 km se erosiona a 0,56 km/Myr y un escudo de 36 km a 16 m/Myr: los órdenes de magnitud de la adenda. `τ_del` (50) y `f_acr` (0,3) **no se calibran**: sus objetivos son globales y dependen del área subducida, que es el doble de la real (§9.3). Calibrarlos ahora compensaría una base irreal.
+
+### 9.3 Resultados (planeta por defecto, semilla 42, 450 Myr sin el rodaje)
+
+| Magnitud | Modelo | Tierra (adenda §10) | |
+|---|---|---|---|
+| Conservación (remuestreo; balance del peor paso) | 1·10⁻¹⁴; 9,5·10⁻¹⁵ | error de redondeo | sí |
+| Área subducida | **6,29 km²/año** (creada 6,44) | 2,7–3,4 | **el doble** |
+| Arcos | 6,92 AU | 2,7–5 | alto |
+| Erosión por subducción | 2,39 AU | 1,3–1,7 | alto |
+| Sedimento subducido | 1,04 AU | 1,0–1,65 | sí |
+| Sedimento acrecionado | 0,41 AU | ≈0,3 | cerca |
+| Pérdida en choques | **4,72 AU** | 0,4–0,7 | **7–12 veces** |
+| Delaminación | 1,18 AU | ≈1,1 | sí |
+| Sedimento al mar | 4,93 AU | ≈1,8 | alto |
+| Espesor máximo | 78,8 km (tope 80); el 1,9 % de la corteza continental pasa de 70 km | 70–80 | sí |
+| Cambio de `V_cont` | −15,9 % | ±10 % | no |
+| `f_cont` final | 0,310 | 0,40 ± 0,03 | no |
+| Fracción de fosa erosiva | 34 % del área subducida | — | |
+
+Los choques terminados son 108, 71 de arco contra continente y 37 de continente contra continente, con una eficacia efectiva media de 0,76.
+
+**Dónde ocurre el consumo (diagnóstico nuevo, `cuentas.*_por_borde`).** En la Tierra todo entra por las fosas y los choques.
+
+| Tipo del borde del tramo | sin borde | divergente | subducción | colisión | transformante |
+|---|---|---|---|---|---|
+| Fondo oceánico consumido (km²/año) | 0,14 | 0,56 | 4,57 | 0,11 | 0,92 |
+| Corteza continental solapada (AU) | 1,10 | 1,22 | 3,66 | 6,11 | 1,99 |
+
+- El 26 % del fondo consumido y el 31 % de la corteza continental solapada caen en bordes que en la Tierra no consumen nada. Son los dientes de bordes que se deslizan: una placa rígida con un borde dentado que se mueve de lado abre huecos en una cara y se solapa en la otra.
+- La geometría del remuestreo no es la causa. La prueba `un_borde_dentado_consume_la_misma_area_que_uno_recto` da 1,022 veces el área teórica con un borde recto y 1,029 con uno en zigzag de dientes a 45°: cuando todos los dientes convergen, el área es la misma.
+- Lo que sobra es cinemática y forma. Los bordes del modelo miden ~310 000 km con 14 placas, frente a 182 000 en la Tierra de 15 placas medida igual (§10). Además las placas se mueven poco de lado: el área subducida en fosas, 4,57 km²/año, ya es 1,3–1,7 veces la real.
+- Los arcos, la erosión por subducción y la erosión de la génesis siguen al área subducida: por eso salen altos. Es un problema de base, para la nota de los bordes.
+
+**Efecto en el planeta**, frente a la conservación exacta (§7):
+- tierra 31,0 % (la Tierra 28,4);
+- altura media de la tierra 1 544 → 1 277 m (671);
+- océano 3 853 m (3 667);
+- nivel del mar −1 184 → −619 m: el sedimento llena las cuencas;
+- edad media del fondo 97 → 79 Myr, más de 200 Myr 15 → 8 %;
+- lluvia sobre tierra 595 → 710 mm, con `c_P` 2,04 → 1,78;
+- la sombra pluviométrica pasa a ir en el sentido real: sotavento entre resto de latitudes medias, 1,24 → 0,79 (la Tierra 0,58, §11).
+
+## 10. Bordes de la Tierra medidos igual que los del modelo (2026-11-05)
+
+`herramientas/analisis/bordes_bird.py` → `config/referencias/tierra_bordes.toml`. Bird (2003), PB2002: 5 819 tramos y 52 placas. Las placas se reconstruyen como regiones de la malla de 52 km, y la longitud se mide con el mismo método que `clasificar_bordes` (`L = 2·A·|∇χ|`).
+
+**La malla no alarga los bordes, los acorta.** El método del gradiente no cuenta la escalera, y una malla de 52 km alisa los zigzag más finos que sus celdas. La afirmación de la adenda v2 §10 ("una malla de 52 km alarga cualquier línea") no se cumple con este método. La comparación con la Tierra medida igual sigue siendo la correcta.
+
+| Clase de Bird | OSR | CRB | SUB | OCB | CCB | OTF | CTF | total |
+|---|---|---|---|---|---|---|---|---|
+| Vectorial (km) | 67 335 | 27 470 | 51 309 | 17 447 | 23 003 | 47 785 | 26 133 | 260 483 |
+| En la malla (km) | 51 443 | 26 091 | 49 275 | 16 196 | 21 203 | 46 488 | 24 413 | 235 109 |
+
+Por tipo del modelo. Dorsal = OSR+CRB; fosa = SUB+OCB (convergencia entre placas oceánicas); choque = CCB; transformante = OTF+CTF.
+
+| km | dorsales | fosas | choques | transformantes | total |
+|---|---|---|---|---|---|
+| Tierra, clases de Bird en la malla (52 placas) | 77 534 | 65 471 | 21 203 | 70 900 | 235 109 |
+| Tierra, regla del modelo, 15° (52 placas) | 103 189 | 53 293 | 39 049 | 38 509 | 234 039 |
+| Tierra, regla del modelo, 15° (15 placas mayores) | 87 446 | 39 521 | 25 596 | 29 626 | 182 188 |
+| Modelo, media sin el rodaje (14–15 placas) | 120 882 | 117 552 | 11 075 | 62 250 | 311 760 |
+
+- **El modelo sí clasifica fallas transformantes**, desde el primer día: I4, `|v_n| < 0,26·|v_rel|`, es decir, a menos de 15° del desgarre puro. Son el 20 % de su longitud. Bird separa sus clases a ~20°: el percentil 95 de la oblicuidad de sus transformantes es 17,8° y el percentil 5 del resto, 24,4°. Con 20°, la Tierra da 48 400 km de transformantes.
+- **Con la regla del modelo, la malla convierte la mitad de las transformantes oceánicas de la Tierra en dorsales.** Los escalones dorsal–transformante más cortos que una celda se alisan en un borde oblicuo con componente de apertura. De los 46 500 km de OTF en la malla, 24 700 salen dorsal, 4 900 fosa y 15 800 transformante.
+- **La Tierra de 15 placas**, como el modelo, tiene 182 000 km de bordes. El modelo tiene 312 000: 1,7 veces más borde para el mismo número de placas.
+  - Dorsales ×1,4.
+  - **Fosas ×3,0.**
+  - Transformantes ×2,1.
+  - Choques ×0,43: los continentes del modelo chocan menos tiempo y en frentes más cortos, aunque consumen más por km (§9.3).
+  - El exceso no viene de que falten las transformantes, sino de bordes más largos para su número de placas y, sobre todo, de más fosa.
+
+## 11. Lluvia observada a 25 km (2026-11-05)
+
+`herramientas/analisis/lluvia_observada.py` → `config/referencias/tierra_lluvia.toml`. Usa WorldClim 2.1 a 10' y CHELSA 2.1 bio12, sobre las mismas celdas de nivel 3 (~26 km) y con las mismas definiciones que el planeta (`laderas_barlovento` y `sotavento_y_resto`, comprobadas iguales en las dos herramientas).
+
+El ×1,36 era **nuestra regla de lluvia sobre el relieve real**, no lluvia medida.
+
+| | WorldClim | CHELSA | Planeta (tras la adenda) |
+|---|---|---|---|
+| Lluvia de barlovento (mm) | 629 | 907 | — |
+| Barlovento / tierra baja de su franja de 1° (cociente de medias) | 0,72 | 0,96 | — |
+| Barlovento / tierra baja a 50–300 km contra el viento | 0,90 (27 % del área) | 1,18 | — |
+| Sotavento / resto de latitudes medias | 0,58 | 0,57 | 0,79 |
+| Lluvia media de la tierra (mm; sin Antártida ni Groenlandia) | 744 (794) | 874 (924) | 710 |
+
+Las columnas del planeta se midieron con el volcado anterior a la adenda; la tabla completa está en `tierra_lluvia.toml`. Antes de la adenda, el planeta daba barlovento entre franja 1,00, sotavento entre resto 1,24 y 595 mm.
+
+- **Con nuestra definición de barlovento, la lluvia observada no aumenta en las laderas: ×0,7–1,2.** La definición coge mesetas altas y secas: la cresta de más de 2 000 m a menos de 150 km siempre se cumple en una meseta. El Tíbet, Irán y el Altiplano son 2,8 de los 8,7 millones de km² de barlovento. El objetivo ×2–3 no tiene apoyo observacional con esta definición; hay que revisarla (decisión del responsable).
+- **Lo que falla de verdad en nuestra lluvia** son la sombra pluviométrica (×1,24 antes de la adenda, ×0,79 ahora; la Tierra ×0,58), el perfil con la altura (×1,7 en laderas bajas, la Tierra ×1,0–1,1) y el reparto por latitud (subtrópicos 3–4 veces más secos y latitudes medias del norte el doble de húmedas). La lluvia media de la tierra se queda corta aun con `c_P`.
+- **CHELSA es más fiel en montaña** (modela el viento sobre el relieve). WorldClim interpola pluviómetros de valle y es una cota inferior.
+
+## 12. Pendientes (en orden)
+
+1. Nota siguiente del responsable: forma de los bordes (datos del §10 y del diagnóstico del §9.3), inicio de subducción en márgenes viejos, fondo oceánico (reparto del sedimento, compactación, mesetas y montes submarinos) y rifts (que estiren conservando: hoy `F_rift` es un sumidero provisional de 0,11 AU).
+2. Con la base arreglada: calibrar `τ_del` (delaminación ≈1,1 AU y espesor máximo 70–80 km) y revisar `f_acr`, la exportación al mar, `V_cont` y `f_cont`.
+3. Lluvia: revisar la definición de barlovento (mesetas), el reparto por latitud y la lluvia de base con la media observada (CHELSA ~920 mm sin casquetes), y retirar `c_P`.
+4. ~~Adenda del responsable: sumideros reales de corteza~~: hecho, §9.
+5. Acortamiento andino (el §6.3 cuenta con él); ciclo de Wilson (rifts por suturas viejas); flexión de la litosfera (cuencas de antepaís); microplacas (Bird).
+6. ~~Reducir el remuestreo~~: hecho, §7.
 7. Casquetes polares (R6); con ellos, el agua total pasa a ser océano + hielo.

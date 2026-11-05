@@ -248,7 +248,47 @@ Al final, la altura de cada sitio sale de la **isostasia**, la flotación: una c
 
   Forzar un número para bajar la tierra iría contra el principio de realismo, así que se ha dejado así y anotado.
 - **No hay plataformas continentales** (la franja de mar poco hondo junto a la costa): los continentes nacen con el borde cortado.
-- **Una sorpresa sobre la lluvia de montaña.** El relieve real de la Tierra, a la escala a la que la ve nuestra lluvia (25 km), solo da ×1,4 de lluvia en las laderas de barlovento, no ×2–3. El objetivo escrito no lo cumple ni la propia Tierra; hay que revisar el objetivo o la escala de la lluvia.
-- **La corteza continental baja un 17 %** en los 500 Myr. El responsable prepara una adenda con los sumideros reales que faltan.
+- **Una sorpresa sobre la lluvia de montaña.** El relieve real de la Tierra, a la escala a la que la ve nuestra lluvia (25 km), solo da ×1,4 de lluvia en las laderas de barlovento, no ×2–3. Ese ×1,4 era nuestra regla de lluvia puesta sobre el relieve real; la lluvia medida de verdad se cuenta más abajo.
+- **La corteza continental baja un 17 %** en los 500 Myr. Lo trata la adenda de balance, más abajo.
 
 Todo está medido en la batería de escenarios (escenario `planeta`, 34 métricas), con su nota frente a la Tierra, y explicado en `incremento-4-diseno.md`. Mientras se mide, el relieve anterior sigue disponible: `worldgen.relieve = "ruido"`.
+
+### Balance de la corteza continental (adenda del responsable, 05-11-2026)
+
+**El fenómeno.** La corteza continental se fabrica y se destruye a la vez.
+- **Se fabrica en los arcos volcánicos:** donde una placa se hunde bajo otra, el agua que lleva funde el manto y sube magma que engorda la placa de arriba. Además, los arcos que nacen en medio del mar acaban pegándose a los continentes.
+- **Vuelve al manto por cuatro vías.**
+  - **El sedimento** que se hunde en las fosas.
+  - **La erosión por subducción:** la placa que baja raspa el borde de la de arriba.
+  - **La delaminación:** la base de una corteza demasiado gruesa se transforma, a mucha presión, en una roca más densa que el manto (eclogita) y se desprende.
+  - **Los choques entre continentes:** parte de la corteza que se mete debajo se pierde.
+
+**Lo que se hizo.** Cada uno de esos procesos tiene ahora su tasa medida en la Tierra.
+- El arco y la erosión por subducción son proporcionales a **cuánta placa se hunde**: el área de fondo oceánico que desaparece en cada fosa, que el modelo mide exacta.
+- Un margen es **erosivo** (raspa) si converge deprisa y le llega poco sedimento, y **acrecionario** si no. En uno acrecionario, parte del sedimento se queda pegado y forma un **prisma** (una cuña de sedimento apretado).
+- Lo que la erosión quita en tierra baja por las laderas hasta el mar y se deposita; si cae en una cuenca sin salida, se queda allí hasta llenarla. Antes se perdía.
+- Cada paso de un millón de años comprueba el balance: lo que cambia la corteza es exactamente lo que fabrican los arcos menos lo que se va al manto, hasta el error de redondeo del ordenador.
+
+**Lo que sale bien.**
+- El sedimento que se hunde (1,0 AU) y la delaminación (1,2 AU) caen en los valores de la Tierra. **AU** es la unidad de estos flujos: 1 km³ de roca al año.
+- La corteza más gruesa llega a 79 km, como el Tíbet.
+- Una cordillera que deja de crecer vuelve a su espesor normal en ~150 millones de años, como las cordilleras viejas reales. Así se ha fijado el ritmo de la erosión.
+- El planeta mejora en varias cosas:
+  - la tierra baja a 1 277 m de media (antes 1 544; la Tierra 671);
+  - el fondo oceánico rejuvenece;
+  - llueve más sobre la tierra;
+  - detrás de las cordilleras llueve menos que en el resto, como en la Tierra (antes era al revés).
+
+**Lo que no cuadra, y por qué.**
+- **En el modelo se hunde el doble de placa que en la Tierra:** 6,3 km² al año, frente a 2,7–3,4. Por eso salen altos los arcos, la erosión por subducción y el sedimento que llega al mar.
+- **Los choques destruyen de 7 a 12 veces más corteza que en la Tierra.**
+- La causa está en la base, no en los números: **los bordes de placa del modelo son demasiado largos y dentados**, y sus placas se deslizan poco de lado.
+  - Comparado con la Tierra medida igual, con el mismo número de placas, el modelo tiene 1,7 veces más borde y 3 veces más fosa.
+  - Un tercio del consumo ocurre en bordes que en la Tierra no consumen nada: los dientes de dos placas que se deslizan una junto a otra chocan entre sí.
+  - El responsable diseña la corrección de los bordes en su próxima nota. Hasta entonces no se ajusta ningún parámetro para compensarlo.
+
+**La lluvia, medida de verdad.** Con datos de lluvia observada (WorldClim y CHELSA) a la misma escala y con la misma definición de "ladera de barlovento", la Tierra **no** llueve más en esas laderas: ×0,7–1,2. La definición coge mesetas altas y secas, como el Tíbet; hay que revisarla. Lo que sí falla en la lluvia del modelo es:
+- la sombra de lluvia detrás de las cordilleras, aún floja (×0,79, la Tierra ×0,58);
+- el reparto por latitudes: subtrópicos demasiado secos y latitudes medias demasiado húmedas.
+
+Detalle técnico en `incremento-4-diseno.md` §9–§11; la adenda, en `adenda_balance_corteza.md`.

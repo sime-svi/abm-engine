@@ -168,12 +168,29 @@ pub struct TectonicaCfg {
     pub d_fosa_m: f64,
     pub w_fosa_km: f64,
     // --- Bordes de placa (§5.4) ---
-    /// Crecimiento de corteza en los arcos (km² por km de fosa y Myr).
-    pub q_arco: f64,
     pub d_arco_km: f64,
     pub w_arco_km: f64,
-    /// Fracción de la corteza de la placa de abajo que engruesa a la de arriba en un choque.
+    // --- Balance de la corteza continental (adenda_balance_corteza.md §5) ---
+    /// Corteza que fabrica un arco por cada km² de placa que se hunde (km³/km²): sobre placa
+    /// oceánica y sobre margen continental (Clift et al. 2009, divididos por la convergencia media).
+    pub p_arc_oc: f64,
+    pub p_arc_cont: f64,
+    /// Erosión por subducción por cada km² de placa que se hunde (km³/km²).
+    pub p_se: f64,
+    /// Un margen es erosivo si converge a más de `v_ero` y le llega menos de `s_ero` de sedimento
+    /// (Clift y Vannucchi 2004).
+    pub v_ero_cm_anio: f64,
+    pub s_ero_km: f64,
+    /// Fracción del sedimento de fosa que se pega a un margen acrecionario (calibrado).
+    pub f_acr: f64,
+    /// Fracción de la corteza solapada que se queda en la placa de arriba en un choque continente–
+    /// continente (India–Asia) y en uno arco–continente (Luzón–Taiwán).
     pub eta_col: f64,
+    pub eta_arco: f64,
+    /// Delaminación: por encima de `h_del` la base de la corteza pasa a eclogita y se desprende con
+    /// tiempo característico `tau_del` (calibrado).
+    pub h_del_km: f64,
+    pub tau_del_myr: f64,
     pub w_min_orog_km: f64,
     pub w_margen_km: f64,
     pub f_rift: f64,
@@ -239,7 +256,7 @@ impl Default for TectonicaCfg {
             h_oc_km: 7.0,
             h0_km: 35.0,
             sigma_h0_km: 3.0,
-            h_max_km: 65.0,
+            h_max_km: 80.0,
             h_nivel_km: 32.0,
             h_cont_min_km: 20.0,
             d_r_m: 2500.0,
@@ -250,10 +267,18 @@ impl Default for TectonicaCfg {
             t_x_myr: 20.0,
             d_fosa_m: 3000.0,
             w_fosa_km: 50.0,
-            q_arco: 40.0,
             d_arco_km: 200.0,
             w_arco_km: 150.0,
-            eta_col: 0.35,
+            p_arc_oc: 1.2,
+            p_arc_cont: 0.8,
+            p_se: 0.4,
+            v_ero_cm_anio: 6.0,
+            s_ero_km: 1.0,
+            f_acr: 0.3,
+            eta_col: 0.5,
+            eta_arco: 0.9,
+            h_del_km: 50.0,
+            tau_del_myr: 50.0,
             w_min_orog_km: 150.0,
             w_margen_km: 150.0,
             f_rift: 0.7,
@@ -275,7 +300,7 @@ impl Default for TectonicaCfg {
             v_rift_cm_anio: 2.0,
             v_sutura_cm_anio: 0.5,
             t_sutura_myr: 10.0,
-            tau_orog_myr: 150.0,
+            tau_orog_myr: 63.0,
             deformacion: 0.06,
             nivel_malla: 2,
             dt_myr: 1.0,
@@ -694,8 +719,25 @@ impl TectonicaCfg {
         if self.nivel_malla > 4 || (n0 as u64) << self.nivel_malla > 1 << 12 {
             return Err(invalid("nivel_malla demasiado fino (n0 · 2^nivel <= 4096)"));
         }
-        if !(0.0..=1.0).contains(&self.f_cont) || !(0.0..=1.0).contains(&self.eta_col) {
-            return Err(invalid("se requiere 0 <= f_cont <= 1 y 0 <= eta_col <= 1"));
+        if ![self.f_cont, self.eta_col, self.eta_arco, self.f_acr]
+            .iter()
+            .all(|x| (0.0..=1.0).contains(x))
+        {
+            return Err(invalid(
+                "se requiere que f_cont, eta_col, eta_arco y f_acr estén entre 0 y 1",
+            ));
+        }
+        if !(self.p_arc_oc >= 0.0
+            && self.p_arc_cont >= 0.0
+            && self.p_se >= 0.0
+            && self.tau_del_myr > 0.0
+            && self.h_del_km > 0.0
+            && self.s_ero_km >= 0.0
+            && self.v_ero_cm_anio >= 0.0)
+        {
+            return Err(invalid(
+                "se requiere p_arc_oc, p_arc_cont, p_se, s_ero_km, v_ero_cm_anio >= 0 y tau_del_myr, h_del_km > 0",
+            ));
         }
         if !(self.rho_w < self.rho_s
             && self.rho_s < self.rho_c

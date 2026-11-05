@@ -954,3 +954,46 @@ Formato de entrada:
   - corteza continental 0,40 → 0,304 (antes 0,334: las copias la inflaban); nivel del mar −1 184 m.
   - Márgenes de la batería actualizados, con nota.
 - **Estado tras el cambio:** deriva con conservación exacta. Pendiente: decidir la longitud de los bordes, implementar la adenda, medir la lluvia observada a 25 km, y las notas próximas (inicio de subducción, fondo oceánico, rifts).
+
+## [2026-11-05] Adenda de balance v2: balance de la corteza continental, bordes de la Tierra medidos igual y lluvia observada
+
+- **Qué:** el responsable entregó la versión 2 de `docs/design/terreno/adenda_balance_corteza.md` (tasas por km² de placa que se hunde) y pidió:
+  - implementarla sin esperar a corregir los bordes;
+  - medir los bordes de Bird (2003) en la malla de 52 km igual que los del modelo, y decir si el modelo clasifica transformantes;
+  - para la erosión, el sedimento al mar validado con la prueba de relajación;
+  - para la lluvia, la observada (WorldClim/CHELSA) a 25 km con la misma definición de barlovento, y revisar `c_P`.
+
+  Rama `terreno-balance-corteza`. Detalle técnico en `incremento-4-diseno.md` §9–§11; explicación llana en el README de la fase.
+  - **Adenda implementada entera, sin interruptor** (cambio de mecanismo; la referencia es el commit anterior):
+    - en cada muestra, `hc` (corteza de tipo continental) y `arco` (`a_i`); sedimento también sobre el fondo oceánico; `V_cont = Σ (hc + S·ρ_s/ρ_c)·A`;
+    - el remuestreo apunta el fondo consumido de cada tramo de fosa;
+    - régimen erosivo o acrecionario; arcos `p_arc·A_sub`; erosión por subducción `p_SE·A_sub`; prisma con `f_acr`; choques con `η_col` 0,5 y `η_arco` 0,9; delaminación exponencial; erosión que lleva el sedimento al mar o a cuencas cerradas;
+    - balance comprobado en cada paso (error de 10⁻¹⁴);
+    - métricas por paso (§8) y medias en `run.tectonica.balance`; eventos `inicio_choque`, `fin_choque`, `cambio_regimen` y `retroceso_margen`; salida en esquema v7.
+  - **Decisiones técnicas mías** (avisadas, `incremento-4-diseno.md` §9.2):
+    - **tramos:** el consumo se agrupa en la celda de borde de la placa de arriba;
+    - **arcos:** cada placa recibe exactamente `Σ A_sub`, repartido por su franja con el peso de la convergencia del borde. Con un reparto por tramo, la mitad se quedaba sin franja en bordes dentados;
+    - **sedimento:** inundación por prioridad hasta el mar; las cuencas cerradas se llenan hasta su desagüe; en el mar llena hasta la plataforma (−130 m) y sigue mar adentro;
+    - **choques:** lo que no cabe en la cuenca de un frente pasa al resto de la placa;
+    - **erosión por subducción:** hasta `d_arco + w_arco/2`; la celda que se queda sin corteza continental pasa a fondo oceánico.
+  - **`H_max` sube de 65 a 80 km** (lo más grueso de la Tierra, objetivo de la adenda) y vale para toda corteza: arcos, prisma y choques. Hubo que comprobarlo **por muestra receptora**: con la comprobación por celda del mundo, algunas muestras llegaban a 120–150 km, porque `en_celda` reparte entre muestras de menos área y una muestra puede recibir por dos celdas.
+  - **`τ_ero` = 63 Myr**, calibrado con la prueba de relajación (India–Asia y detener la convergencia): baja de 38 km en 148 Myr, el centro de 100–200. Con 150 Myr eran 322. `τ_del` y `f_acr` se quedan en sus valores iniciales: sus objetivos globales dependen de la base, que falla.
+  - **Bordes de Bird** (`herramientas/analisis/bordes_bird.py` → `config/referencias/tierra_bordes.toml`):
+    - la malla no alarga las líneas, las acorta (×0,90): el método del gradiente alisa los zigzag finos;
+    - con la regla del modelo, la Tierra da dorsales 103 000, fosas 53 000, choques 39 000 y transformantes 38 500 km (52 placas); con 15 placas, 87 000 / 39 500 / 25 600 / 29 600;
+    - el modelo, con 14–15 placas: 121 000 / 118 000 / 11 000 / 62 000.
+  - **El modelo sí clasifica transformantes** (I4: a menos de 15°; Bird separa a ~20°). La malla convierte la mitad de las transformantes oceánicas reales en dorsales.
+  - **Lluvia observada:** la midió un subagente (`lluvia_observada.py`, `tiffmini.py`, `tierra_lluvia.toml`; `referencia_tierra.py` y `terreno.py` refactorizados sin cambiar sus salidas). Con nuestra definición de barlovento, la Tierra da ×0,7–1,2, no ×2–3, porque la definición coge mesetas (el Tíbet, Irán y el Altiplano son un tercio del área). El planeta falla en la sombra pluviométrica, el perfil con la altura y el reparto por latitud.
+- **Por qué:** realismo primero. `f_cont` es un resultado; antes de tocar parámetros se revisa la base.
+- **Resultados** (planeta, 450 Myr sin rodaje; entre paréntesis, la Tierra):
+  - **área subducida 6,3 km²/año (2,7–3,4): el doble;**
+  - arcos 6,9 AU (2,7–5); erosión por subducción 2,4 (1,3–1,7); sedimento subducido 1,04 (1,0–1,65); acrecionado 0,41 (≈0,3);
+  - **choques 4,7 (0,4–0,7)**; delaminación 1,18 (≈1,1); sedimento al mar 4,9 (≈1,8);
+  - espesor máximo 79 km (70–80); `V_cont` −16 % (±10 %); `f_cont` 0,31 (0,40).
+  - **Diagnóstico:** el 26 % del fondo consumido y el 31 % de la corteza continental solapada caen en bordes divergentes y transformantes (dientes de bordes que se deslizan). El modelo tiene 1,7 veces más borde y 3 veces más fosa que una Tierra de 15 placas medida igual. El remuestreo no es la causa: un borde en zigzag consume lo mismo que uno recto (1,029 frente a 1,022 del teórico).
+  - **Planeta:** altura media de la tierra 1 544 → 1 277 m; nivel del mar −1 184 → −619 m; edad media del fondo 97 → 79 Myr; lluvia sobre tierra 595 → 710 mm (`c_P` 2,04 → 1,78); sotavento entre resto 1,24 → 0,79 (la Tierra 0,58).
+- **Verificación:**
+  - 6 tests nuevos (relajación, planeta sin fosas, reglas del margen y de la delaminación, borde dentado frente a recto, balance por paso y traslados exactos en la prueba de conservación); `sin_cratones_solo_los_arcos_hacen_corteza_continental` sustituye a la prueba que prohibía la corteza continental sin cratones, porque los arcos reales la hacen en decenas de Myr;
+  - batería: `planeta` con 46 métricas (11 nuevas del balance; márgenes movidos con nota);
+  - `verificar.sh` en verde; no regresión de los agentes idéntica byte a byte; la génesis tarda ~140 s (antes ~90).
+- **Pendiente:** la nota del responsable sobre los bordes, el inicio de subducción, el fondo oceánico y los rifts; después, calibrar `τ_del` y revisar `f_acr`. La definición de barlovento y el objetivo de la lluvia los decide el responsable.
