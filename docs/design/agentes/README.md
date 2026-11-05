@@ -54,14 +54,47 @@ Para comprobar que la biología **por sí sola** da cifras realistas antes de so
 - **Los humanos tienen demasiados hijos.** La tasa de fecundidad sale de ~10 hijos por mujer, frente a 5–6 en cazadores-recolectores reales. El modelo no hace que la fertilidad baje con la edad antes de la menopausia (a los 50). Queda anotado para la calibración.
 - **Rendimiento.** 30 años con ~10 000 animales tardan ~4 s.
 
+## Revisión 1 (05-11-2026) — las decisiones del responsable sobre los hallazgos
+
+El responsable decidió qué hacer con los hallazgos del incremento 1 en `nota_agentes_revision_1.md`, y la sección 8 de esa nota cuenta lo hecho y lo medido. Son cuatro cambios, cada uno con su interruptor en `config/agentes.toml`. Con los cuatro apagados (`config/experiments/agentes_incremento1.toml`), la simulación da **exactamente** lo mismo que antes.
+
+1. **El apetito tiene en cuenta todo lo que se gasta ese día**, también criar. Es lo que pasa en la naturaleza: las madres que amamantan comen mucho más (**hiperfagia**: comer más de lo normal).
+2. **Cuando escasea la comida, cada animal come menos antes de que se acabe.** Encontrar comida cuesta más cuando hay poca, así que nadie llena la tripa del todo. Es la **respuesta funcional de Holling**, la forma clásica de describirlo en ecología. Sustituye a la propuesta "proporcional" del incremento 1.
+3. **Las madres se protegen y los sexos son distintos:**
+   - una madre en mala condición da menos leche;
+   - si su condición cae mucho, desteta a la fuerza: las crías mayorcitas sobreviven comiendo solas y las más pequeñas pueden morir;
+   - en los humanos, las mujeres pesan 56 kg con un 25 % de grasa y los hombres 64 kg con un 15 %. Ellas aguantan sin comer unos 49 días y ellos unos 30.
+4. **Cada mujer deja de ser fértil a una edad suya**, en torno a los 38 años (unos más tarde, otras antes), y no todas a los 50 como antes.
+
+### Qué se ha conseguido
+
+- **Las poblaciones se regulan solas y ya no se extinguen.** El herbívoro, que antes desaparecía en 13 años, aguanta 100 años estable, con la comida a la mitad de su máximo (justo donde más rebrota). Los humanos se quedan en un 90 % de lo que la tierra puede mantener. Lo consigue el cambio 2. El cambio 1 hace que, en esa situación, criar salga pagado: el herbívoro deja de morir de hambre.
+- **Siguen saliendo las leyes de la ecología:** hay más animales donde la tierra produce más, y una especie de 300 kg y otra de 10 kg en el mismo sitio comen exactamente lo mismo por km² (ley de Damuth).
+- **El modelo también sabe colapsar cuando toca.** Con un alimento que tarda 20 años en rebrotar (como el liquen de los renos de la isla de St. Matthew), la población se dispara al doble y medio de lo sostenible y después se hunde.
+- **Las hambrunas ya no acaban con las hembras.**
+  - Con una sequía, en el herbívoro quedan un 30 % de hembras adultas; antes, casi ninguna.
+  - En los humanos, ahora mueren **menos mujeres que hombres**, como en las hambrunas reales, gracias a sus reservas de grasa.
+  - Las crías mueren antes que los adultos, y la población se recupera.
+- **Las mujeres tienen unos 6,6 hijos** (antes ~10), en el rango de los cazadores-recolectores reales (5–7), y el último hijo llega hacia los 37 años.
+
+### Consideraciones y hallazgos
+
+- **El hambre llega a todos a la vez.** Con la nueva regla, lo que come cada animal depende de cuánta comida queda, no de cuántos comen. En una sequía todos los de una parcela pasan hambre a la vez y mueren casi a la vez, antes de que la comida se recupere. Como cada parcela está aislada, muchas se quedan vacías. Cuando los animales puedan moverse (otro documento), se volverán a llenar.
+- **En el herbívoro, las hembras siguen muriendo más que los machos en las hambrunas.** No es por la leche, sino por el embarazo: pasan preñadas 200 de cada 336 días. Que la madre deje antes de amamantar no lo arregla (se probó).
+- **Los humanos viven menos de media:** de 31 años de esperanza de vida a 21–25. Cuando la población está en el límite de lo que la tierra da, el 29 % de las muertes son por hambre.
+- **La fecundidad humana no cuadra del todo.** Con la edad de esterilidad a los 38, sale el número de hijos correcto, pero el último llega un poco pronto. Con 40, la forma por edades es la real, pero salen demasiados hijos. Haría falta otro ajuste (por ejemplo, que la probabilidad de quedarse embarazada baje con la edad).
+- **Coste:** 30 años de simulación tardan ~15 s, porque ahora el herbívoro sobrevive (antes se extinguía en el año 13 y la corrida tardaba 4 s).
+- **Queda para el paso 2 (poblaciones):** la versión "por grupos" de cada cambio, ya escrita en la nota.
+- **Decisiones del responsable:** siete (A1–A7, nota §8.9), con sus datos.
+
 ## Cómo se ejecuta
 
 ```bash
-cargo run --release --bin agentes                                            # config/agentes.toml (diseño tal cual)
-cargo run --release --bin agentes -- config/experiments/agentes_proporcional.toml   # propuesta D16
+cargo run --release --bin agentes                                                 # config/agentes.toml (con la revisión 1)
+cargo run --release --bin agentes -- config/experiments/agentes_incremento1.toml   # el incremento 1 tal cual
 ```
 
 Escribe `output/<nombre>_agentes.json` con:
 - los parámetros derivados de cada especie;
-- un registro cada 30 días (población, nacimientos, muertes por causa, condición, forraje y balance de energía);
-- un resumen por año: esperanza de vida, fecundidad, intervalo entre partos, pirámide de edades y densidad frente a la capacidad.
+- un registro cada 30 días: población, nacimientos, muertes por causa, condición, forraje y balance de energía; con la revisión 1, también destetes forzosos y condición de las lactantes;
+- un resumen por año: esperanza de vida, fecundidad, intervalo entre partos, pirámide de edades y densidad frente a la capacidad; con la revisión 1, también fecundidad por grupos de edad, edad del último parto y mortalidad por edad y sexo.

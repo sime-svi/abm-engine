@@ -3,6 +3,7 @@
 
 use abm_core::ConfigError;
 
+use super::azar::{Proposito, uniforme};
 use super::config::{AjustesCfg, BioConfig, EspecieCfg, Termico};
 
 /// Constante de Boltzmann (eV/K), para el metabolismo de los ectotermos.
@@ -43,6 +44,21 @@ pub struct Especie {
     pub siler: [f64; 5],
     /// Días del año (para pasar edades y tasas anuales a días).
     pub dias_anio: f64,
+    /// Por sexo (`[hembra, macho]`, revisión 1 §3.4): masa adulta, grasa máxima y constante de
+    /// crecimiento de West. Sin dimorfismo, las tres son las de la especie.
+    pub masa_sexo: [f64; 2],
+    pub f_grasa_sexo: [f64; 2],
+    pub c_w_sexo: [f64; 2],
+    /// `true` si las masas adultas de los sexos difieren.
+    pub dimorfico: bool,
+    /// Semisaturación de la respuesta funcional relativa a `K` (revisión 1 §2).
+    pub h_medio: f64,
+    /// Edad de esterilidad (revisión 1 §4): media y desviación típica en días.
+    pub mu_est: f64,
+    pub sigma_est: f64,
+    /// Edad a la que la mortalidad senescente iguala a la de fondo (días): separa "adultos" de
+    /// "viejos" en las métricas de mortalidad por edad.
+    pub a_vejez: u32,
 }
 
 fn elegir(especie: Option<f64>, preset: Option<f64>, derivado: f64) -> f64 {
@@ -134,10 +150,49 @@ impl Especie {
         ];
 
         let a_crec90 = dias("a_crec90", &e.nombre, a_crec90_anios * da)?;
-        // West: c_W tal que la cría llega al 90 % de M a la edad a_crec90 (§6.0).
-        let q0 = (m0 / masa).powf(0.25);
-        let c_w =
-            4.0 * masa.powf(0.25) / a_crec90 as f64 * ((1.0 - q0) / (1.0 - 0.9f64.powf(0.25))).ln();
+        // West: c_W tal que la cría llega al 90 % de su masa adulta a la edad a_crec90 (§6.0).
+        let c_w_de = |m_adulta: f64| {
+            let q0 = (m0 / m_adulta).powf(0.25);
+            4.0 * m_adulta.powf(0.25) / a_crec90 as f64
+                * ((1.0 - q0) / (1.0 - 0.9f64.powf(0.25))).ln()
+        };
+        let c_w = c_w_de(masa);
+        let f_grasa_max = elegir(aj.f_grasa_max, pr.f_grasa_max, r.f_grasa_max);
+        // Dimorfismo (revisión 1 §3.4): masa y grasa de cada sexo, si la especie las da.
+        let (masa_sexo, f_grasa_sexo) = if en.dimorfismo {
+            (
+                [
+                    elegir(aj.masa_kg_hembra, pr.masa_kg_hembra, masa),
+                    elegir(aj.masa_kg_macho, pr.masa_kg_macho, masa),
+                ],
+                [
+                    elegir(aj.f_grasa_max_hembra, pr.f_grasa_max_hembra, f_grasa_max),
+                    elegir(aj.f_grasa_max_macho, pr.f_grasa_max_macho, f_grasa_max),
+                ],
+            )
+        } else {
+            ([masa; 2], [f_grasa_max; 2])
+        };
+        let c_w_sexo = masa_sexo.map(|m| if m == masa { c_w } else { c_w_de(m) });
+        let k_ap = elegir(aj.k_ap, pr.k_ap, r.k_ap);
+        let a_fin_rep_d = dias("a_fin_rep", &e.nombre, a_fin_rep_anios * da)?;
+        let a_rep_d = dias("a_rep", &e.nombre, a_rep_anios * da)?;
+        // Esterilidad (revisión 1 §4); el genérico la deriva de su vida reproductiva.
+        let vida_rep = (a_fin_rep_d as f64 - a_rep_d as f64) / da;
+        let mu_est = elegir(
+            aj.mu_est_anios,
+            pr.mu_est_anios,
+            a_rep_d as f64 / da + 0.7 * vida_rep,
+        ) * da;
+        let sigma_est = elegir(aj.sigma_est_anios, pr.sigma_est_anios, 0.1 * vida_rep) * da;
+        // Vejez: α3·e^(β3·a) = α2.
+        let a_max_d = dias("a_max", &e.nombre, a_max_anios * da)?;
+        let a_vejez = if siler[3] > 0.0 && siler[2] > siler[3] && siler[4] > 0.0 {
+            ((siler[2] / siler[3]).ln() / siler[4] * da).round() as u32
+        } else {
+            a_max_d
+        }
+        .min(a_max_d);
 
         let esp = Especie {
             nombre: e.nombre.clone(),
@@ -149,9 +204,9 @@ impl Especie {
                 Termico::Ectotermo => en.b0_ecto,
             },
             pal: elegir(aj.pal, pr.pal, r.pal),
-            f_grasa_max: elegir(aj.f_grasa_max, pr.f_grasa_max, r.f_grasa_max),
+            f_grasa_max,
             rho_grasa: en.rho_grasa,
-            k_ap: elegir(aj.k_ap, pr.k_ap, r.k_ap),
+            k_ap,
             eps: elegir(aj.eps, pr.eps, r.eps),
             f_com: elegir(aj.f_com, pr.f_com, r.f_com),
             camada: elegir(aj.camada, pr.camada, r.camada),
@@ -159,16 +214,24 @@ impl Especie {
             rho_par: elegir(aj.rho_par, pr.rho_par, r.rho_par),
             rho_sexo: elegir(aj.rho_sexo, pr.rho_sexo, r.rho_sexo),
             p_huerf: elegir(aj.p_huerf, pr.p_huerf, r.p_huerf),
-            a_max: dias("a_max", &e.nombre, a_max_anios * da)?,
+            a_max: a_max_d,
             a_crec90,
-            a_rep: dias("a_rep", &e.nombre, a_rep_anios * da)?,
-            a_fin_rep: dias("a_fin_rep", &e.nombre, a_fin_rep_anios * da)?,
+            a_rep: a_rep_d,
+            a_fin_rep: a_fin_rep_d,
             d_gest: dias("d_gest", &e.nombre, d_gest)?,
             d_destete: dias("d_destete", &e.nombre, d_destete)?,
             delta_a: dias("delta_a", &e.nombre, delta_a)?,
             c_w,
             siler,
             dias_anio: da,
+            masa_sexo,
+            f_grasa_sexo,
+            c_w_sexo,
+            dimorfico: masa_sexo[0] != masa || masa_sexo[1] != masa,
+            h_medio: elegir(aj.h_medio, pr.h_medio, ((k_ap - 1.0) / 2.0).max(0.0)),
+            mu_est,
+            sigma_est,
+            a_vejez,
         };
         esp.validar()?;
         Ok(esp)
@@ -214,6 +277,26 @@ impl Especie {
         if self.a_rep > self.a_max {
             return Err(invalida("a_rep no puede superar a_max"));
         }
+        let por_sexo = self.masa_sexo.iter().chain(&self.f_grasa_sexo);
+        if por_sexo.into_iter().any(|&x| !(x > 0.0 && x.is_finite())) {
+            return Err(invalida("las masas y grasas por sexo deben ser > 0"));
+        }
+        if self.f_grasa_sexo.iter().any(|&x| x > 1.0) {
+            return Err(invalida(
+                "la grasa máxima de cada sexo debe estar en (0, 1]",
+            ));
+        }
+        if self.masa_sexo.iter().any(|&m| self.m0 >= 0.9 * m) {
+            return Err(invalida(
+                "la masa al nacer debe ser < 0,9 de la de cada sexo",
+            ));
+        }
+        if !(self.h_medio >= 0.0 && self.h_medio.is_finite()) {
+            return Err(invalida("h_medio debe ser >= 0"));
+        }
+        if !(self.sigma_est >= 0.0 && self.mu_est.is_finite()) {
+            return Err(invalida("se requiere sigma_est_anios >= 0"));
+        }
         Ok(())
     }
 
@@ -232,27 +315,66 @@ impl Especie {
         self.basal(self.masa, f_ecto) * self.pal
     }
 
-    /// Reserva máxima `E_max(m) = f_grasa_max · m · ρ_grasa` (kcal).
+    /// Reserva máxima `E_max(m) = f_grasa_max · m · ρ_grasa` (kcal), con la grasa de la especie.
     #[inline]
     pub fn e_max(&self, m: f64) -> f64 {
         self.f_grasa_max * m * self.rho_grasa
     }
 
-    /// Masa por edad sin retraso (solución exacta de West, §6.6).
+    /// Reserva máxima de un individuo del sexo `s` (0 hembra, 1 macho), con su grasa máxima.
+    #[inline]
+    pub fn e_max_s(&self, s: usize, m: f64) -> f64 {
+        self.f_grasa_sexo[s] * m * self.rho_grasa
+    }
+
+    /// Gasto diario del adulto del sexo `s` en mantenimiento y actividad, `B(M_s)·PAL`.
+    pub fn gasto_adulto_s(&self, s: usize, f_ecto: f64) -> f64 {
+        self.basal(self.masa_sexo[s], f_ecto) * self.pal
+    }
+
+    /// Días que aguanta sin comer un adulto del sexo `s`: `E_max(M_s) / (B(M_s)·PAL)`.
+    pub fn ayuno_s(&self, s: usize) -> f64 {
+        self.e_max_s(s, self.masa_sexo[s]) / self.gasto_adulto_s(s, 1.0)
+    }
+
+    /// Edad de esterilidad (días) de una hembra (revisión 1 §4): `Normal(μ_est, σ_est)` truncada a
+    /// `[a_rep, a_fin_rep]`, sorteada con el azar por contador `H(semilla, id, "esterilidad")`.
+    /// Es función pura del individuo: no hace falta guardarla.
+    pub fn a_est(&self, semilla: u64, id: u64) -> u32 {
+        let (lo, hi) = (self.a_rep as f64, self.a_fin_rep as f64);
+        // Box–Muller con rechazo de lo que cae fuera (con los valores de la nota, ~0,1 %).
+        for k in 0..32u64 {
+            let u1 = uniforme(semilla, id, 0, Proposito::Esterilidad, 2 * k);
+            let u2 = uniforme(semilla, id, 0, Proposito::Esterilidad, 2 * k + 1);
+            let z = (-2.0 * (1.0 - u1).ln()).sqrt() * (std::f64::consts::TAU * u2).cos();
+            let x = self.mu_est + self.sigma_est * z;
+            if (lo..=hi).contains(&x) {
+                return x.round() as u32;
+            }
+        }
+        self.mu_est.clamp(lo, hi).round() as u32
+    }
+
+    /// Masa por edad sin retraso (solución exacta de West, §6.6), con la masa de la especie.
     pub fn masa_por_edad(&self, a_dias: u32) -> f64 {
-        let q0 = (self.m0 / self.masa).powf(0.25);
-        let q = 1.0 - (1.0 - q0) * (-self.c_w * a_dias as f64 / (4.0 * self.masa.powf(0.25))).exp();
-        (self.masa * q.powi(4)).min(self.masa)
+        masa_west(self.m0, self.masa, self.c_w, a_dias)
+    }
+
+    /// Masa por edad sin retraso de un individuo del sexo `s`.
+    pub fn masa_por_edad_s(&self, s: usize, a_dias: u32) -> f64 {
+        masa_west(self.m0, self.masa_sexo[s], self.c_w_sexo[s], a_dias)
     }
 
     /// Crecimiento del día con comida suficiente (West): `c_W·m^¾·(1 − (m/M)^¼)`, sin pasar de `M`.
     #[inline]
     pub fn dm_west(&self, m: f64) -> f64 {
-        if m >= self.masa {
-            return 0.0;
-        }
-        let dm = self.c_w * m.powf(0.75) * (1.0 - (m / self.masa).powf(0.25));
-        dm.min(self.masa - m).max(0.0)
+        dm_west(self.masa, self.c_w, m)
+    }
+
+    /// Crecimiento del día de un individuo del sexo `s`, hacia su masa adulta.
+    #[inline]
+    pub fn dm_west_s(&self, s: usize, m: f64) -> f64 {
+        dm_west(self.masa_sexo[s], self.c_w_sexo[s], m)
     }
 
     /// Riesgo anual de Siler `μ(a)` (1/año), con `a` en años.
@@ -282,9 +404,15 @@ impl Especie {
     }
 
     /// Población máxima sostenible de una celda (§1): `f_com·PPN·A·ρ_veg·ε / (días·G_adulto)` (D6).
+    /// Con dimorfismo, `G_adulto` es la media de los dos sexos pesada por la proporción de sexos.
     pub fn n_max(&self, area_m2: f64, ppn: f64, rho_veg: f64, f_ecto: f64) -> f64 {
-        self.f_com * ppn * area_m2 * rho_veg * self.eps
-            / (self.dias_anio * self.gasto_adulto(f_ecto))
+        let g = if self.dimorfico {
+            (1.0 - self.rho_sexo) * self.gasto_adulto_s(0, f_ecto)
+                + self.rho_sexo * self.gasto_adulto_s(1, f_ecto)
+        } else {
+            self.gasto_adulto(f_ecto)
+        };
+        self.f_com * ppn * area_m2 * rho_veg * self.eps / (self.dias_anio * g)
     }
 
     /// Clases de edad de anchura `Δa` hasta `a_max` (pirámide y tablas de vida).
@@ -308,6 +436,23 @@ impl Especie {
         }
         l
     }
+}
+
+/// Masa por edad sin retraso (solución exacta de West) hacia la masa adulta `m_adulta`.
+fn masa_west(m0: f64, m_adulta: f64, c_w: f64, a_dias: u32) -> f64 {
+    let q0 = (m0 / m_adulta).powf(0.25);
+    let q = 1.0 - (1.0 - q0) * (-c_w * a_dias as f64 / (4.0 * m_adulta.powf(0.25))).exp();
+    (m_adulta * q.powi(4)).min(m_adulta)
+}
+
+/// Crecimiento de un día (West) de masa `m` hacia la masa adulta `m_adulta`.
+#[inline]
+fn dm_west(m_adulta: f64, c_w: f64, m: f64) -> f64 {
+    if m >= m_adulta {
+        return 0.0;
+    }
+    let dm = c_w * m.powf(0.75) * (1.0 - (m / m_adulta).powf(0.25));
+    dm.min(m_adulta - m).max(0.0)
 }
 
 /// Factor de temperatura del metabolismo de los ectotermos (§6.0, teoría metabólica).
@@ -471,5 +616,65 @@ mod tests {
         let a1 = (x * g70.a_max as f64) as usize;
         let a2 = (x * grande.a_max as f64) as usize;
         assert!((l1[a1] - l2[a2]).abs() < 0.01, "{} vs {}", l1[a1], l2[a2]);
+    }
+
+    #[test]
+    fn el_dimorfismo_da_las_cifras_de_la_nota() {
+        // Revisión 1 §3.4, con PAL 1,8: mujer 1 433 / 2 579 / 126 000 kcal y ~49 días de ayuno;
+        // hombre 1 584 / 2 851 / 86 400 kcal y ~30 días.
+        let (_, hum) = especies();
+        assert!(hum.dimorfico);
+        let tabla = [
+            (0, 1433.0, 2579.0, 126_000.0, 49.0),
+            (1, 1584.0, 2851.0, 86_400.0, 30.0),
+        ];
+        for (s, basal, gasto, e_max, ayuno) in tabla {
+            let m = hum.masa_sexo[s];
+            assert!(cerca(hum.basal(m, 1.0), basal, 0.002), "basal {s}");
+            assert!(cerca(hum.gasto_adulto_s(s, 1.0), gasto, 0.002), "gasto {s}");
+            assert!(cerca(hum.e_max_s(s, m), e_max, 1e-9), "E_max {s}");
+            assert!(
+                (hum.ayuno_s(s) - ayuno).abs() < 1.0,
+                "ayuno {s}: {}",
+                hum.ayuno_s(s)
+            );
+            // Cada sexo llega al 90 % de su masa adulta a la edad a_crec90, desde los 3,3 kg.
+            let m90 = hum.masa_por_edad_s(s, hum.a_crec90);
+            assert!((m90 / (0.9 * m) - 1.0).abs() < 1e-3, "West {s}: {m90}");
+            assert!((hum.masa_por_edad_s(s, 0) - 3.3).abs() < 1e-9);
+        }
+        // Sin dimorfismo, las tablas por sexo son las de la especie (bit a bit).
+        let mut cfg = BioConfig::default();
+        cfg.energetica.dimorfismo = false;
+        let plano = Especie::derivar(&cfg, &cfg.especies[1]).unwrap();
+        assert!(!plano.dimorfico);
+        for s in 0..2 {
+            assert_eq!(plano.masa_sexo[s].to_bits(), plano.masa.to_bits());
+            assert_eq!(plano.f_grasa_sexo[s].to_bits(), plano.f_grasa_max.to_bits());
+            assert_eq!(plano.c_w_sexo[s].to_bits(), plano.c_w.to_bits());
+        }
+        // El genérico no tiene dimorfismo por defecto.
+        let (g70, _) = especies();
+        assert!(!g70.dimorfico && g70.masa_sexo == [g70.masa; 2]);
+    }
+
+    #[test]
+    fn la_edad_de_esterilidad_sigue_una_normal_truncada() {
+        // Revisión 1 §4: humano Normal(38, 4) años; genérico derivado de su vida reproductiva.
+        let (g70, hum) = especies();
+        for (e, mu, sigma) in [(&hum, 38.0, 4.0), (&g70, 17.95, 2.35)] {
+            let n = 20_000;
+            let xs: Vec<f64> = (0..n)
+                .map(|id| f64::from(e.a_est(42, id)) / e.dias_anio)
+                .collect();
+            let media = xs.iter().sum::<f64>() / n as f64;
+            let sd = (xs.iter().map(|x| (x - media).powi(2)).sum::<f64>() / n as f64).sqrt();
+            assert!((media - mu).abs() < 0.1, "{}: media {media}", e.nombre);
+            assert!((sd / sigma - 1.0).abs() < 0.03, "{}: sd {sd}", e.nombre);
+            let (lo, hi) = (e.a_rep, e.a_fin_rep);
+            assert!((0..n).all(|id| (lo..=hi).contains(&e.a_est(42, id))));
+            // Función pura del individuo.
+            assert_eq!(e.a_est(42, 7), e.a_est(42, 7));
+        }
     }
 }

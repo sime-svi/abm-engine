@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-05 — nota de sombra pluviométrica del terreno (k_oro calibrado, agotamiento de humedad, c_P)
+Última actualización: 2026-11-05 — revisión 1 de la biología de los agentes (Holling, apetito por gasto total, lactancia y dimorfismo, esterilidad)
 
 ---
 
@@ -27,7 +27,7 @@ abm/
 │   ├── [x] agentes.toml           # Biología de los agentes (especies, energética, forraje, hábitat)
 │   ├── [x] terreno.toml           # Parámetros del planeta ([lod], [erosion], [soil]…)
 │   └── experiments/               # Configs con nombre por experimento
-│       ├── [x] agentes_proporcional.toml  # Propuesta D16 (consumo proporcional al stock), 60 años
+│       ├── [x] agentes_incremento1.toml   # La biología sin la revisión 1 (= salida de ece0868, byte a byte)
 │       └── [x] terreno_sin_sombra.toml    # El planeta sin la nota de sombra (= salida de bb6a8c0, byte a byte)
 │
 ├── crates/                        # Un paquete por responsabilidad; las flechas apuntan a abm-core
@@ -46,10 +46,10 @@ abm/
 │   │       ├── [x] lib.rs           # + VERSION (versión del ruleset)
 │   │       ├── biologia/            # Biología por días (fase «agentes», incremento 1)
 │   │       │   ├── [x] mod.rs · config.rs      # BioConfig (config/agentes.toml)
-│   │       │   ├── [x] especie.rs   # Especie por masa: Kleiber, West, Siler, leche, N_max (+ tests de calibración)
+│   │       │   ├── [x] especie.rs   # Especie por masa: Kleiber, West, Siler, leche, N_max, sexos, a_est (+ tests)
 │   │       │   ├── [x] azar.rs      # Azar por contador H(semilla, id, tick, propósito, índice) + SumaExacta
 │   │       │   ├── [x] componentes.rs · recursos.rs · habitat.rs   # Individuo (ECS), libro, hábitat de prueba (Miami)
-│   │       │   ├── [x] sistemas.rs  # T4 forraje · A3 demanda/reparto · A4 energética · A5–A9
+│   │       │   ├── [x] sistemas.rs  # T4 forraje · A3 demanda (Holling)/reparto · A4 energética · A5–A9 (destete forzoso)
 │   │       │   └── [x] genesis.rs · schedule.rs    # Población inicial y orden del tick
 │   │       ├── [x] config.rs        # Config del modelo (config/default.toml)
 │   │       ├── [x] components.rs    # Componentes del dominio (Position, Energy, Age, AgentId…)
@@ -72,7 +72,7 @@ abm/
 │   │
 │   ├── abm-metrics/               # OBSERVADORES + LOD de almacenamiento (→ core, ruleset, persistence)
 │   │   ├── [x] Cargo.toml
-│   │   └── src/ [x] lib.rs · collect.rs · biologia.rs   # biologia: recuentos, balance, tablas de vida anuales
+│   │   └── src/ [x] lib.rs · collect.rs · biologia.rs   # biologia: recuentos, balance, tablas de vida, demografía
 │   │
 │   ├── abm-persistence/           # SALIDA (JSON + Postgres tras un trait; sin deps del proyecto)
 │   │   ├── [x] Cargo.toml
@@ -94,7 +94,7 @@ abm/
 │       │   ├── [x] bin/agentes.rs   # binario `agentes` (biología por días)
 │       │   └── [x] bin/terreno.rs   # binario `terreno` (planeta)
 │       └── tests/
-│           ├── [x] biologia.rs      # balance, ayuno, sin machos, k_ap<1, determinismo, orden, cohorte, D16
+│           ├── [x] biologia.rs      # balance, ayuno, determinismo, orden, cohorte + revisión 1 (Holling, sequía, fecundidad…)
 │           ├── [x] determinism.rs   # misma semilla → misma salida + guardias
 │           └── [x] persistence_pg.rs # escribe run+métricas en BD (#[ignore]; corre con --ignored)
 │
@@ -130,7 +130,8 @@ abm/
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)
 │           ├── [x] README.md                      # Explicación llana + hallazgos
 │           ├── [x] diseno_biologia_agentes.md     # Diseño del responsable v1.0 (madre)
-│           └── [x] incremento-1-diseno.md         # Individuos en un hábitat de prueba (IMPLEMENTADO)
+│           ├── [x] incremento-1-diseno.md         # Individuos en un hábitat de prueba (IMPLEMENTADO)
+│           └── [x] nota_agentes_revision_1.md     # Revisión 1: los cuatro cambios (IMPLEMENTADA para individuos, §8)
 │
 └── output/                        # Volcados JSON locales y caché de la génesis (IGNORADO por git)
     └── [ ] .gitkeep
@@ -165,13 +166,15 @@ Estado:
 - **Determinismo:** misma semilla → mismo JSON byte a byte, verificado también entre procesos y entre
   `debug` y `release`.
 - **Comprobaciones:** `cargo fmt` / `clippy --workspace -D warnings` / `cargo test` en verde
-  (unitarios: terreno 14 + biología 6 + métricas 1; forrajeo 3; biología 8; terreno 15; erosión 15;
+  (unitarios: terreno 14 + biología 8 + métricas 1; forrajeo 3; biología 15; terreno 15; erosión 15;
   el test de BD es `#[ignore]` y pasa con `--ignored`).
-- **Biología de los agentes (incremento 1):** individuos con energía en kcal, crecimiento de West,
+- **Biología de los agentes (incremento 1 + revisión 1):** individuos con energía en kcal, crecimiento de West,
   reproducción sexual y mortalidad de Siler calibrada (humano: e0 30,9 años; genérico: l(1) = 0,6),
-  sobre un hábitat de prueba. Balance de energía cerrado a 10⁻⁶ kcal. Hallazgo: con el reparto del
-  diseño, la población agota el forraje y colapsa. La propuesta D16 (consumo proporcional al stock)
-  la regula cerca de `N_max`, a decidir por el responsable.
+  sobre un hábitat de prueba. Balance de energía cerrado a 10⁻⁶ kcal. Con la revisión 1:
+  - la respuesta funcional de Holling regula las poblaciones (herbívoro 1,23·`N_max`, humanos 0,90);
+  - el apetito se refiere al gasto total;
+  - hay destete forzoso y dimorfismo (en una hambruna mueren menos mujeres que hombres);
+  - cada mujer tiene su edad de esterilidad (6,6 hijos por mujer).
 - **Lluvia independiente de la resolución** (nota de lluvia orográfica): relieve de referencia a
   25 km para el efecto orográfico y distancia de humedad medida desde la costa. Al afinar una zona a
   la resolución real, su lluvia cambia un 0,03 % (antes +3,9 %).
@@ -194,9 +197,9 @@ nacimientos y muertes continuos, gracias a la relación `g < m < apetito` (regen
 metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
 
 **Pendiente (fases siguientes):**
-- biología de los agentes: decisiones del responsable (D1 apetito, D16 respuesta del consumo,
-  destete forzoso, fecundidad humana por edad); incremento 2 (cohortes y conversión), incremento 3
-  (planeta, forraje del terreno y Foco), incremento 4 (eventos y BD);
+- biología de los agentes: decisiones A1–A7 del responsable (revisión 1 §8.9); incremento 2 (cohortes y
+  conversión, con la versión de poblaciones de la revisión 1), incremento 3 (planeta, forraje del terreno
+  y Foco), incremento 4 (eventos y BD);
 - terreno incremento 4 (lagos dinámicos, flujo multidireccional, fertilidad dinámica, eventos);
 - sombra pluviométrica: decisiones S1–S5 del responsable (valor de `k_oro`, parámetros del secado, mar plano, `c_P`; nota de sombra §6.7);
 - tablas `events` y `agent_snapshots` (LOD micro) con su sink;

@@ -1,5 +1,7 @@
-# Biología de los agentes por días — incremento 1 (individuos en un hábitat de prueba).
+# Biología de los agentes por días — incremento 1 (individuos en un hábitat de prueba) con la revisión 1.
 # Diseño: docs/design/agentes/diseno_biologia_agentes.md · incremento: docs/design/agentes/incremento-1-diseno.md
+# Revisión 1 (docs/design/agentes/nota_agentes_revision_1.md): cuatro cambios, cada uno con su interruptor.
+# Con todos apagados: config/experiments/agentes_incremento1.toml (= la salida del incremento 1, byte a byte).
 # 1 tick = 1 día. Energía en kcal. Masas en kg. Tasas "por año" se pasan a días dividiendo por dias_anio.
 
 [run]
@@ -32,7 +34,7 @@ b_delta_a      = 0.25
 camada         = 1.0       # crías por parto (media; la parte fraccionaria es un Bernoulli)
 f_neo          = 0.06      # masa al nacer / masa adulta
 f_grasa_max    = 0.15      # fracción máxima de masa en grasa
-k_ap           = 2.0       # apetito / gasto (en energía asimilable: decisión D1, a confirmar)
+k_ap           = 2.0       # apetito / gasto (en energía asimilada: D1, confirmada en la revisión 1 §1)
 eps            = 0.5       # eficiencia digestiva del forraje
 f_com          = 0.004     # fracción de la PPN accesible a la especie (Damuth)
 p_conc         = 0.03      # prob. diaria de concepción (hembra disponible, con macho, en buena condición)
@@ -61,14 +63,27 @@ r_abort    = 0.1           # condición bajo la cual se pierde la gestación
 b0_ecto    = 7.0           # constante metabólica de ectotermos a t_ref (orientativo)
 e_a        = 0.65          # energía de activación (eV)
 t_ref      = 20.0          # temperatura de referencia de ectotermos (°C)
+# Revisión 1, cambio 1: apetito = k_ap · gasto total del día (hiperfagia de gestantes y lactantes).
+# false = k_ap · B(m) · PAL (incremento 1).
+apetito_gasto_total = true
+# Revisión 1, cambio 3: lactancia según la condición de la madre, destete forzoso y dimorfismo sexual.
+leche_por_condicion = true # la leche baja de forma lineal entre r_lact (completa) y r_aband (nada)
+r_lact     = 0.3           # condición por debajo de la cual la leche empieza a bajar
+r_aband    = 0.1           # condición por debajo de la cual hay destete forzoso
+destete_forzoso = true     # la lactante con condición < r_aband desteta: sus crías de >= f_dest_min·d_destete comen solas, las más jóvenes mueren con p_huerf
+f_dest_min = 0.5           # fracción de d_destete a partir de la cual la cría sobrevive destetada
+dimorfismo = true          # cada sexo usa su masa adulta y su grasa máxima (si la especie las da: el preset humano)
+# Revisión 1, cambio 4: edad de esterilidad individual a_est ~ Normal(mu_est, sigma_est) truncada a [a_rep, a_fin_rep].
+esterilidad_individual = true
 
 [forraje]
 rho_veg = 4.4              # energía bruta de la materia vegetal seca (kcal/g)
 tau_c   = 0.5              # años de producción que caben en el stock máximo
 g0_frac = 0.01             # rebrote mínimo (banco de semillas), fracción de la regeneración máxima
-# "total" = diseño §6.4 (todo el stock accesible: en celdas aisladas la población agota el forraje y colapsa)
-# "proporcional" = propuesta D16, fuera del diseño (se come en proporción a V/K: la población se regula sola)
-respuesta = "total"
+# Revisión 1, cambio 2 (D16): respuesta funcional de Holling tipo II, x = d·V/(V + h_medio·K), con
+# h_medio = (k_ap − 1)/2 por defecto (equilibrio en K/2; se puede fijar por especie).
+# false = todo el stock accesible (diseño v1.0 §6.4: en celdas aisladas la población agota el forraje y colapsa).
+respuesta_funcional = true
 
 [poblacion]
 fraccion_inicial = 0.5     # población inicial / capacidad estimada (§6.0)
@@ -100,6 +115,14 @@ siler_b1        = 1.131
 siler_a2        = 0.013
 siler_a3        = 1.47e-4
 beta3           = 0.085
+# Revisión 1 §3.4: dimorfismo sexual (con dimorfismo = true). Ayuno: ~49 días las mujeres, ~30 los hombres.
+masa_kg_hembra     = 56.0
+masa_kg_macho      = 64.0
+f_grasa_max_hembra = 0.25
+f_grasa_max_macho  = 0.15
+# Revisión 1 §4: edad de esterilidad (con esterilidad_individual = true). Valor inicial de la nota.
+mu_est_anios       = 38.0
+sigma_est_anios    = 4.0
 
 [[especies]]
 nombre = "herbivoro_70kg"
@@ -122,3 +145,9 @@ p_media_mm = 700.0
 # inicio_dia    = 3650
 # duracion_dias = 365
 # factor        = 0.1
+
+# Métricas opcionales (revisión 1): fecundidad por grupos de edad de la madre, edad del último parto,
+# mortalidad por grupo de edad y sexo y condición de las lactantes. No cambian el modelo.
+[metricas]
+demografia             = true
+ancho_fecundidad_anios = 5.0

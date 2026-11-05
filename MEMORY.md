@@ -680,3 +680,34 @@ Formato de entrada:
     - a sotavento de las cordilleras grandes en latitudes medias: lluvia 688 → 231 mm y desierto 7,6 → 15,8 %;
     - PPN (Miami) y capacidad de carga −2,9 %.
 - **Estado tras el cambio:** sombra pluviométrica activa. Pendientes del responsable: S1–S5 (nota §6.7). Siguiente: revisión 1 de la biología de los agentes.
+
+## [2026-11-05] Revisión 1 de la biología de los agentes: apetito por gasto total, Holling, lactancia y dimorfismo, esterilidad
+
+- **Qué:** Se implementó `docs/design/agentes/nota_agentes_revision_1.md` en la rama `agentes-revision1`, solo para individuos. Cuatro cambios, cada uno con su interruptor:
+  1. `energetica.apetito_gasto_total`: `Ap = k_ap · G_total`. D1 queda confirmada.
+  2. `forraje.respuesta_funcional`: Holling II con `h_½ = (k_ap − 1)/2` por especie. **Sustituye** a `forraje.respuesta`, D16; la variante proporcional y `agentes_proporcional.toml` se retiran.
+  3. Lactancia y sexos:
+     - `leche_por_condicion` (`r_lact`, `r_aband`);
+     - `destete_forzoso` (`f_dest_min`), con la causa de muerte nueva "destete forzoso";
+     - `dimorfismo`: masa, grasa y crecimiento por sexo; el preset humano: 56/64 kg y 25/15 % de grasa.
+  4. `esterilidad_individual`: `a_est ~ Normal(38, 4)` truncada, por contador, fijada al nacer.
+
+  Otros cambios:
+  - **Métricas opcionales** (`[metricas] demografia`): fecundidad por grupos de 5 años, edad del último parto, mortalidad por grupo de edad y sexo, y condición de las lactantes. Todos los campos nuevos de la salida son opcionales y no se escriben con su interruptor apagado (formato v1 intacto).
+  - **Configuración:** `config/experiments/agentes_incremento1.toml` con todo apagado.
+  - **Modo población:** su versión de cada cambio queda anotada para el incremento 2 (nota §8.7).
+- **Por qué:** los hallazgos del incremento 1: la población no se regulaba, las hambrunas acababan con las hembras y la fecundidad humana era de ~10 hijos.
+- **Decisiones / problemas:**
+  - **Holling regula.** Sin él, el herbívoro se extingue siempre en el año 13; con todo, 1,23·`N_max` (la nota pide 0,7–1,2) y humanos 0,90. Se mantienen la densidad frente a la PPN en 4 biomas, la equivalencia energética 10/300 kg (cociente 1,000) y Damuth (12,8). Con un liquen (τ_c = 20 años): sobrepasamiento de 2,5× y colapso.
+  - **El cambio 1 solo se nota con comida escasa** (con abundancia, el apetito antiguo ya pagaba la leche). En equilibrio quita el hambre (1 045 muertes/año → 0), pone `V/K = 0,50` y es lo que evita el colapso de hembras del herbívoro en la sequía (31 % de adultas frente al 0,04 %).
+  - **El cambio 3 casi no actúa en el herbívoro:** su sobremortalidad femenina viene de la gestación. Subir `r_aband` a 0,25 no cambia nada. En humanos, el dimorfismo hace que en una hambruna mueran menos mujeres que hombres (0,08 frente a 0,30 al año), como en la realidad.
+  - **Hallazgo: hambre sincronizada.** Con Holling, lo que come cada uno depende del forraje que queda y no de cuántos comen. En una sequía, todos los de una celda mueren a la vez, y las celdas pequeñas (o con la sequía durante el sobrepasamiento) se extinguen enteras.
+  - **Fecundidad humana:** con `μ_est = 38` salen 6,6 hijos y el último parto a los 36,7 años (el objetivo era 37–40), con una caída por edad más temprana que la de Coale-Trussell. Con 40 sale la forma, pero 7,3 hijos. Ningún valor cumple los tres objetivos.
+  - **`e0` humana de 21–25 años** en equilibrio: el 29 % de las muertes, por hambre.
+  - **Optimización:** sortear `a_est` cada día costaba un 35 %; se fija al nacer (`Repro.a_fin`) y la salida sale idéntica byte a byte.
+  - **Decisiones pendientes del responsable:** A1–A7 (nota §8.9).
+- **Verificación:**
+  - **No regresión:** con todo apagado, salida **idéntica byte a byte** al binario de ece0868 (30 años por defecto).
+  - **Tests:** 2 unitarios nuevos y 7 de simulación nuevos o reescritos. `fmt`, `clippy --workspace --all-targets -D warnings` y `cargo test --workspace` en verde (biología: 8 unitarios + 15 de simulación, 45 s en debug).
+  - **Medidas:** campaña de 30 corridas (cada cambio solo, todos, todos menos uno, sequías, biomas, equivalencia, liquen, barrido de `μ_est`), en la nota §8.
+- **Estado tras el cambio:** biología con la revisión 1. Siguiente: decisiones A1–A7; después, el incremento 2 (poblaciones).

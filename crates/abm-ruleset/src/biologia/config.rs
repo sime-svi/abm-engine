@@ -26,6 +26,8 @@ pub struct BioConfig {
     pub especies: Vec<EspecieCfg>,
     /// Hábitat de prueba del incremento 1.
     pub habitat: HabitatCfg,
+    /// Métricas opcionales de la salida.
+    pub metricas: MetricasCfg,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,6 +102,25 @@ pub struct EnergeticaCfg {
     pub b0_ecto: f64,
     pub e_a: f64,
     pub t_ref: f64,
+    /// Revisión 1, cambio 1 (D1 + hiperfagia): el apetito es energía asimilada y se refiere al
+    /// gasto total del día, `Ap = k_ap · G_total`. `false` = `Ap = k_ap · B(m) · PAL`.
+    pub apetito_gasto_total: bool,
+    /// Revisión 1, cambio 3.1: la leche baja con la condición de la madre, entre `r_lact` (leche
+    /// completa) y `r_aband` (sin leche). `false` = leche completa siempre.
+    pub leche_por_condicion: bool,
+    pub r_lact: f64,
+    pub r_aband: f64,
+    /// Revisión 1, cambio 3.2: destete forzoso. Si la condición de la lactante baja de `r_aband`,
+    /// la lactancia termina; las crías de al menos `f_dest_min · d_destete` días sobreviven
+    /// destetadas y las más jóvenes mueren con `p_huerf`. `false` = sin destete forzoso.
+    pub destete_forzoso: bool,
+    pub f_dest_min: f64,
+    /// Revisión 1, cambio 3.4: dimorfismo sexual. Cada sexo usa su masa adulta y su grasa máxima
+    /// si la especie las da. `false` = la misma para los dos sexos.
+    pub dimorfismo: bool,
+    /// Revisión 1, cambio 4: edad de esterilidad individual `a_est ~ Normal(μ_est, σ_est)`,
+    /// truncada a `[a_rep, a_fin_rep]`. `false` = fértil hasta `a_fin_rep`.
+    pub esterilidad_individual: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,21 +132,10 @@ pub struct ForrajeCfg {
     pub tau_c: f64,
     /// Rebrote mínimo (banco de semillas), fracción de la regeneración máxima.
     pub g0_frac: f64,
-    /// Cuánto del forraje consigue comer cada uno según el stock (incremento 1, D16).
-    pub respuesta: RespuestaForraje,
-}
-
-/// Respuesta del consumo al stock de forraje (incremento 1, D16).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RespuestaForraje {
-    /// Diseño (§6.4) tal cual: todo el stock es accesible y cada uno come lo que pide hasta que se
-    /// agota. En celdas aisladas la población crece hasta agotar el forraje y colapsa.
-    #[default]
-    Total,
-    /// **Propuesta, fuera del diseño:** la demanda se multiplica por `V/K`, así que al escasear el
-    /// forraje se come menos antes de agotarlo. La población se regula sola cerca de `N_max`.
-    Proporcional,
+    /// Revisión 1, cambio 2 (sustituye a la opción `respuesta` del incremento 1, D16): respuesta
+    /// funcional de Holling tipo II. Cada uno come `d · V/(V + V_½)`, con `V_½ = h_½ · K` (`h_½`
+    /// por especie). `false` = todo el stock accesible, como el diseño v1.0 (§6.4).
+    pub respuesta_funcional: bool,
 }
 
 /// Cómo se reparten las edades de la población inicial.
@@ -179,6 +189,19 @@ pub struct AjustesCfg {
     pub siler_a2: Option<f64>,
     pub siler_a3: Option<f64>,
     pub beta3: Option<f64>,
+    /// Semisaturación de la respuesta funcional, relativa a `K` (revisión 1 §2). Por defecto
+    /// `(k_ap − 1)/2`, que pone el equilibrio en `K/2`.
+    pub h_medio: Option<f64>,
+    /// Dimorfismo sexual (revisión 1 §3.4): masa adulta y grasa máxima de cada sexo. Por
+    /// defecto, las de la especie.
+    pub masa_kg_hembra: Option<f64>,
+    pub masa_kg_macho: Option<f64>,
+    pub f_grasa_max_hembra: Option<f64>,
+    pub f_grasa_max_macho: Option<f64>,
+    /// Edad de esterilidad (revisión 1 §4): media y desviación típica (años). Por defecto
+    /// `a_rep + 0,7 · (a_fin_rep − a_rep)` y `0,1 · (a_fin_rep − a_rep)`.
+    pub mu_est_anios: Option<f64>,
+    pub sigma_est_anios: Option<f64>,
 }
 
 /// Tipo térmico de una especie.
@@ -228,6 +251,26 @@ pub struct SequiaCfg {
     pub inicio_dia: u64,
     pub duracion_dias: u64,
     pub factor: f64,
+}
+
+/// Métricas opcionales (no cambian el modelo, solo lo que se escribe).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct MetricasCfg {
+    /// Demografía por edades y condición (revisión 1): fecundidad por grupos de edad de la madre,
+    /// edad del último parto, mortalidad por grupo de edad y sexo, y condición de las lactantes.
+    pub demografia: bool,
+    /// Anchura de los grupos de edad de la fecundidad (años).
+    pub ancho_fecundidad_anios: f64,
+}
+
+impl Default for MetricasCfg {
+    fn default() -> Self {
+        Self {
+            demografia: true,
+            ancho_fecundidad_anios: 5.0,
+        }
+    }
 }
 
 impl Default for RunCfg {
@@ -301,6 +344,14 @@ impl Default for EnergeticaCfg {
             b0_ecto: 7.0,
             e_a: 0.65,
             t_ref: 20.0,
+            apetito_gasto_total: true,
+            leche_por_condicion: true,
+            r_lact: 0.3,
+            r_aband: 0.1,
+            destete_forzoso: true,
+            f_dest_min: 0.5,
+            dimorfismo: true,
+            esterilidad_individual: true,
         }
     }
 }
@@ -311,7 +362,7 @@ impl Default for ForrajeCfg {
             rho_veg: 4.4,
             tau_c: 0.5,
             g0_frac: 0.01,
-            respuesta: RespuestaForraje::Total,
+            respuesta_funcional: true,
         }
     }
 }
@@ -373,6 +424,13 @@ pub fn preset_humano() -> AjustesCfg {
         siler_a2: Some(0.013),
         siler_a3: Some(1.47e-4),
         beta3: Some(0.085),
+        // Revisión 1 §3.4 (dimorfismo) y §4 (esterilidad).
+        masa_kg_hembra: Some(56.0),
+        masa_kg_macho: Some(64.0),
+        f_grasa_max_hembra: Some(0.25),
+        f_grasa_max_macho: Some(0.15),
+        mu_est_anios: Some(38.0),
+        sigma_est_anios: Some(4.0),
         ..AjustesCfg::default()
     }
 }
@@ -405,6 +463,7 @@ impl Default for BioConfig {
                 },
             ],
             habitat: HabitatCfg::default(),
+            metricas: MetricasCfg::default(),
         }
     }
 }
@@ -474,6 +533,16 @@ impl BioConfig {
         }
         if !(0.0 <= en.r_min && en.r_min < en.r_opt && en.r_opt <= 1.0) {
             return Err(invalida("se requiere 0 <= r_min < r_opt <= 1"));
+        }
+        if !(0.0 <= en.r_aband && en.r_aband < en.r_lact && en.r_lact <= 1.0) {
+            return Err(invalida("se requiere 0 <= r_aband < r_lact <= 1"));
+        }
+        if !(0.0..=1.0).contains(&en.f_dest_min) {
+            return Err(invalida("energetica.f_dest_min debe estar en [0, 1]"));
+        }
+        let ancho = self.metricas.ancho_fecundidad_anios;
+        if !(ancho > 0.0 && ancho.is_finite()) {
+            return Err(invalida("metricas.ancho_fecundidad_anios debe ser > 0"));
         }
         if self.especies.is_empty() {
             return Err(invalida("se requiere al menos una especie en [[especies]]"));

@@ -53,7 +53,12 @@ pub enum Causa {
     EdadMax = 1,
     Intrinseca = 2,
     Orfandad = 3,
+    /// Cría joven que muere en un destete forzoso (revisión 1 §3.2).
+    Destete = 4,
 }
+
+/// Nº de causas de muerte.
+pub const N_CAUSAS: usize = 5;
 
 /// Un muerto del tick (para las métricas: causa, edad y reserva).
 #[derive(Debug, Clone, Copy)]
@@ -63,6 +68,14 @@ pub struct MuertoInfo {
     pub edad: u32,
     pub causa: Causa,
     pub reserva: f64,
+}
+
+/// Una hembra que termina su vida reproductiva en el tick (pasa a postreproductiva).
+#[derive(Debug, Clone, Copy)]
+pub struct FinReproInfo {
+    pub esp: u16,
+    /// Edad (días) de su último parto, si tuvo alguno durante la corrida.
+    pub edad_ultimo_parto: Option<u32>,
 }
 
 /// Un parto del tick.
@@ -79,10 +92,13 @@ pub struct PartoInfo {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CuentasEspecie {
     pub nacimientos: u64,
-    pub muertes: [u64; 4],
+    pub muertes: [u64; N_CAUSAS],
     pub concepciones: u64,
     pub abortos: u64,
     pub destetes: u64,
+    /// Destetes forzosos (madres) y crías que sobreviven destetadas (revisión 1 §3.2).
+    pub destetes_forzosos: u64,
+    pub crias_destetadas: u64,
     pub en_deficit: u64,
     /// Forraje bruto consumido (kcal) y rebrote neto del stock (g).
     pub consumo_kcal: SumaExacta,
@@ -103,6 +119,7 @@ pub struct Libro {
     pub reservas_muertos: SumaExacta,
     pub muertos: Vec<MuertoInfo>,
     pub partos: Vec<PartoInfo>,
+    pub fin_repro: Vec<FinReproInfo>,
 }
 
 impl Libro {
@@ -120,6 +137,7 @@ impl Libro {
         self.reservas_muertos = SumaExacta::default();
         self.muertos.clear();
         self.partos.clear();
+        self.fin_repro.clear();
     }
 }
 
@@ -132,6 +150,8 @@ pub struct CriaPendiente {
     pub celda: Celda,
     pub macho: bool,
     pub reserva: f64,
+    /// Fin de su vida reproductiva (días): su edad de esterilidad o `a_fin_rep`.
+    pub a_fin: u32,
 }
 
 /// Búferes reutilizados entre ticks.
@@ -139,6 +159,11 @@ pub struct CriaPendiente {
 pub struct Buffers {
     /// Leche que necesita cada cría: (id de la madre, φ·G_c), ordenado por madre.
     pub leche: Vec<(u64, f64)>,
+    /// Fracción de leche que da cada lactante según su condición, `g_leche(r)` (revisión 1
+    /// §3.1): (id de la madre, g), ordenado por madre.
+    pub leche_madre: Vec<(u64, f64)>,
+    /// Madres que destetan a la fuerza en el tick (revisión 1 §3.2), ordenado.
+    pub abandonos: Vec<u64>,
     /// Demanda total, cociente del reparto justo y consumo por (celda, especie).
     pub demanda: Vec<SumaExacta>,
     pub reparto: Vec<f64>,
@@ -147,7 +172,8 @@ pub struct Buffers {
     pub machos: Vec<u32>,
     pub crias: Vec<u64>,
     pub nacimientos: Vec<CriaPendiente>,
-    /// Muertos del tick (entidad, id) y huérfanos que sobreviven.
+    /// Muertos del tick (entidad, id) y crías que pasan a comer solas (huérfanos que sobreviven y
+    /// destetadas a la fuerza).
     pub muertos: Vec<(Entity, u64)>,
     pub ids_muertos: Vec<u64>,
     pub madres_muertas: Vec<u64>,

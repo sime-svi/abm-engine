@@ -83,15 +83,23 @@ pub fn build_con_orden(cfg: &BioConfig, barajado: Option<u64>) -> Result<World, 
                     }
                 };
                 let a = a.min(e.a_max.saturating_sub(1));
-                let m = e.masa_por_edad(a);
+                let sexo = if macho { Sexo::Macho } else { Sexo::Hembra };
+                // Masa y reserva con la masa adulta y la grasa de su sexo (revisión 1 §3.4).
+                let m = e.masa_por_edad_s(sexo.i(), a);
+                // Fin de la vida reproductiva: con esterilidad individual, su a_est (rev. 1 §4).
+                let a_fin = if cfg.energetica.esterilidad_individual && !macho {
+                    e.a_est(semilla, id)
+                } else {
+                    e.a_fin_rep
+                };
                 nuevos.push((
                     IdBio(id),
                     EspecieRef(k as u16),
-                    if macho { Sexo::Macho } else { Sexo::Hembra },
+                    sexo,
                     Edad(a),
                     Masa(m),
-                    Reserva(po.reserva_inicial * e.e_max(m)),
-                    Repro::por_edad(macho, a, e.a_rep, e.a_fin_rep),
+                    Reserva(po.reserva_inicial * e.e_max_s(sexo.i(), m)),
+                    Repro::por_edad(macho, a, e.a_rep, a_fin),
                     Celda(c as u32),
                     Diario::default(),
                 ));

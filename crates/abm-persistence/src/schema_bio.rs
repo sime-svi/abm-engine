@@ -1,5 +1,8 @@
 //! Formato de salida de la biología de los agentes (`output/<nombre>_agentes.json`). Diseño de
 //! biología §8; incremento 1 §8.
+//!
+//! Los campos de la revisión 1 son opcionales: solo se escriben si su interruptor está encendido.
+//! Con todos apagados, el documento es el del incremento 1, byte a byte (formato v1).
 
 use serde::{Deserialize, Serialize};
 
@@ -64,6 +67,28 @@ pub struct EspecieMeta {
     /// Población máxima sostenible de todo el hábitat (§1).
     pub n_max: f64,
     pub poblacion_inicial: u64,
+    /// Con dimorfismo (revisión 1 §3.4): masa adulta y días de ayuno de cada sexo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub masa_kg_hembra: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub masa_kg_macho: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ayuno_dias_hembra: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ayuno_dias_macho: Option<f64>,
+    /// Con respuesta funcional (revisión 1 §2): semisaturación relativa a `K`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub h_medio: Option<f64>,
+    /// Con esterilidad individual (revisión 1 §4): media y desviación típica de la edad de
+    /// esterilidad (años).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mu_est_anios: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sigma_est_anios: Option<f64>,
+    /// Con las métricas de demografía: límites (días) de los grupos de edad de la mortalidad
+    /// (crías < destete ≤ jóvenes < madurez ≤ adultos < vejez ≤ viejos).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grupos_edad_dias: Option<[u32; 3]>,
 }
 
 /// Registro de un tick.
@@ -102,6 +127,17 @@ pub struct EspecieTick {
     pub forraje_max_kg: f64,
     pub consumo_kg: f64,
     pub rebrote_kg: f64,
+    /// Con destete forzoso (revisión 1 §3.2): madres que destetan a la fuerza, crías que pasan a
+    /// comer solas y crías que mueren en el intervalo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destetes_forzosos: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crias_destetadas_forzoso: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub muertes_destete: Option<u64>,
+    /// Con las métricas de demografía: condición media `E/E_max` de las lactantes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condicion_lactantes: Option<f64>,
 }
 
 /// Balance de energía (diseño §8). `residuo = Δreservas − (asimilada + leche_recibida −
@@ -151,4 +187,22 @@ pub struct EspecieAnio {
     /// Pirámide al final del año, por clase de edad (`Δa`) y sexo.
     pub piramide_hembras: Vec<u64>,
     pub piramide_machos: Vec<u64>,
+    /// Con destete forzoso: crías muertas en destetes forzosos.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub muertes_destete: Option<u64>,
+    /// Con las métricas de demografía (revisión 1): fecundidad por grupos de edad de la madre
+    /// (crías por hembra y año; grupos de `metricas.ancho_fecundidad_anios`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fecundidad_grupos: Option<Vec<f64>>,
+    /// Hembras que terminan su vida reproductiva en el año habiendo parido durante la corrida, y
+    /// edad media de su último parto (años).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub n_ultimo_parto: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edad_ultimo_parto_anios: Option<f64>,
+    /// Mortalidad anual (1/año) por grupo de edad (crías, jóvenes, adultos, viejos) y sexo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mortalidad_hembras: Option<[f64; 4]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mortalidad_machos: Option<[f64; 4]>,
 }

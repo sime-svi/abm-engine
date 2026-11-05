@@ -12,10 +12,11 @@ use super::azar::{Proposito, SumaExacta, hash, uniforme};
 use super::componentes::{
     Celda, Dependiente, Diario, Edad, EspecieRef, EstadoRepro, IdBio, Masa, Repro, Reserva, Sexo,
 };
-use super::config::RespuestaForraje;
 use super::especie::Especie;
 use super::habitat::Habitat;
-use super::recursos::{Buffers, Catalogo, Causa, CriaPendiente, Libro, MuertoInfo, PartoInfo};
+use super::recursos::{
+    Buffers, Catalogo, Causa, CriaPendiente, FinReproInfo, Libro, MuertoInfo, PartoInfo,
+};
 
 /// Inicio del tick: libro a cero y reservas de partida (para el balance de energía).
 pub fn bio_inicio(cat: Res<Catalogo>, mut libro: ResMut<Libro>, q: Query<&Reserva>) {
@@ -54,6 +55,7 @@ pub fn bio_forraje(
 type QDemanda<'a> = (
     &'a IdBio,
     &'a EspecieRef,
+    &'a Sexo,
     &'a Edad,
     &'a Masa,
     &'a Reserva,
@@ -63,10 +65,19 @@ type QDemanda<'a> = (
     &'a mut Diario,
 );
 
+/// Fracción de la leche que da una madre según su condición `r = E/E_max` (revisión 1 §3.1):
+/// completa por encima de `r_lact`, nada por debajo de `r_aband`, lineal entre medias.
+#[inline]
+fn g_leche(r: f64, r_lact: f64, r_aband: f64) -> f64 {
+    ((r - r_aband) / (r_lact - r_aband)).clamp(0.0, 1.0)
+}
+
 /// A3. Demanda y reparto justo (§6.4), con el gasto del día (§6.5):
-/// - pasada 1: crecimiento previsto (D2), gasto propio y la leche que necesita cada cría (D3);
-/// - pasada 2: leche que paga cada madre, demanda `d = min(Ap, E_max − E + G)/ε` (D1), y su suma
-///   por celda y especie;
+/// - pasada 1: crecimiento previsto (D2), gasto propio y la leche que necesita cada cría (D3),
+///   graduada por la condición de su madre (revisión 1 §3.1);
+/// - pasada 2: leche que paga cada madre, demanda `d = min(Ap, E_max − E + G)/ε` (D1; con la
+///   revisión 1 §1, `Ap = k_ap · G_total`), respuesta funcional (revisión 1 §2) y su suma por celda
+///   y especie;
 /// - reparto: `x_i = d_i · min(1, F/Σd)`, con `F = V·A·ρ_veg`.
 pub fn bio_demanda(
     cat: Res<Catalogo>,
@@ -78,24 +89,38 @@ pub fn bio_demanda(
     let n = hab.n_celdas * hab.n_esp;
     let Buffers {
         leche,
+        leche_madre,
         demanda,
         reparto,
         consumo,
         ..
     } = &mut *buf;
+    // Leche según la condición de cada lactante, con su estado al empezar el tick.
+    leche_madre.clear();
+    if en.leche_por_condicion {
+        for (id, esp, sexo, _, masa, res, repro, ..) in q.iter() {
+            if repro.estado == EstadoRepro::Lactante {
+                let e = &cat.especies[esp.0 as usize];
+                let r = res.0 / e.e_max_s(sexo.i(), masa.0);
+                leche_madre.push((id.0, g_leche(r, en.r_lact, en.r_aband)));
+            }
+        }
+        leche_madre.sort_unstable_by_key(|x| x.0);
+    }
     leche.clear();
-    for (_, esp, edad, masa, res, repro, celda, dep, mut d) in q.iter_mut() {
+    for (_, esp, sexo, edad, masa, res, repro, celda, dep, mut d) in q.iter_mut() {
         let e = &cat.especies[esp.0 as usize];
+        let s = sexo.i();
         let f_ecto = hab.f_ecto[celda.0 as usize];
         let m = masa.0;
-        let dm = if m < e.masa && res.0 >= en.r_crec_min * e.e_max(m) {
-            e.dm_west(m)
+        let dm = if m < e.masa_sexo[s] && res.0 >= en.r_crec_min * e.e_max_s(s, m) {
+            e.dm_west_s(s, m)
         } else {
             0.0
         };
         let mut g = e.basal(m, f_ecto) * e.pal + en.c_crec * dm;
         if repro.estado == EstadoRepro::Gestante {
-            g += en.k_gest * e.basal(e.masa, f_ecto);
+            g += en.k_gest * e.basal(e.masa_sexo[0], f_ecto);
         }
         *d = Diario {
             dm,
@@ -104,6 +129,12 @@ pub fn bio_demanda(
         };
         if let Some(dep) = dep {
             d.leche = e.phi_leche(edad.0) * g;
+            if en.leche_por_condicion {
+                // La cría no compensa comiendo más la leche que falta (revisión 1 §3.1).
+                d.leche *= leche_madre
+                    .binary_search_by_key(&dep.madre, |x| x.0)
+                    .map_or(1.0, |i| leche_madre[i].1);
+            }
             if d.leche > 0.0 {
                 leche.push((dep.madre, d.leche));
             }
@@ -115,7 +146,7 @@ pub fn bio_demanda(
     demanda.resize(n, SumaExacta::default());
     consumo.clear();
     consumo.resize(n, SumaExacta::default());
-    for (id, esp, edad, masa, res, repro, celda, dep, mut d) in q.iter_mut() {
+    for (id, esp, sexo, edad, masa, res, repro, celda, dep, mut d) in q.iter_mut() {
         let e = &cat.especies[esp.0 as usize];
         let c = celda.0 as usize;
         let m = masa.0;
@@ -128,17 +159,24 @@ pub fn bio_demanda(
             d.g_leche = s.valor() / en.eps_leche;
         }
         let g = d.g_propio + d.g_leche;
-        let apetito = e.k_ap * e.basal(m, hab.f_ecto[c]) * e.pal;
-        let falta = (e.e_max(m) - res.0 + g).max(0.0);
+        // Apetito en energía asimilada (D1): referido al gasto total del día (revisión 1 §1:
+        // hiperfagia de gestantes y lactantes) o, como en el incremento 1, al de mantenimiento.
+        let apetito = if en.apetito_gasto_total {
+            e.k_ap * g
+        } else {
+            e.k_ap * e.basal(m, hab.f_ecto[c]) * e.pal
+        };
+        let falta = (e.e_max_s(sexo.i(), m) - res.0 + g).max(0.0);
         let mut dem = apetito.min(falta) / e.eps;
         if dep.is_some() {
             dem *= 1.0 - e.phi_leche(edad.0);
         }
         let i = hab.idx(c, esp.0 as usize);
-        if cat.forraje.respuesta == RespuestaForraje::Proporcional {
-            // Propuesta D16 (fuera del diseño): se consigue comer en proporción al stock.
-            dem *= if hab.k[i] > 0.0 {
-                hab.v[i] / hab.k[i]
+        if cat.forraje.respuesta_funcional {
+            // Holling tipo II (revisión 1 §2): con poco forraje se come menos antes de agotarlo.
+            let v_medio = e.h_medio * hab.k[i];
+            dem *= if hab.v[i] + v_medio > 0.0 {
+                hab.v[i] / (hab.v[i] + v_medio)
             } else {
                 0.0
             };
@@ -168,12 +206,12 @@ pub fn bio_energetica(
     hab: Res<Habitat>,
     mut buf: ResMut<Buffers>,
     mut libro: ResMut<Libro>,
-    mut q: Query<(&EspecieRef, &Masa, &Celda, &mut Reserva, &mut Diario)>,
+    mut q: Query<(&EspecieRef, &Sexo, &Masa, &Celda, &mut Reserva, &mut Diario)>,
 ) {
     let en = &cat.en;
     let buf = &mut *buf;
     let libro = &mut *libro;
-    for (esp, masa, celda, mut res, mut d) in q.iter_mut() {
+    for (esp, sexo, masa, celda, mut res, mut d) in q.iter_mut() {
         let k = esp.0 as usize;
         let e = &cat.especies[k];
         let i = hab.idx(celda.0 as usize, k);
@@ -194,7 +232,7 @@ pub fn bio_energetica(
             nueva -= gasto - ingreso;
             d.deficit = true;
         }
-        let tope = e.e_max(masa.0);
+        let tope = e.e_max_s(sexo.i(), masa.0);
         let mut excedente = 0.0;
         if nueva > tope {
             excedente = nueva - tope;
@@ -213,11 +251,12 @@ pub fn bio_energetica(
     }
 }
 
-/// A5. Crecimiento (§6.6): `m ← min(m + Δm, M)`, con el `Δm` decidido en A3.
-pub fn bio_crecimiento(cat: Res<Catalogo>, mut q: Query<(&EspecieRef, &mut Masa, &Diario)>) {
-    for (esp, mut masa, d) in q.iter_mut() {
+/// A5. Crecimiento (§6.6): `m ← min(m + Δm, M)`, con el `Δm` decidido en A3 y la masa adulta de
+/// su sexo.
+pub fn bio_crecimiento(cat: Res<Catalogo>, mut q: Query<(&EspecieRef, &Sexo, &mut Masa, &Diario)>) {
+    for (esp, sexo, mut masa, d) in q.iter_mut() {
         if d.dm > 0.0 {
-            masa.0 = (masa.0 + d.dm).min(cat.especies[esp.0 as usize].masa);
+            masa.0 = (masa.0 + d.dm).min(cat.especies[esp.0 as usize].masa_sexo[sexo.i()]);
         }
     }
 }
@@ -234,11 +273,13 @@ type QRepro<'a> = (
 );
 
 /// Parto (§6.7): crías por Bernoulli de la parte fraccionaria de la camada, sexo por `ρ_sexo`,
-/// reserva inicial `r_0·E_max(m0)` pagada por la madre (si no alcanza, reparte lo que tiene).
+/// reserva inicial `r_0·E_max(m0)` pagada por la madre (si no alcanza, reparte lo que tiene). Cada
+/// hija recibe su edad de esterilidad si `esterilidad` (revisión 1 §4).
 #[allow(clippy::too_many_arguments)]
 fn parto(
     e: &Especie,
     r_0: f64,
+    esterilidad: bool,
     semilla: u64,
     t: u64,
     id: u64,
@@ -252,18 +293,7 @@ fn parto(
 ) {
     let extra = u32::from(uniforme(semilla, id, t, Proposito::Camada, 0) < e.camada.fract());
     let n = e.camada.floor() as u32 + extra;
-    let e0 = r_0 * e.e_max(e.m0);
-    let por_cria = if n == 0 {
-        0.0
-    } else if res.0 >= e0 * n as f64 {
-        res.0 -= e0 * n as f64;
-        e0
-    } else {
-        let x = res.0.max(0.0) / n as f64;
-        res.0 = res.0.min(0.0);
-        x
-    };
-    for j in 0..n {
+    let cria = |j: u32| {
         let cid = hash(
             semilla,
             id,
@@ -271,15 +301,71 @@ fn parto(
             Proposito::IdCria,
             j as u64,
         );
-        let macho = uniforme(semilla, cid, t, Proposito::SexoCria, 0) < e.rho_sexo;
-        nacimientos.push(CriaPendiente {
-            id: cid,
-            madre: id,
-            esp,
-            celda,
-            macho,
-            reserva: por_cria,
-        });
+        (
+            cid,
+            uniforme(semilla, cid, t, Proposito::SexoCria, 0) < e.rho_sexo,
+        )
+    };
+    let a_fin = |cid: u64, macho: bool| {
+        if esterilidad && !macho {
+            e.a_est(semilla, cid)
+        } else {
+            e.a_fin_rep
+        }
+    };
+    if e.f_grasa_sexo[0] == e.f_grasa_sexo[1] {
+        // Todas las crías tienen la misma reserva inicial (como en el incremento 1).
+        let e0 = r_0 * e.e_max(e.m0);
+        let por_cria = if n == 0 {
+            0.0
+        } else if res.0 >= e0 * n as f64 {
+            res.0 -= e0 * n as f64;
+            e0
+        } else {
+            let x = res.0.max(0.0) / n as f64;
+            res.0 = res.0.min(0.0);
+            x
+        };
+        for j in 0..n {
+            let (cid, macho) = cria(j);
+            nacimientos.push(CriaPendiente {
+                id: cid,
+                madre: id,
+                esp,
+                celda,
+                macho,
+                reserva: por_cria,
+                a_fin: a_fin(cid, macho),
+            });
+        }
+    } else {
+        // Dimorfismo (revisión 1 §3.4): la reserva inicial de cada cría es `r_0·E_max(m0)` con la
+        // grasa de su sexo. Si la madre no llega, reparte lo que tiene por igual.
+        let e0 = |macho: bool| r_0 * e.e_max_s(usize::from(macho), e.m0);
+        let total: f64 = (0..n).map(|j| e0(cria(j).1)).sum();
+        let alcanza = res.0 >= total;
+        let reparto = if n == 0 {
+            0.0
+        } else {
+            res.0.max(0.0) / n as f64
+        };
+        if alcanza {
+            res.0 -= total;
+        } else {
+            res.0 = res.0.min(0.0);
+        }
+        for j in 0..n {
+            let (cid, macho) = cria(j);
+            nacimientos.push(CriaPendiente {
+                id: cid,
+                madre: id,
+                esp,
+                celda,
+                macho,
+                reserva: if alcanza { e0(macho) } else { reparto },
+                a_fin: a_fin(cid, macho),
+            });
+        }
     }
     libro.partos.push(PartoInfo {
         esp,
@@ -299,8 +385,19 @@ fn parto(
     }
 }
 
-/// A6. Reproducción sexual (§6.7): madurez, aborto o parto, fin de la lactancia, concepción y fin
-/// de la vida reproductiva (D9). Las crías se crean después, en `bio_nacimientos`.
+/// Fin de la vida reproductiva de una hembra en el tick `t`: pasa a postreproductiva y se anota la
+/// edad de su último parto (métricas de la revisión 1 §4).
+fn fin_reproduccion(repro: &mut Repro, esp: u16, a: u32, t: u64, libro: &mut Libro) {
+    repro.estado = EstadoRepro::Postreproductiva;
+    libro.fin_repro.push(FinReproInfo {
+        esp,
+        edad_ultimo_parto: repro.ultimo_parto.map(|u| a - (t - u) as u32),
+    });
+}
+
+/// A6. Reproducción sexual (§6.7): madurez, aborto o parto, fin de la lactancia (natural o forzoso,
+/// revisión 1 §3.2), concepción y fin de la vida reproductiva (D9; con la revisión 1 §4, a la edad
+/// de esterilidad de cada hembra). Las crías se crean después, en `bio_nacimientos`.
 pub fn bio_reproduccion(
     cat: Res<Catalogo>,
     hab: Res<Habitat>,
@@ -317,9 +414,11 @@ pub fn bio_reproduccion(
         machos,
         crias,
         nacimientos,
+        abandonos,
         ..
     } = &mut *buf;
     let libro = &mut *libro;
+    abandonos.clear();
     machos.clear();
     machos.resize(hab.n_celdas * hab.n_esp, 0);
     for (_, esp, sexo, _, _, _, repro, celda) in q.iter() {
@@ -342,16 +441,19 @@ pub fn bio_reproduccion(
             }
             continue;
         }
+        // Fin de la vida reproductiva: a_fin_rep o, con esterilidad individual, su a_est.
+        let a_fin = repro.a_fin;
+        let e_max = e.e_max_s(0, masa.0);
         if repro.estado == EstadoRepro::Inmadura && a >= e.a_rep {
-            repro.estado = if a >= e.a_fin_rep {
-                EstadoRepro::Postreproductiva
+            if a >= a_fin {
+                fin_reproduccion(&mut repro, esp.0, a, t, libro);
             } else {
-                EstadoRepro::Disponible
-            };
+                repro.estado = EstadoRepro::Disponible;
+            }
         }
         match repro.estado {
             EstadoRepro::Gestante => {
-                if res.0 < en.r_abort * e.e_max(masa.0) {
+                if res.0 < en.r_abort * e_max {
                     repro.estado = EstadoRepro::Disponible;
                     repro.dias_rest = 0;
                     libro.esp[k].abortos += 1;
@@ -361,6 +463,7 @@ pub fn bio_reproduccion(
                         parto(
                             e,
                             en.r_0,
+                            en.esterilidad_individual,
                             semilla,
                             t,
                             id.0,
@@ -386,15 +489,22 @@ pub fn bio_reproduccion(
                 } else if vivas == 0 {
                     repro.estado = EstadoRepro::Disponible;
                     repro.dias_rest = 0;
+                } else if en.destete_forzoso && res.0 < en.r_aband * e_max {
+                    // Destete forzoso (revisión 1 §3.2): la madre prioriza su supervivencia. Sus
+                    // crías se resuelven en A7 (las jóvenes, con la regla de los huérfanos).
+                    repro.estado = EstadoRepro::Disponible;
+                    repro.dias_rest = 0;
+                    abandonos.push(id.0);
+                    libro.esp[k].destetes_forzosos += 1;
                 }
             }
             _ => {}
         }
         if repro.estado == EstadoRepro::Disponible {
-            if a >= e.a_fin_rep {
-                repro.estado = EstadoRepro::Postreproductiva;
+            if a >= a_fin {
+                fin_reproduccion(&mut repro, esp.0, a, t, libro);
             } else if machos[hab.idx(celda.0 as usize, k)] > 0 {
-                let r = res.0 / e.e_max(masa.0);
+                let r = res.0 / e_max;
                 let p = e.p_conc * Especie::f_e(r, en.r_min, en.r_opt);
                 if p > 0.0 && uniforme(semilla, id.0, t, Proposito::Concepcion, 0) < p {
                     repro.estado = EstadoRepro::Gestante;
@@ -404,6 +514,7 @@ pub fn bio_reproduccion(
             }
         }
     }
+    abandonos.sort_unstable();
 }
 
 /// A6 (final). Crea las crías del tick, en orden de id.
@@ -435,6 +546,7 @@ pub fn bio_nacimientos(world: &mut World) {
                     dias_rest: 0,
                     partos: 0,
                     ultimo_parto: None,
+                    a_fin: c.a_fin,
                 },
                 c.celda,
                 Dependiente { madre: c.madre },
@@ -456,8 +568,24 @@ type QMuerte<'a> = (
     Option<&'a Dependiente>,
 );
 
+/// Anota una muerte del tick: la entidad a retirar, su reserva en el libro y el recuento.
+fn anotar(
+    muertos: &mut Vec<(Entity, u64)>,
+    libro: &mut Libro,
+    ent: Entity,
+    id: u64,
+    m: MuertoInfo,
+) {
+    muertos.push((ent, id));
+    libro.reservas_muertos.sumar(m.reserva);
+    libro.esp[m.esp as usize].muertes[m.causa as usize] += 1;
+    libro.muertos.push(m);
+}
+
 /// A7. Mortalidad (§6.8), en orden: inanición (`E ≤ 0`), edad máxima, Siler y, si murió una madre
-/// lactante, orfandad de sus crías (mueren con `p_huerf`; las demás pasan a comer solas).
+/// lactante, orfandad de sus crías (mueren con `p_huerf`; las demás pasan a comer solas). Las crías
+/// de un destete forzoso (revisión 1 §3.2) siguen la misma regla si son más jóvenes que
+/// `f_dest_min · d_destete`; las mayores pasan a comer solas.
 pub fn bio_mortalidad(
     cat: Res<Catalogo>,
     tick: Res<Tick>,
@@ -472,6 +600,7 @@ pub fn bio_mortalidad(
         ids_muertos,
         madres_muertas,
         huerfanos,
+        abandonos,
         ..
     } = &mut *buf;
     let libro = &mut *libro;
@@ -479,19 +608,6 @@ pub fn bio_mortalidad(
     ids_muertos.clear();
     madres_muertas.clear();
     huerfanos.clear();
-    let mut anotar =
-        |ent: Entity, id: u64, esp: u16, sexo: Sexo, edad: u32, causa: Causa, e: f64| {
-            muertos.push((ent, id));
-            libro.reservas_muertos.sumar(e);
-            libro.esp[esp as usize].muertes[causa as usize] += 1;
-            libro.muertos.push(MuertoInfo {
-                esp,
-                sexo,
-                edad,
-                causa,
-                reserva: e,
-            });
-        };
     for (ent, id, esp, sexo, edad, res, repro, _) in q.iter() {
         let e = &cat.especies[esp.0 as usize];
         let causa = if res.0 <= 0.0 {
@@ -503,31 +619,54 @@ pub fn bio_mortalidad(
         } else {
             None
         };
-        if let Some(c) = causa {
-            anotar(ent, id.0, esp.0, *sexo, edad.0, c, res.0);
+        if let Some(causa) = causa {
+            let m = MuertoInfo {
+                esp: esp.0,
+                sexo: *sexo,
+                edad: edad.0,
+                causa,
+                reserva: res.0,
+            };
+            anotar(muertos, libro, ent, id.0, m);
             ids_muertos.push(id.0);
             if repro.estado == EstadoRepro::Lactante {
                 madres_muertas.push(id.0);
             }
         }
     }
-    if madres_muertas.is_empty() {
+    if madres_muertas.is_empty() && abandonos.is_empty() {
         return;
     }
     madres_muertas.sort_unstable();
     ids_muertos.sort_unstable();
+    let f_dest_min = cat.en.f_dest_min;
     for (ent, id, esp, sexo, edad, res, _, dep) in q.iter() {
         let Some(dep) = dep else { continue };
-        if madres_muertas.binary_search(&dep.madre).is_err()
-            || ids_muertos.binary_search(&id.0).is_ok()
-        {
+        if ids_muertos.binary_search(&id.0).is_ok() {
             continue;
         }
-        let p = cat.especies[esp.0 as usize].p_huerf;
-        if uniforme(semilla, id.0, t, Proposito::Orfandad, 0) < p {
-            anotar(ent, id.0, esp.0, *sexo, edad.0, Causa::Orfandad, res.0);
-        } else {
-            huerfanos.push(ent);
+        let e = &cat.especies[esp.0 as usize];
+        let muere = |causa: Causa| MuertoInfo {
+            esp: esp.0,
+            sexo: *sexo,
+            edad: edad.0,
+            causa,
+            reserva: res.0,
+        };
+        if madres_muertas.binary_search(&dep.madre).is_ok() {
+            if uniforme(semilla, id.0, t, Proposito::Orfandad, 0) < e.p_huerf {
+                anotar(muertos, libro, ent, id.0, muere(Causa::Orfandad));
+            } else {
+                huerfanos.push(ent);
+            }
+        } else if abandonos.binary_search(&dep.madre).is_ok() {
+            let joven = f64::from(edad.0) < f_dest_min * f64::from(e.d_destete);
+            if joven && uniforme(semilla, id.0, t, Proposito::Abandono, 0) < e.p_huerf {
+                anotar(muertos, libro, ent, id.0, muere(Causa::Destete));
+            } else {
+                huerfanos.push(ent);
+                libro.esp[esp.0 as usize].crias_destetadas += 1;
+            }
         }
     }
 }

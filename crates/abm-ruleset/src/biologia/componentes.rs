@@ -17,6 +17,17 @@ pub enum Sexo {
     Macho,
 }
 
+impl Sexo {
+    /// Índice del sexo en las tablas por sexo (`[hembra, macho]`).
+    #[inline]
+    pub fn i(self) -> usize {
+        match self {
+            Sexo::Hembra => 0,
+            Sexo::Macho => 1,
+        }
+    }
+}
+
 /// Edad `a` (días).
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Edad(pub u32);
@@ -51,10 +62,14 @@ pub struct Repro {
     pub partos: u32,
     /// Tick del último parto (intervalo entre partos).
     pub ultimo_parto: Option<u64>,
+    /// Fin de la vida reproductiva de este individuo (días): `a_fin_rep` o, con la esterilidad
+    /// individual de la revisión 1 §4, su edad de esterilidad. Se fija al nacer.
+    pub a_fin: u32,
 }
 
 impl Repro {
-    /// Estado inicial por sexo y edad (§6.0), sin gestación ni lactancia.
+    /// Estado inicial por sexo y edad (§6.0), sin gestación ni lactancia. `a_fin_rep` es el fin de
+    /// la vida reproductiva de ese individuo (con esterilidad individual, su `a_est`).
     pub fn por_edad(macho: bool, a: u32, a_rep: u32, a_fin_rep: u32) -> Repro {
         let estado = match (macho, a >= a_rep, a >= a_fin_rep) {
             (true, false, _) => EstadoRepro::Inmaduro,
@@ -68,6 +83,7 @@ impl Repro {
             dias_rest: 0,
             partos: 0,
             ultimo_parto: None,
+            a_fin: a_fin_rep,
         }
     }
 }

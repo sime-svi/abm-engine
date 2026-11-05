@@ -16,16 +16,18 @@ use abm_ruleset::biologia::componentes::{
 };
 use abm_ruleset::biologia::config::Termico;
 use abm_ruleset::biologia::habitat::Habitat;
-use abm_ruleset::biologia::recursos::{Catalogo, Libro};
+use abm_ruleset::biologia::recursos::{Catalogo, Libro, N_CAUSAS};
 
 /// Recuentos de una especie acumulados desde el registro anterior.
 #[derive(Debug, Clone, Default)]
 struct Intervalo {
     nacimientos: u64,
-    muertes: [u64; 4],
+    muertes: [u64; N_CAUSAS],
     concepciones: u64,
     abortos: u64,
     destetes: u64,
+    destetes_forzosos: u64,
+    crias_destetadas: u64,
     consumo_kcal: f64,
     rebrote_g: f64,
 }
@@ -35,7 +37,7 @@ struct Intervalo {
 struct Anual {
     poblacion_dias: u64,
     nacimientos: u64,
-    muertes: [u64; 4],
+    muertes: [u64; N_CAUSAS],
     /// Exposición (individuos·día) y muertes por sexo (0 hembra, 1 macho) y clase de edad.
     expo: [Vec<u64>; 2],
     muertes_clase: [Vec<u64>; 2],
@@ -45,17 +47,34 @@ struct Anual {
     intervalos_n: u64,
     consumo_kcal: f64,
     rebrote_g: f64,
+    /// Demografía (revisión 1): crías por grupo de edad de la madre y exposición de las hembras
+    /// (hembras·día) por grupo; exposición y muertes por sexo y grupo de mortalidad; suma de las
+    /// edades del último parto (días) y cuántas hembras terminan su vida reproductiva con partos.
+    nac_grupo: Vec<u64>,
+    expo_hembras_grupo: Vec<u64>,
+    expo_g: [[u64; 4]; 2],
+    muertes_g: [[u64; 4]; 2],
+    ultimo_parto_dias: u64,
+    ultimo_parto_n: u64,
 }
 
 impl Anual {
-    fn nuevo(n_clases: usize) -> Anual {
+    fn nuevo(n_clases: usize, n_grupos: usize) -> Anual {
         Anual {
             expo: [vec![0; n_clases], vec![0; n_clases]],
             muertes_clase: [vec![0; n_clases], vec![0; n_clases]],
             nac_madre: vec![0; n_clases],
+            nac_grupo: vec![0; n_grupos],
+            expo_hembras_grupo: vec![0; n_grupos],
             ..Anual::default()
         }
     }
+}
+
+/// Grupo de mortalidad de una edad (días): 0 crías, 1 jóvenes, 2 adultos, 3 viejos.
+#[inline]
+fn grupo_mortalidad(a: u32, limites: [u32; 3]) -> usize {
+    limites.iter().take_while(|&&x| a >= x).count()
 }
 
 /// Registro de métricas de la biología (recurso del mundo).
@@ -70,6 +89,14 @@ pub struct RegistroBio {
     balance: Balance,
     anual: Vec<Anual>,
     ids: Vec<u64>,
+    /// Interruptores que deciden qué campos opcionales se escriben (revisión 1).
+    destete: bool,
+    demografia: bool,
+    /// Anchura de los grupos de fecundidad (días), nº de grupos y límites de los grupos de
+    /// mortalidad, por especie.
+    ancho_fec: u32,
+    n_grupos: Vec<usize>,
+    limites: Vec<[u32; 3]>,
     pub meta: BioRunMeta,
     pub ticks: Vec<BioTick>,
     pub anios: Vec<BioAnio>,
@@ -99,6 +126,21 @@ impl RegistroBio {
         let cat = world.resource::<Catalogo>();
         let hab = world.resource::<Habitat>();
         let rho_veg = cat.forraje.rho_veg;
+        let en = &cfg.energetica;
+        let demografia = cfg.metricas.demografia;
+        let ancho_fec =
+            (cfg.metricas.ancho_fecundidad_anios * cfg.tiempo.dias_anio as f64).round() as u32;
+        let ancho_fec = ancho_fec.max(1);
+        let limites: Vec<[u32; 3]> = cat
+            .especies
+            .iter()
+            .map(|e| [e.d_destete, e.a_rep, e.a_vejez])
+            .collect();
+        let n_grupos: Vec<usize> = cat
+            .especies
+            .iter()
+            .map(|e| (e.a_max / ancho_fec) as usize + 1)
+            .collect();
         let area_km2 = hab.area_m2.iter().sum::<f64>() / 1e6;
         let n_max: Vec<f64> = cat
             .especies
@@ -145,6 +187,14 @@ impl RegistroBio {
                 ayuno_dias: e.e_max(e.masa) / e.gasto_adulto(1.0),
                 n_max: n_max[k],
                 poblacion_inicial: iniciales[k],
+                masa_kg_hembra: en.dimorfismo.then_some(e.masa_sexo[0]),
+                masa_kg_macho: en.dimorfismo.then_some(e.masa_sexo[1]),
+                ayuno_dias_hembra: en.dimorfismo.then(|| e.ayuno_s(0)),
+                ayuno_dias_macho: en.dimorfismo.then(|| e.ayuno_s(1)),
+                h_medio: cfg.forraje.respuesta_funcional.then_some(e.h_medio),
+                mu_est_anios: en.esterilidad_individual.then(|| e.mu_est / e.dias_anio),
+                sigma_est_anios: en.esterilidad_individual.then(|| e.sigma_est / e.dias_anio),
+                grupos_edad_dias: demografia.then_some(limites[k]),
             })
             .collect();
         let meta = BioRunMeta {
@@ -162,7 +212,8 @@ impl RegistroBio {
         let anual = cat
             .especies
             .iter()
-            .map(|e| Anual::nuevo(e.n_clases()))
+            .zip(&n_grupos)
+            .map(|(e, &g)| Anual::nuevo(e.n_clases(), g))
             .collect();
         RegistroBio {
             every: cfg.run.metrics_every,
@@ -174,6 +225,11 @@ impl RegistroBio {
             balance: Balance::default(),
             anual,
             ids: Vec::new(),
+            destete: en.destete_forzoso,
+            demografia,
+            ancho_fec,
+            n_grupos,
+            limites,
             meta,
             ticks: Vec::new(),
             anios: Vec::new(),
@@ -191,6 +247,12 @@ impl RegistroBio {
     }
 }
 
+/// Grupo de fecundidad (de `ancho` días) de una edad, sin pasar del último.
+#[inline]
+fn grupo_fec(a: u32, ancho: u32, n_grupos: usize) -> usize {
+    ((a / ancho) as usize).min(n_grupos - 1)
+}
+
 /// Recuentos instantáneos de una especie.
 #[derive(Debug, Clone, Copy, Default)]
 struct Censo {
@@ -201,6 +263,7 @@ struct Censo {
     gestantes: u64,
     lactantes: u64,
     condicion: SumaExacta,
+    condicion_lactantes: SumaExacta,
     reservas: SumaExacta,
 }
 
@@ -267,11 +330,22 @@ pub fn collect_bio(
         }
         c.dependientes += u64::from(dep.is_some());
         c.gestantes += u64::from(repro.estado == EstadoRepro::Gestante);
-        c.lactantes += u64::from(repro.estado == EstadoRepro::Lactante);
-        c.condicion.sumar(res.0 / e.e_max(masa.0));
+        let r = res.0 / e.e_max_s(sexo.i(), masa.0);
+        if repro.estado == EstadoRepro::Lactante {
+            c.lactantes += 1;
+            c.condicion_lactantes.sumar(r);
+        }
+        c.condicion.sumar(r);
         c.reservas.sumar(res.0);
         reservas.sumar(res.0);
-        reg.anual[k].expo[sexo_i(*sexo)][e.clase(edad.0)] += 1;
+        let an = &mut reg.anual[k];
+        an.expo[sexo_i(*sexo)][e.clase(edad.0)] += 1;
+        if reg.demografia {
+            an.expo_g[sexo.i()][grupo_mortalidad(edad.0, reg.limites[k])] += 1;
+            if *sexo == Sexo::Hembra {
+                an.expo_hembras_grupo[grupo_fec(edad.0, reg.ancho_fec, reg.n_grupos[k])] += 1;
+            }
+        }
     }
 
     // Recuentos del libro.
@@ -286,6 +360,8 @@ pub fn collect_bio(
         iv.concepciones += l.concepciones;
         iv.abortos += l.abortos;
         iv.destetes += l.destetes;
+        iv.destetes_forzosos += l.destetes_forzosos;
+        iv.crias_destetadas += l.crias_destetadas;
         iv.consumo_kcal += l.consumo_kcal.valor();
         iv.rebrote_g += l.rebrote_g.valor();
         an.poblacion_dias += c.n;
@@ -298,16 +374,32 @@ pub fn collect_bio(
         }
     }
     for m in &libro.muertos {
-        let e = &cat.especies[m.esp as usize];
-        reg.anual[m.esp as usize].muertes_clase[sexo_i(m.sexo)][e.clase(m.edad)] += 1;
+        let k = m.esp as usize;
+        let e = &cat.especies[k];
+        let an = &mut reg.anual[k];
+        an.muertes_clase[sexo_i(m.sexo)][e.clase(m.edad)] += 1;
+        if reg.demografia {
+            an.muertes_g[m.sexo.i()][grupo_mortalidad(m.edad, reg.limites[k])] += 1;
+        }
     }
     for p in &libro.partos {
-        let e = &cat.especies[p.esp as usize];
-        let an = &mut reg.anual[p.esp as usize];
+        let k = p.esp as usize;
+        let e = &cat.especies[k];
+        let an = &mut reg.anual[k];
         an.nac_madre[e.clase(p.edad_madre)] += p.crias as u64;
         if let Some(i) = p.intervalo {
             an.intervalos_dias += i;
             an.intervalos_n += 1;
+        }
+        if reg.demografia {
+            an.nac_grupo[grupo_fec(p.edad_madre, reg.ancho_fec, reg.n_grupos[k])] += p.crias as u64;
+        }
+    }
+    for f in &libro.fin_repro {
+        if let Some(a) = f.edad_ultimo_parto {
+            let an = &mut reg.anual[f.esp as usize];
+            an.ultimo_parto_dias += u64::from(a);
+            an.ultimo_parto_n += 1;
         }
     }
 
@@ -378,6 +470,16 @@ pub fn collect_bio(
                     forraje_max_kg: tope / 1000.0,
                     consumo_kg: iv.consumo_kcal / rho / 1000.0,
                     rebrote_kg: iv.rebrote_g / 1000.0,
+                    destetes_forzosos: reg.destete.then_some(iv.destetes_forzosos),
+                    crias_destetadas_forzoso: reg.destete.then_some(iv.crias_destetadas),
+                    muertes_destete: reg.destete.then_some(iv.muertes[4]),
+                    condicion_lactantes: reg.demografia.then(|| {
+                        if c.lactantes > 0 {
+                            c.condicion_lactantes.valor() / c.lactantes as f64
+                        } else {
+                            0.0
+                        }
+                    }),
                 }
             })
             .collect();
@@ -429,6 +531,16 @@ pub fn collect_bio(
                 };
                 let muertes_total: u64 = an.muertes.iter().sum();
                 let [pir_h, pir_m] = std::mem::take(&mut piramides[k]);
+                let tasa = |muertes: u64, expo: u64| {
+                    if expo > 0 {
+                        muertes as f64 / (expo as f64 / da)
+                    } else {
+                        0.0
+                    }
+                };
+                let mortalidad = |s: usize| -> [f64; 4] {
+                    std::array::from_fn(|g| tasa(an.muertes_g[s][g], an.expo_g[s][g]))
+                };
                 EspecieAnio {
                     poblacion_media: media,
                     densidad_km2: media / reg.area_km2,
@@ -456,6 +568,19 @@ pub fn collect_bio(
                         .then(|| an.consumo_kcal / rho / an.rebrote_g),
                     piramide_hembras: pir_h,
                     piramide_machos: pir_m,
+                    muertes_destete: reg.destete.then_some(an.muertes[4]),
+                    fecundidad_grupos: reg.demografia.then(|| {
+                        an.nac_grupo
+                            .iter()
+                            .zip(&an.expo_hembras_grupo)
+                            .map(|(&n, &x)| tasa(n, x))
+                            .collect()
+                    }),
+                    n_ultimo_parto: reg.demografia.then_some(an.ultimo_parto_n),
+                    edad_ultimo_parto_anios: (reg.demografia && an.ultimo_parto_n > 0)
+                        .then(|| an.ultimo_parto_dias as f64 / an.ultimo_parto_n as f64 / da),
+                    mortalidad_hembras: reg.demografia.then(|| mortalidad(0)),
+                    mortalidad_machos: reg.demografia.then(|| mortalidad(1)),
                 }
             })
             .collect();
@@ -466,7 +591,8 @@ pub fn collect_bio(
         let nuevos: Vec<Anual> = cat
             .especies
             .iter()
-            .map(|e| Anual::nuevo(e.n_clases()))
+            .zip(&reg.n_grupos)
+            .map(|(e, &g)| Anual::nuevo(e.n_clases(), g))
             .collect();
         reg.anual = nuevos;
     }

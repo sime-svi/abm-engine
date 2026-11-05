@@ -1,6 +1,6 @@
 # Agentes — Incremento 1: el individuo en un hábitat de prueba
 
-**Estado:** diseño técnico de Claude Code sobre el documento del responsable (`diseno_biologia_agentes.md`, v1.0). Las decisiones de interpretación (§3) están marcadas para su revisión.
+**Estado:** diseño técnico de Claude Code sobre el documento del responsable (`diseno_biologia_agentes.md`, v1.0). Las decisiones de interpretación (§3) están marcadas para su revisión. **Revisión 1** (`nota_agentes_revision_1.md`, implementada el 2026-11-05, §8 de la nota): confirma D1, sustituye D16 por la respuesta funcional de Holling y añade la leche según la condición de la madre, el destete forzoso, el dimorfismo sexual y la edad de esterilidad individual.
 **Fecha:** 2026-11-05.
 
 ---
@@ -21,7 +21,7 @@ El documento del responsable describe la biología completa: individuos y poblac
 
 | Incremento | Contenido |
 |---|---|
-| 2 | Modo población (cohortes, §6.9) y conversión individuo ↔ población (§6.3), con la prueba de coherencia entre modos (≥ 10 semillas, 5 %). |
+| 2 | Modo población (cohortes, §6.9) y conversión individuo ↔ población (§6.3), con la prueba de coherencia entre modos (≥ 10 semillas, 5 %, incluida la sequía). Incluye la versión de poblaciones de los cambios de la revisión 1 (nota §8.7). |
 | 3 | Acople con el planeta: forraje en las celdas del terreno con medias móviles y factor estacional (§6.1 completo), LOD del forraje, Foco (§6.2) como disparador del LOD del terreno y génesis de agentes en el planeta. |
 | 4 | Registro de eventos individuales (§7) y volcado a la base de datos (tablas `events` y `agent_snapshots`). |
 
@@ -36,7 +36,7 @@ El documento del responsable describe la biología completa: individuos y poblac
 
 | # | Punto del documento | Decisión | Motivo |
 |---|---|---|---|
-| **D1** | §6.4 `d = min(Ap, (E_max − E + G)/ε)` | **El apetito `Ap = k_ap·B·PAL` se mide en energía asimilable:** `d = min(Ap, E_max − E + G) / ε`. | Leído tal cual, `Ap` sería forraje bruto. Con `ε = 0,5` y `k_ap = 2`, el genérico asimilaría como mucho `B·PAL`: no podría pagar crecimiento, gestación ni lactancia, ni rehacer reservas, y se extinguiría. La regla de estabilidad del propio documento (`k_ap > 1` ⇒ se rehacen reservas, §1 y §10) solo se cumple con esta lectura. **A confirmar por el responsable.** |
+| **D1** | §6.4 `d = min(Ap, (E_max − E + G)/ε)` | **El apetito `Ap = k_ap·B·PAL` se mide en energía asimilable:** `d = min(Ap, E_max − E + G) / ε`. | Leído tal cual, `Ap` sería forraje bruto. Con `ε = 0,5` y `k_ap = 2`, el genérico asimilaría como mucho `B·PAL`: no podría pagar crecimiento, gestación ni lactancia, ni rehacer reservas, y se extinguiría. La regla de estabilidad del propio documento (`k_ap > 1` ⇒ se rehacen reservas, §1 y §10) solo se cumple con esta lectura. **Confirmada en la revisión 1 §1**, que además refiere el apetito al gasto total del día: `Ap = k_ap·G_total` (`energetica.apetito_gasto_total`). |
 | D2 | §6.5/§6.6, el gasto de crecimiento depende de `Δm` | `Δm` se decide al principio del tick con la condición de partida (`E/E_max ≥ r_crec_min`). Su coste entra en el gasto del día y la masa crece en A5. | Evita la circularidad entre gasto, ingesta y crecimiento. |
 | D3 | §6.5, leche | La madre paga `Σ φ(a_c)·G_c / ε_leche`, con `G_c` el gasto propio de cada cría (mantenimiento + crecimiento). | `G_c` de la cría no incluye leche. |
 | D4 | §6.5/§6.8, inanición | Si el déficit supera las reservas, `E` queda negativa ese día y el individuo muere. Su reserva (negativa) entra en "reservas de los muertos". | Cierra el balance exactamente sin repartir el déficit. |
@@ -51,7 +51,7 @@ El documento del responsable describe la biología completa: individuos y poblac
 | D13 | §10, "barajar el orden de proceso" | Todas las sumas que vuelven al modelo o a la salida (demanda por celda, consumo, libro de energía, métricas) son **sumas exactas en punto fijo** (`i128`, 2⁻³² kcal): no dependen del orden. | Se prueba barajando el orden de creación de la población inicial: la salida es idéntica byte a byte. |
 | D14 | §7, eventos | Recuentos por tick y por especie. El registro individual va al incremento 4. | Acotar el tamaño del registro. |
 | D15 | §6.1, factor estacional | `s(t) = 1` (clima constante), salvo una **sequía** opcional: `s(t) = factor` durante una ventana de días. | El factor real necesita `T` y `θ` del terreno (incremento 3). La sequía permite probar las hambrunas (§10). |
-| **D16** | §6.4, oferta `F = V·A·ρ_veg` | Por defecto, el diseño tal cual (`forraje.respuesta = "total"`). Como **propuesta**, `"proporcional"`: la demanda se multiplica por `V/K`. | Con todo el stock accesible, la población no nota la escasez hasta agotarlo y colapsa (§10). Con la propuesta se regula sola cerca de `N_max`. **Lo decide el responsable.** |
+| **D16** | §6.4, oferta `F = V·A·ρ_veg` | Por defecto, el diseño tal cual (`forraje.respuesta = "total"`). Como **propuesta**, `"proporcional"`: la demanda se multiplica por `V/K`. | Con todo el stock accesible, la población no nota la escasez hasta agotarlo y colapsa (§10). Con la propuesta se regula sola cerca de `N_max`. **Decidida en la revisión 1 §2:** respuesta funcional de Holling tipo II, `d·V/(V + h_½·K)`, encendida por defecto (`forraje.respuesta_funcional`). La opción `respuesta` y la variante proporcional se retiran. |
 
 ## 4. Calibración de la mortalidad (Siler)
 

@@ -19,6 +19,10 @@ pub enum Proposito {
     IdInicial = 8,
     IdCria = 9,
     Barajado = 10,
+    /// Edad de esterilidad de cada hembra (revisión 1 §4).
+    Esterilidad = 11,
+    /// Muerte de las crías jóvenes en un destete forzoso (revisión 1 §3.2).
+    Abandono = 12,
 }
 
 /// Mezclador SplitMix64 (función biyectiva de 64 bits con buena difusión).
