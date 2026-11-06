@@ -89,6 +89,23 @@ pub struct MetricaMyr {
     pub sedimento_medio_oceano_km: f64,
     /// Error relativo del balance del paso (§6.9).
     pub error_balance_rel: f64,
+    // --- Bordes de placa (nota_bordes_placa.md §8) ---
+    /// Perímetro total de los bordes (km), medido como `tierra_bordes.toml`.
+    pub perimetro_km: f64,
+    /// Dientes de tramos transformantes o divergentes recolocados en un hueco de su placa y sin
+    /// hueco (sumados a una celda de su placa), creación residual en huecos que no son de dorsal y
+    /// área reasignada por el suavizado (km²/año).
+    pub dientes_recolocados_km2_anio: f64,
+    pub dientes_sin_hueco_km2_anio: f64,
+    /// Muestras sueltas lejos de su placa: su material pasa a la placa donde están (km²/año).
+    pub dientes_a_otra_placa_km2_anio: f64,
+    pub creacion_residual_km2_anio: f64,
+    pub area_reasignada_km2_anio: f64,
+    /// Islas (trozos sueltos de una placa dentro de otra) absorbidas por la que las rodea (km²/año).
+    pub area_islas_km2_anio: f64,
+    /// Material continental de los dientes (AU): solapes en tramos no convergentes que no se
+    /// consumen.
+    pub dientes_continentales_au: f64,
 }
 
 /// Cuentas del material continental (km³) a lo largo de la deriva (adenda de balance §6 y §8).
@@ -119,6 +136,8 @@ pub struct CuentasCorteza {
     pub choque_sin_sitio_km3: f64,
     /// Delaminación (`F_del`, §6.6).
     pub delaminacion_km3: f64,
+    /// Corteza que el flujo lateral pasa de una columna gruesa a sus vecinas (§6.6b; traslado).
+    pub flujo_lateral_km3: f64,
     /// Adelgazamiento de los rifts (`H ← f_rift·H`): sumidero provisional. En la Tierra estirar
     /// conserva el volumen; se revisa en la nota de rifts.
     pub rift_km3: f64,
@@ -236,6 +255,8 @@ pub struct BalanceMedio {
     /// Espesor máximo de la corteza: medio y al final (km).
     pub espesor_max_medio_km: f64,
     pub espesor_max_final_km: f64,
+    /// Espesor máximo en toda la deriva, con el rodaje (alarma de la adenda v3: no más de 80 km).
+    pub espesor_max_todo_km: f64,
     /// Fracción de la corteza continental de más de 70 km: media y al final.
     pub area_mas_70km_frac: f64,
     pub area_mas_70km_final_frac: f64,
@@ -243,4 +264,12 @@ pub struct BalanceMedio {
     pub v_cont_cambio_frac: f64,
     /// Espesor medio del sedimento sobre el fondo oceánico al final (km).
     pub sedimento_medio_oceano_km: f64,
+    /// Bordes (nota de bordes §8): perímetro medio (km); dientes recolocados, sin hueco, creación
+    /// residual y área reasignada (km²/año); material continental de los dientes (AU).
+    pub perimetro_km: f64,
+    pub dientes_recolocados_km2_anio: f64,
+    pub dientes_sin_hueco_km2_anio: f64,
+    pub creacion_residual_km2_anio: f64,
+    pub area_reasignada_km2_anio: f64,
+    pub dientes_continentales_au: f64,
 }

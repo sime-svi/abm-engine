@@ -2,7 +2,13 @@
 
 Documento de diseño. Complementa a diseno_relieve_tectonico.md (incremento 4 del terreno).
 
-Estado: versión 2. Diseño cerrado; las preguntas del §11 ya están respondidas.
+Estado: versión 3. Diseño cerrado.
+
+Cambios de la versión 3:
+- El tope de espesor H_max deja de ser una regla. Lo sustituye el flujo lateral de la corteza engrosada (6.6b), que conserva el volumen. H_max = 80 km queda solo como comprobación en los tests.
+- El objetivo de pérdida en choques recoge la incertidumbre real: 0,4–0,7 AU de media, y hasta ~3 AU durante un gran choque.
+- τ_ero pasa a 63 Myr (calibrado con la prueba de relajación) y se añade la comprobación de la ley de erosión (§11).
+- Se corrige una afirmación de la versión 2: la malla no alarga las líneas, las acorta en torno a un 10 %.
 
 Esta adenda sustituye cualquier calibración de η_col pensada para llegar a f_cont = 0,40. A partir de ahora, f_cont es un resultado que se valida, no un objetivo que se fuerza.
 
@@ -61,6 +67,7 @@ Sí se modela:
 - Sedimento en la fosa: una parte se pega al margen y el resto se hunde.
 - Choques con dos eficacias distintas: arco contra continente y continente contra continente.
 - Delaminación de la corteza engrosada.
+- Flujo lateral de la corteza engrosada: las mesetas altas se desparraman hacia los lados. Sustituye al tope H_max.
 - Destino del sedimento de la erosión que ya existe durante la deriva: acaba en el mar, en una capa mínima de sedimento. Hoy se pierde.
 - Contabilidad del balance por proceso en cada paso.
 
@@ -68,7 +75,6 @@ Se abstrae o se deja para más adelante:
 - **Material disuelto que se fija en la corteza oceánica (≈0,4 AU).** Se ignora: es química, no relieve.
 - **Erosión por subducción distinta según el régimen del margen.** Se usa una sola tasa media por área, porque la erosión actúa en todos los márgenes. Ampliación futura.
 - **Levantamiento al desprenderse la raíz densa.** En la realidad, al caerse la raíz de eclogita la superficie sube. Aquí la corteza tiene una sola densidad y eso no se reproduce. Ampliación futura.
-- **Flujo lateral de la corteza inferior** (las mesetas altas se desparraman hacia los lados). No entra. Si tras esta adenda f_cont sigue bajo, es el primer candidato.
 - **Reparto fino del sedimento en el mar** (plataforma, talud, llanura abisal), su compactación, las mesetas oceánicas y los montes submarinos. Van en la nota del fondo oceánico; aquí la capa de sedimento es la mínima necesaria para cerrar el balance.
 - **Reciclaje del sedimento subducido a través del magma del arco.** No se modela por separado; la tasa medida de los arcos ya es la producción neta observada.
 - **Forma de los bordes de placa.** Se trata en la nota siguiente. Esta adenda no depende de ella.
@@ -128,7 +134,9 @@ Todo el sedimento cuenta como material continental, porque en este modelo su ún
 | η_arco | Fracción conservada en un choque arco–continente | 0,9 | adimensional | Medido: el arco de Luzón se acreciona casi un 90 % en Taiwán |
 | h_del | Espesor a partir del cual la base de la corteza se vuelve eclogita y se desprende | 50 | km | Físico (presiones de 1,2–1,5 GPa); rango 45–55 |
 | τ_del | Tiempo característico de la delaminación del exceso | 50 (inicial) | Myr | Calibrado: delaminación global ≈1,1 AU y espesor máximo de 70–80 km |
-| τ_ero | Tiempo de la erosión de la génesis (ya existe en el documento principal) | 150 | Myr | Calibrado junto con τ_del: relajación a 35–38 km en 100–200 Myr y exportación al mar ≈1,8 AU |
+| h_flujo | Espesor a partir del cual la corteza inferior, caliente y débil, fluye hacia los lados | 50 | km | Físico, del mismo orden que h_del; rango 45–60 |
+| D_flujo | Difusividad del flujo lateral | calibrar | km²/Myr | Calibrado: espesor máximo de 70–80 km sin tope, mesetas de cientos a ~1 000 km de ancho, y relajación junto con τ_del y τ_ero |
+| τ_ero | Tiempo de la erosión de la génesis (ya existe en el documento principal) | 63 (calibrado con la prueba de relajación) | Myr | Calibrado junto con τ_del: relajación a 35–38 km en 100–200 Myr y exportación al mar ≈1,8 AU |
 | ε_cons | Error relativo de conservación admitido por paso | igual que la malla del terreno | adimensional | Numérico |
 
 ---
@@ -201,6 +209,20 @@ h_c,i ← h_del + (h_c,i − h_del) · exp(−Δt / τ_del)
 
 Lo retirado pasa al manto y forma F_del. Se usa la forma exponencial exacta porque es estable para cualquier Δt.
 
+### 6.6b Flujo lateral de la corteza engrosada
+
+La corteza muy gruesa no crece sin límite. Su parte baja, caliente y débil, se desparrama hacia los lados, como una masa de pan. Así las mesetas se ensanchan en vez de apilarse en un punto, como ocurre en el Tíbet.
+
+Para cada par de celdas vecinas i y k de la misma placa, ambas con corteza de tipo continental, si h_c,i > h_flujo y h_c,i > h_c,k, el volumen que pasa de i a k en el paso es:
+
+V_ik = D_flujo · (h_c,i − h_c,k) / d_ik · ℓ_ik · Δt
+
+Aquí d_ik es la distancia entre los centros de las celdas y ℓ_ik la longitud del lado que comparten. V_ik se resta de i y se suma a k, así que el volumen se conserva por construcción.
+
+Todos los V_ik de un subpaso se calculan con los espesores del inicio del subpaso y se aplican a la vez; así la regla es una función pura del estado. Si el paso tectónico es grande, se divide en subpasos para que sea estable (condición orientativa: D_flujo · Δt_sub / d² ≤ 1/8).
+
+H_max = 80 km deja de ser una regla. Queda solo como comprobación en los tests: ninguna celda debe superarlo. Si alguna muestra se acerca a valores como los 150 km vistos antes del tope, es síntoma de que algún proceso apila corteza en un punto, y hay que buscarlo.
+
 ### 6.7 Destino del sedimento de la erosión existente
 
 La génesis ya erosiona durante la deriva con la regla del documento principal (tiempo τ_ero). No se añade otra ley de erosión. Lo que cambia es adónde va el material. Hoy solo cabe en los márgenes continentales y el resto se pierde (≈1,28 AU), lo que rompe la conservación.
@@ -258,7 +280,7 @@ Orden dentro del paso:
 5. Erosión por subducción (6.3).
 6. Sedimento en la fosa (6.4).
 7. Choques (6.5).
-8. Delaminación (6.6).
+8. Delaminación (6.6) y flujo lateral (6.6b).
 9. Erosión del documento principal, con el destino del sedimento de 6.7.
 10. Isostasia y nivel del mar (6.8).
 11. Comprobación del balance y métricas (6.9 y §8).
@@ -279,7 +301,7 @@ Relación con otros trabajos:
 | Sedimento subducido | 1,0–1,65 AU | von Huene y Scholl 1991; Clift et al. 2009 |
 | Erosión por subducción | 1,3–1,7 AU | Clift et al. 2009; Stern 2011 |
 | Delaminación | ≈1,1 AU (mal acotada) | Clift et al. 2009 |
-| Pérdida en choques continentales | 0,4–0,7 AU | Clift et al. 2009; Stern y Scholl 2010 |
+| Pérdida en choques continentales | 0,4–0,7 AU de media. Durante un gran choque, hasta ~3 AU: en India–Asia, unos 15 % del flujo de corteza oceánica subducida (dato discutido) | Clift et al. 2009; Stern y Scholl 2010; Ingalls et al. 2016 |
 | Sedimento acrecionado | ≈0,3 AU | Clift et al. 2009 |
 | Sedimento exportado al mar | ≈1,8 AU (media del Cenozoico) | Clift et al. 2009 |
 | Creación total / destrucción total | 3,2–5 / 3,2–5,3 AU | Stern y Scholl 2010 |
@@ -292,7 +314,7 @@ Relación con otros trabajos:
 | Longitud de bordes por tipo (fosas, dorsales, fallas transformantes) | La de los bordes de Bird (2003) proyectados sobre la misma malla y medidos con el mismo método | Bird 2003 |
 | Ciclo de supercontinentes | más creación al romperse, más destrucción al juntarse | Stern y Scholl 2010 |
 
-La longitud de bordes no se compara con cifras publicadas en km, porque una malla de 52 km alarga cualquier línea al dibujarla en escalera. Se compara con la Tierra medida igual.
+La longitud de bordes no se compara con cifras publicadas en km, porque el método de medida en la malla cambia la longitud: en la práctica la acorta en torno a un 10 %, al alisar los zigzag más finos que una celda. Se compara con la Tierra medida igual.
 
 Comprobación de orden de magnitud para la erosión de la génesis: en las cordilleras activas la erosión ronda de 0,1 a 1 km por millón de años, y en los escudos antiguos, metros por millón de años.
 
@@ -326,7 +348,9 @@ Los parámetros medidos pueden moverse dentro de su rango publicado, porque esta
 2. **Producción de los arcos.** Hoy es fija, 40 km³/Myr por km de fosa, sin depender de la convergencia ni del tipo de arco. Se sustituye por 6.1.
 3. **Corteza de arco en f_cont.** Hoy no cuenta hasta pasar de 20 km, y entonces entra entera, con sus 7 km de basalto. Se crea la marca a_i y se cuenta solo lo añadido, desde que se crea.
 
-Queda abierta una cuestión que no bloquea esta adenda: las fosas y las dorsales del modelo miden más que las de la Tierra (unos 100 000 y 101 500 km). Con las tasas por área de la versión 2, los flujos no dependen de esa longitud. La forma de los bordes se trata en la nota siguiente.
+Queda abierta una cuestión que no bloquea esta adenda: las fosas y las dorsales del modelo miden más que las de la Tierra (unos 100 000 y 101 500 km). Con las tasas por área de la versión 2, los flujos no dependen de esa longitud. La forma de los bordes se trata en nota_bordes_placa.md.
+
+4. **Ley de erosión (comprobación pendiente).** Con τ_ero = 63 Myr se cumple la relajación, pero el sedimento que llega al mar sale 4,9 AU frente a ≈1,8. Parte se debe a la base: se hunde el doble de placa, así que hay el doble de arcos y de montañas que gastar. Tras corregir los bordes se vuelve a medir. Si un solo τ_ero no cumple a la vez la relajación y la exportación al mar, se pasa a una ley no lineal, porque la erosión real crece mucho más que proporcional con la altura: las cordilleras altas se gastan muy rápido y las llanuras casi nada.
 
 ---
 

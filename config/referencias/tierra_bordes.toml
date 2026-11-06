@@ -3,7 +3,8 @@
 # Seton et al. (2020) para el tipo de corteza. Malla tectónica de nivel 2 (~52 km).
 # Longitudes en km: dorsales, choques y transformantes, la mitad de cada lado; fosas, el lado
 # que se hunde. "malla_clases": clase de Bird del tramo más cercano. "regla_modelo_15": tipo
-# con la regla de clasificar_bordes (f_transformante 0,26); "regla_bird_20", con 20°.
+# con la regla anterior de clasificar_bordes (f_transformante 0,26); "regla_bird_20", con 20°;
+# "regla_nota": la de nota_bordes_placa.md (normal del borde suavizado a 150 km y 20°).
 # "mayores_15": las placas pequeñas fundidas con su vecina hasta quedar 15.
 
 [bordes.vectorial_km]
@@ -50,6 +51,13 @@ choque = 35817.5
 transformante = 48357.4
 total = 234328
 
+[bordes.todas.regla_nota_km]
+dorsal = 100887
+fosa = 51163.1
+choque = 35391.1
+transformante = 47288.1
+total = 234730
+
 [bordes.todas.malla]
 placas = 58
 ambiguas_frac = 0.036885
@@ -83,6 +91,13 @@ fosa = 38102.8
 choque = 23205.3
 transformante = 36924.8
 total = 182392
+
+[bordes.mayores_15.regla_nota_km]
+dorsal = 86717.5
+fosa = 37346.9
+choque = 23568.7
+transformante = 34944.7
+total = 182578
 
 [bordes.mayores_15.malla]
 placas = 15

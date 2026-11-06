@@ -273,12 +273,123 @@ Las columnas del planeta se midieron con el volcado anterior a la adenda; la tab
 - **Lo que falla de verdad en nuestra lluvia** son la sombra pluviométrica (×1,24 antes de la adenda, ×0,79 ahora; la Tierra ×0,58), el perfil con la altura (×1,7 en laderas bajas, la Tierra ×1,0–1,1) y el reparto por latitud (subtrópicos 3–4 veces más secos y latitudes medias del norte el doble de húmedas). La lluvia media de la tierra se queda corta aun con `c_P`.
 - **CHELSA es más fiel en montaña** (modela el viento sobre el relieve). WorldClim interpola pluviómetros de valle y es una cota inferior.
 
-## 12. Pendientes (en orden)
+## 12. Nota de bordes de placa: implementación (2026-11-06)
 
-1. Nota siguiente del responsable: forma de los bordes (datos del §10 y del diagnóstico del §9.3), inicio de subducción en márgenes viejos, fondo oceánico (reparto del sedimento, compactación, mesetas y montes submarinos) y rifts (que estiren conservando: hoy `F_rift` es un sumidero provisional de 0,11 AU).
-2. Con la base arreglada: calibrar `τ_del` (delaminación ≈1,1 AU y espesor máximo 70–80 km) y revisar `f_acr`, la exportación al mar, `V_cont` y `f_cont`.
-3. Lluvia: revisar la definición de barlovento (mesetas), el reparto por latitud y la lluvia de base con la media observada (CHELSA ~920 mm sin casquetes), y retirar `c_P`.
-4. ~~Adenda del responsable: sumideros reales de corteza~~: hecho, §9.
-5. Acortamiento andino (el §6.3 cuenta con él); ciclo de Wilson (rifts por suturas viejas); flexión de la litosfera (cuencas de antepaís); microplacas (Bird).
-6. ~~Reducir el remuestreo~~: hecho, §7.
-7. Casquetes polares (R6); con ellos, el agua total pasa a ser océano + hielo.
+`nota_bordes_placa.md`, del responsable. Código: `tectonica/deriva/suavizado.rs` (borde suavizado) y `deriva.rs` (solapes, huecos, dientes, islas). Sin interruptor: cambio de mecanismo; la referencia del comportamiento anterior es el commit anterior.
+
+### 12.1 Reglas y adaptaciones a la representación (§11.1 de la nota)
+
+- **Borde suavizado (§6.2).** `φ_p,i` = fracción del área a menos de `L_borde` (150 km) que reclama la placa `p`. Un solape cuenta la mitad para cada placa; un hueco, nada. Las vecindades se calculan una vez, en formato CSR.
+  - Radio efectivo de al menos 1,5 lados de celda: en las mallas gruesas de las pruebas (~200 km) un radio de 150 km no llega a las vecinas.
+  - La normal es el gradiente de `φ_q − φ_p` por mínimos cuadrados sobre las 8 vecinas.
+- **Tipo de tramo (§6.3):** con `θ_tr` = 20° (`theta_tr_grados`, que sustituye a `f_transformante` = 0,26 ≈ 15°). `clasificar_bordes` usa también la normal suavizada; la longitud se sigue midiendo con el gradiente del indicador, el método con que se mide la Tierra.
+- **Solapes (§6.4).** En un tramo convergente, el torneo de siempre: se consume y se registra `A_sub`. En uno transformante o divergente, la celda es de la placa de más `φ` (desempate sembrado) y la muestra de la otra es un **diente**.
+- **Dientes (decisiones técnicas).** Se recolocan antes de repartir los huecos, para que llenen el que su placa deja detrás. Destino: el hueco más cercano que **toca su placa**, de cualquier tipo, a menos de `r_busca = L_borde`.
+  - Interpretar "el hueco de su propia placa" como "del lado de su placa según `φ`" dejaba sin hueco a un diente continental metido en el lado de la otra placa. Iba a una sola celda de su placa y la apilaba paso a paso: 1 525 km.
+  - Sin hueco, el diente se reparte por las celdas de su placa a menos de `r_busca` si son al menos un cuarto de la vecindad; si no, por todas las de la vecindad. En dos o tres celdas, el "engruesa un poco" de la nota apilaba corteza.
+- **Huecos:** los de dorsal, como siempre. Los de tramos transformantes o convergentes que no llenó ningún diente, a la placa de más `φ`, con fondo nuevo (creación residual).
+- **Suavizado de la pertenencia (§6.5), como la nota:** solo celdas sin corteza continental ni de arco.
+  - Si la otra placa ya tiene una muestra oculta en ese sitio, se ve la suya (si también es solo oceánica); si no, la muestra pasa a la otra placa con su volumen.
+- **Extensiones (decisiones técnicas):**
+  - **Islas.** Un trozo suelto de una placa (componente conexa que no es la mayor) de menos de `L_borde²` pasa a la placa que más lo rodea, también si es continental. Es la absorción de placas pequeñas del documento principal, pero por trozos. A 52 km, un trozo de 100 km de una placa dentro de otra no es un borde.
+  - **Muestras sueltas.** La de una placa con `φ` < 0,15 en la celda (`PHI_SUELTA`; una celda de las ~26 de la vecindad da ~0,04) no gana un solape. Si perdiera también como diente, la corteza de la placa de abajo que quedó oculta bajo la de arriba (corteza metida por debajo) se sumaba entera a la de arriba en poco sitio. Si pierde, se consume como siempre.
+
+### 12.2 Pruebas (§10 de la nota)
+
+| Prueba | Resultado |
+|---|---|
+| Deslizamiento puro, borde con dientes de una celda, 100 Myr | consumo 0 y creación 0 (exactos); celdas de borde 1 536 → 768 (los dientes desaparecen) |
+| Separación oblicua (45°), 30 Myr | consumo 0 en la dorsal; nacen 1,55·10⁷ km² (lo que da la cinemática) |
+| India–Asia | velocidad de la India 14,7 → 5,3–6,4 cm/año; antes de la nota, 14,7 → 4,8–6,7 (media tras el choque 5,8 frente a 5,5): mismo comportamiento, no idéntico (los bordes laterales usan 20° y la normal suavizada) |
+| Conservación | balance de cada paso a 7·10⁻¹⁵ |
+
+### 12.3 Resultados (planeta, semilla 42, sin el rodaje)
+
+| Magnitud | Antes de la nota | Con la nota | Objetivo (§10) |
+|---|---|---|---|
+| Fondo consumido en tramos divergentes y transformantes | 26 % | 3,0 % | < 2 % |
+| Corteza continental solapada en ellos | 31 % | 4,5 % | < 2 % |
+| Fondo consumido / creado (km²/año) | 6,29 / 6,44 | 3,64 / 4,06 | 2,7–3,4 |
+| Dorsales (km) | 120 900 | 74 600 | 86 700 ± 25 % |
+| Fosas | 117 600 | 74 000 | 37 300 ± 25 % |
+| Choques | 11 100 | 6 800 | 23 600 ± 25 % |
+| Transformantes | 62 300 | 51 200 | 34 900 ± 25 % |
+| Perímetro | 311 800 | 205 700 | 182 600 ± 25 % |
+| Edad media del fondo (Myr) | 79 | 132 (mediana 59) | 63,9 (mediana 55,2) |
+
+- **Referencia de la Tierra.** Es la de `tierra_bordes.toml` con la regla de la nota (normal suavizada a 150 km y 20°), 15 placas mayores. Con 52 placas: 100 900 / 51 200 / 35 400 / 47 300 / 234 700 km.
+- **Barrido de `L_borde`** (el único parámetro que la nota deja ajustar):
+
+  | `L_borde` (km) | fosas (km) | perímetro (km) | `A_sub` (km²/año) | consumo no convergente | edad media (Myr) |
+  |---|---|---|---|---|---|
+  | 100 | 80 200 | 226 800 | 4,07 | 4,9 % | 108 |
+  | 150 | 74 000 | 205 700 | 3,64 | 3,0 % | 132 |
+  | 300 | 58 200 | 161 800 | 2,85 | 2,3 % | 218 |
+
+  Aun con 300 km las fosas son 1,56 veces las de la Tierra. Según la nota (§10 y §11.2), la causa no está en la forma de los bordes, sino en las **fuerzas que mueven las placas**. Se queda en 150 km: con él, el perímetro y las dorsales entran en su margen.
+- **Edad del fondo.** La mediana (59 Myr) ya es la de la Tierra. La media sube porque el 24 % del fondo pasa de 200 Myr (la Tierra, ~0,1 %). Antes, los dientes reciclaban fondo joven y la escondían. Falta el inicio de subducción en márgenes viejos (nota siguiente).
+- **§11.3 (¿arco por tramo?).** Con los bordes suavizados, el 44,5 % del área subducida sigue cayendo en tramos sin franja propia. El arco se sigue repartiendo por placa.
+
+## 13. Adenda de balance v3: flujo lateral sin tope (2026-11-06)
+
+`H_max` deja de ser una regla (se quita `h_max_km` de la configuración). En las pruebas queda la alarma de 80 km, `ALARMA_ESPESOR_KM`: en el choque India–Asia (malla de 104 km, con un 10 % de holgura por la resolución) y en la batería del planeta (`tect_bal_espesor_max_todo_km`).
+
+**Flujo lateral (§6.6b), adaptaciones (decisiones técnicas):**
+- **Va por la malla del mundo**, entre celdas vecinas de lado de la misma placa y con la muestra que ve cada una. La rejilla propia de una placa está girada respecto a la del mundo; la corteza nueva o recolocada queda en celdas sueltas de esa rejilla, sin vecinas con las que fluir. Por la rejilla de la placa, las muestras gruesas no se vaciaban.
+- **También fluye a través de un borde de choque continente–continente.** El orógeno abarca las dos placas; si no, una astilla de la placa de arriba rodeada de otras placas se queda con toda la corteza que se mete debajo. Es una desviación del texto de la adenda ("de la misma placa") y se avisa al responsable.
+- Subpasos con `D·Δt_sub/d² ≤ 1/16`, porque una muestra puede verla más de una celda. Conserva el volumen por construcción.
+
+**Calibración de `D_flujo` (tipo b)** con India–Asia (malla de 52 km), hecha tras implementar la nota de bordes:
+
+| D (km²/Myr) | 0 | 1 000 | 2 000 | 2 500 | **3 000** | 4 000 | 10 000 |
+|---|---|---|---|---|---|---|---|
+| Espesor máximo a 30–60 Myr (km) | 219–527 | 91–115 | 76–85 | 72–81 | **72–77** | 68–73 | 58–64 |
+| Ancho de la meseta de más de 55 km (km) | 185–230 | 244–334 | 244–351 | 244–366 | **254–284** | 232–280 | 42–268 |
+
+`D_flujo` = 3 000 km²/Myr, el centro de 70–80 km. Equivale a un canal de corteza inferior de 15 km con viscosidad ~10²⁰ Pa·s, dentro de lo estimado para el Tíbet. La meseta (cientos de km) no llega a los ~1 000 km del Tíbet; la limitan la erosión lineal, que gasta igual una meseta que un frente empinado, y la delaminación (§15). Con el flujo y la nota de bordes, la relajación tarda 136 Myr: sigue en 100–200 con `τ_ero` = 63.
+
+### 13.1 Qué apilaba corteza (investigación pedida por el responsable)
+
+Sin tope y sin flujo, el choque India–Asia apila 124 km en 10 Myr, 203 en 20 y 527 en 60. En el planeta llegó a 1 525 km. El tope de 80 km lo ocultaba. Mecanismos encontrados, en orden de importancia, y su arreglo:
+
+1. **La franja de cada frente de choque (Voronoi).** Con un frente de dos filas, las celdas de frente de dentro se quedaban con una sola celda y la apilaban (hasta 18 km por paso). Arreglo: el volumen de cada zona de choque se reparte por igual en su franja de `W_min_orog`, la regla del documento principal ("uniforme en `W_min_orog`"), sobre toda la corteza de la placa de arriba. Que fuese solo la continental era una decisión mía de la primera implementación.
+2. **Islas de la placa de arriba** (muestras ocultas que reaparecen dentro de la otra placa). En un choque continental ganaban el solape y se comían, paso a paso, la corteza que les pasaba por debajo. Arreglo: una muestra suelta no gana (§12.1).
+3. **El flujo lateral por la rejilla girada de la placa**, donde las muestras gruesas estaban sueltas. Arreglo: por la malla del mundo.
+4. **Astillas de la placa de arriba rodeadas de otras placas.** Arreglo: el flujo cruza las suturas de los choques continentales.
+5. **Dientes e islas repartidos en 1–3 celdas.** Arreglo: reparto por la vecindad y absorción de islas.
+6. **Una montaña de sedimento.** La muestra que el mundo ve en una celda recibía el sedimento de la depresión vecina, donde caía su centro. La depresión seguía siéndolo y la montaña crecía sin fin; además, la erosión se llevaba el sedimento de una cuenca cerrada y volvía a ella. Arreglos: lo que se calcula para una celda va a la muestra que se ve en ella (más las ocultas cuyo centro cae allí), y el fondo de una cuenca cerrada no se erosiona.
+
+**Resultado:** espesor máximo de toda la deriva 1 525 → **113 km**; media de los máximos 64 km; al final, 63. Pasan de 80 km **3 pasos de 500**, por traslados de dientes e islas en uniones de placas. Queda como hallazgo.
+
+## 14. Barlovento con la regla del responsable (2026-11-06)
+
+La regla: laderas que suben de cara al viento dominante, del pie a la cresta; fuera las mesetas (celdas con terreno más alto a barlovento). Se comparan con la llanura del pie. Una sola función para la Tierra y el planeta, `terreno.laderas_pie_cresta()`, del subagente de la lluvia.
+
+| | Tierra, WorldClim | Tierra, CHELSA | Planeta (antes de la nota) | Planeta (ahora) |
+|---|---|---|---|---|
+| Lluvia de ladera / lluvia del pie (cociente de medias) | 0,90 | 1,23 | 1,12 | 1,05 |
+
+El objetivo es lo que da la Tierra observada con la misma regla: ~1,2 con CHELSA, la más fiel en montaña. No es ×2–3. El 67 % de las laderas del planeta sube directamente desde el mar (la Tierra, 6 %); esas se omiten, como en la Tierra.
+
+## 15. Exportación de sedimento y la ley de erosión (2026-11-06)
+
+Medido tras la nota de bordes (relajación: choque India–Asia de 50 Myr, malla de 104 km):
+
+| `τ_ero` (Myr) | relajación a menos de 38 km | sedimento al mar (planeta) |
+|---|---|---|
+| 63 | 136 Myr | 3,07 AU |
+| 110 | 257 Myr | 3,07 AU |
+
+- **La exportación al mar no depende de `τ_ero`.** En equilibrio, la erosión se lleva lo que añaden los arcos y los choques; `τ_ero` solo decide lo altas que llegan a estar las montañas. Una ley no lineal con la altura cambiaría dónde se erosiona (frentes empinados frente a mesetas) y la anchura de las mesetas, pero no el total exportado.
+- **Lo que sobra es lo que falta en la delaminación:** 0,05 AU frente a ≈1,1. El flujo lateral reparte la corteza engrosada antes de que llegue a `h_del` = 50 km (los dos umbrales son iguales, `h_flujo` = `h_del`). En la Tierra, las raíces de los arcos se desprenden: la eclogita de los arcos se forma desde ~35–45 km. En el modelo, ese material acaba erosionado y en el mar.
+- **Pregunta para el responsable:** ¿delaminación de las raíces de los arcos (y `τ_del`) antes que la erosión no lineal? `τ_del` y `f_acr` siguen sin calibrar.
+
+## 16. Pendientes (en orden)
+
+1. **Fuerzas de las placas** (nota de bordes §11.2): las fosas siguen 2 veces las de la Tierra con cualquier `L_borde` razonable; mirar el reparto de convergencia por placa.
+2. **Exportación al mar** (3,1 AU, objetivo ≈1,8): no depende de `τ_ero` (§15); lo que falta es la delaminación (0,05 AU, ≈1,1). Decidir entre la delaminación de las raíces de los arcos y la erosión no lineal con la altura (adenda v3 §11.4), que cambiaría dónde se erosiona pero no el total.
+3. Nota siguiente del responsable: inicio de subducción en márgenes viejos (el 24 % del fondo pasa de 200 Myr), fondo oceánico (reparto del sedimento, mesetas, montes submarinos) y rifts que estiren conservando.
+4. Los 3 pasos de 500 que pasan la alarma de 80 km (dientes e islas en uniones de placas).
+5. Con la base arreglada, calibrar `τ_del` y `f_acr` (sedimento acrecionado 0,14 y subducido 0,38 AU, objetivos ≈0,3 y 1,0–1,65; llega poco sedimento a las fosas).
+6. Lluvia: reparto por latitudes (nota propia, tras cerrar la tectónica); `c_P` sin recalibrar.
+7. Acortamiento andino, ciclo de Wilson, flexión de la litosfera, microplacas; casquetes polares.

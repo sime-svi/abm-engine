@@ -19,7 +19,11 @@ Qué mide, en las celdas de nivel 3 del cubo esférico (~26 km) de `referencia_t
          paralelo (la media de los puntos cada 10 km que caen en tierra baja); las celdas sin tierra
          baja a barlovento (por ejemplo, con el mar delante) se omiten y se da el área omitida;
      ii. la media de la tierra baja (h < 300 m) de su franja de 1° de latitud;
-  d. la lluvia media de la tierra, con y sin la Antártida y Groenlandia, y por franjas de 10°.
+  d. la lluvia media de la tierra, con y sin la Antártida y Groenlandia, y por franjas de 10°;
+  e. la regla del responsable para el objetivo (2026-11-05): las laderas de barlovento de pie a cresta
+     (`terreno.laderas_pie_cresta`: suben de cara al viento desde el pie, sin nada tan alto como ellas
+     contra el viento hasta el pie, hacia una cresta de más de 2000 m) y su lluvia entre la del llano
+     de su pie (`terreno.cociente_laderas`), también por franjas de altura.
 Después mide exactamente lo mismo en el volcado por celda del planeta (`run.dump_world` y
 `run.dump_climate`), con la lluvia del modelo, y lo muestra al lado. El planeta no va al TOML: cambia
 con cada corrida.
@@ -37,7 +41,7 @@ interpretan sus bytes):
 
 Uso: python3 -I herramientas/analisis/lluvia_observada.py [--planeta output/escenarios/planeta] [--sin-chelsa]
 Escribe config/referencias/tierra_lluvia.toml (solo la Tierra) y muestra la tabla Tierra–planeta. Solo usa
-la biblioteca estándar de Python. Tarda ~30 s con los datos y las cachés hechos; la primera vez, unos
+la biblioteca estándar de Python. Tarda ~40 s con los datos y las cachés hechos; la primera vez, unos
 minutos más: el relieve de nivel 3 (~1 min en el equipo del 2026-11-05) y la lectura de CHELSA (~2 min).
 """
 import argparse
@@ -297,16 +301,19 @@ def chelsa_celdas(directorio, datos):
 class Mundo:
     """Las celdas de tierra de un mundo con lo que piden las medidas: `tierra` (dicts con lat_deg,
     lon_deg, h, area_km2, m_oro y una clave por conjunto de lluvia, None sin dato), `dueno` (para cada
-    celda de nivel 3, la celda de tierra que la contiene, o None) y `barlovento`."""
+    celda de nivel 3, la celda que la contiene: None o una de mar donde no hay tierra), `barlovento` y
+    `laderas`."""
 
     def __init__(self, nombre, tierra, dueno, barlovento):
         self.nombre, self.tierra, self.dueno, self.barlovento = nombre, tierra, dueno, barlovento
         self.rel = terreno.relieve_por_casillas(tierra)
+        self.laderas = []       # laderas de barlovento de pie a cresta: (celda, pie)
 
 
 def mundo_tierra(cel, lluvias):
-    """La Tierra: celdas de nivel 3 con h ≥ 0 en la roca rebotada, y las laderas de barlovento de
-    `referencia_tierra.laderas_barlovento` (la selección de `pendientes`)."""
+    """La Tierra: celdas de nivel 3 con h ≥ 0 en la roca rebotada, las laderas de barlovento de
+    `referencia_tierra.laderas_barlovento` (la selección de `pendientes`) y las de pie a cresta
+    (`terreno.laderas_pie_cresta`, la misma función que el planeta)."""
     filas = rt.factor_orografico(cel)
     km2 = AREA_TIERRA_KM2 / sum(cel.w)
     tierra, dueno = [], [None] * len(cel.w)
@@ -323,34 +330,24 @@ def mundo_tierra(cel, lluvias):
     otra = terreno.laderas_barlovento(tierra, m.rel)
     if [c['k'] for c in otra] != [c['k'] for c in lad]:
         raise RuntimeError('referencia_tierra.py y terreno.py no eligen las mismas laderas de barlovento')
+    m.laderas = terreno.laderas_pie_cresta(tierra, dueno)
     return m
 
 
 def mundo_planeta(prefijo):
-    """El planeta: las celdas de tierra de su volcado (todas las que no son océano, como terreno.py) y
-    sus laderas de barlovento con `terreno.laderas_barlovento`. El volcado mezcla niveles de detalle
-    (LOD): cada celda cubre 4^(3−nivel) celdas de nivel 3."""
+    """El planeta: las celdas de tierra de su volcado (todas las que no son océano, como terreno.py),
+    sus laderas de barlovento (`terreno.laderas_barlovento`) y las de pie a cresta. El volcado mezcla
+    niveles de detalle (LOD): `terreno.mapa_nivel3` da la celda que contiene cada celda de nivel 3, con
+    el mar, que tiene lluvia (para los pies en el mar)."""
     with open(prefijo + '_world.json') as f:
         celdas = json.load(f)
-    dueno = [None] * (6 * N3 * N3)
-    tierra = []
     for c in celdas:
-        if c['surface'] == 'oceano':
-            continue
-        n = rt.N0 << c['level']
-        la, lo = math.radians(c['lat_deg']), math.radians(c['lon_deg'])
-        idx = rt.localizar(math.cos(la) * math.cos(lo), math.cos(la) * math.sin(lo), math.sin(la), n)
-        cara, resto = divmod(idx, n * n)
-        j, i = divmod(resto, n)
-        f = 1 << (3 - c['level'])
-        for dj in range(f):
-            for di in range(f):
-                dueno[(cara * N3 + j * f + dj) * N3 + i * f + di] = c
         c['modelo'] = c['lluvia_anual_mm']
         c['hielo'] = False
-        tierra.append(c)
-    m = Mundo('planeta', tierra, dueno, None)
+    tierra = [c for c in celdas if c['surface'] != 'oceano']
+    m = Mundo('planeta', tierra, terreno.mapa_nivel3(celdas), None)
     m.barlovento = terreno.laderas_barlovento(tierra, m.rel)
+    m.laderas = terreno.laderas_pie_cresta(tierra, m.dueno)
     with open(prefijo + '_terreno.json') as f:
         m.c_p = json.load(f)['run']['lluvia']['c_p']
     return m
@@ -385,7 +382,7 @@ def referencia_arriba(m, clave):
         while d <= D_MAX:
             lo = math.radians(c['lon_deg'] - hacia_el_este * math.degrees(d / (R_KM * coslat)))
             v = m.dueno[rt.localizar(cp * math.cos(lo), cp * math.sin(lo), sp, N3)]
-            if v is not None and v['h'] < H_BAJA and v[clave] is not None:
+            if v is not None and v['surface'] != 'oceano' and v['h'] < H_BAJA and v[clave] is not None:
                 vals.append(v[clave])
             d += D_PASO
         return sum(vals) / len(vals) if vals else None
@@ -482,6 +479,9 @@ def medir(m, clave):
          'sombra': sombra(m, clave)}
     if any(c['hielo'] for c in m.barlovento):
         r['barlovento_sin_antartida_ni_groenlandia'] = barlovento(m, [c for c in m.barlovento if not c['hielo']], clave)
+    r['barlovento_ladera'] = terreno.cociente_laderas(m.laderas, clave)
+    if any(p['ref_mar'] for _, p in m.laderas):     # el planeta: el mar tiene lluvia
+        r['barlovento_ladera_con_mar'] = terreno.cociente_laderas(m.laderas, clave, con_mar=True)
     return r
 
 
@@ -529,6 +529,22 @@ def mostrar(res, plan):
     fila('  factor i / ii (cociente de medias)',
          lambda r: f"{r['barlovento_sin_antartida_ni_groenlandia']['factor_arriba']['cociente_de_medias']:.3f} / "
          f"{r['barlovento_sin_antartida_ni_groenlandia']['factor_franja']['cociente_de_medias']:.3f}", '{}')
+    for clave, titulo in (('barlovento_ladera', 'ladera de barlovento de pie a cresta (objetivo)'),
+                          ('barlovento_ladera_con_mar', '  la misma, con los pies en el mar')):
+        fila(titulo)
+        fila('  área (millones de km²)', lambda r: r[clave]['area_km2'] / 1e6, '{:.2f}')
+        fila('  ladera / llano del pie (mm)',
+             lambda r: f"{r[clave]['lluvia_mm']:.0f} / {r[clave]['referencia_mm']:.0f}", '{}')
+        fila('  cociente de medias', lambda r: r[clave]['cociente_de_medias'], '{:.3f}')
+        fila('  mediana / media de los cocientes',
+             lambda r: f"{r[clave]['mediana']:.3f} / {r[clave]['media']:.3f}", '{}')
+        fila('  pie en el mar / omitida (fracción)',
+             lambda r: f"{r[clave]['pie_en_mar_frac']:.3f} / {r[clave]['omitida_frac']:.3f}", '{}')
+        fila('  altura media del pie (m)', lambda r: r[clave]['pie_h_medio_m'])
+        fila('  300–1000 / 1000–2000 / ≥ 2000 m: cociente',
+             lambda r: ' / '.join(f'{x:.2f}' for x in r[clave]['por_altura']['cociente_de_medias']), '{}')
+        fila('  área por franja de altura (fracción)',
+             lambda r: ' / '.join(f'{x:.2f}' for x in r[clave]['por_altura']['area_frac']), '{}')
     fila('sotavento de latitudes medias (mm)', lambda r: r['sombra']['sotavento_lluvia_mm'])
     fila('resto de las latitudes medias (mm)', lambda r: r['sombra']['resto_lluvia_mm'])
     fila('sotavento / resto', lambda r: r['sombra']['sotavento_entre_resto'], '{:.3f}')
@@ -625,8 +641,27 @@ def escribir(ruta, res, extra):
         claves = ('sotavento_lluvia_mm', 'sotavento_area_km2', 'resto_lluvia_mm', 'resto_area_km2',
                   'sotavento_entre_resto')
         secciones.append((f'{nombre}.sombra', seccion([(k, s[k]) for k in claves])))
+        b = r['barlovento_ladera']
+        secciones.append((f'{nombre}.barlovento_ladera', seccion([
+            ('area_km2', b['area_km2'], 'Área de las laderas de barlovento de pie a cresta.'),
+            ('lluvia_mm', b['lluvia_mm'], 'Lluvia media de las laderas con referencia.'),
+            ('referencia_mm', b['referencia_mm'], 'Lluvia media del llano de su pie.'),
+            ('cociente_de_medias', b['cociente_de_medias'],
+             'El objetivo: lluvia media de las laderas entre la del llano de su pie.'),
+            ('mediana', b['mediana']), ('media', b['media']),
+            ('pie_en_mar_frac', b['pie_en_mar_frac'], 'Fracción del área con el pie en el mar.'),
+            ('omitida_frac', b['omitida_frac'],
+             'Fracción con dato sin referencia de tierra (el pie en el mar): se omite.'),
+            ('pie_h_medio_m', b['pie_h_medio_m'], 'Altura media del pie (m) de las laderas con referencia.')])))
+        pa = b['por_altura']
+        secciones.append((f'{nombre}.barlovento_ladera.por_altura', seccion([
+            ('limites_m', terreno.LIM_ALTURA_LADERA),
+            ('area_frac', pa['area_frac'], 'Fracción de las laderas en cada franja de altura.'),
+            ('cociente_de_medias', pa['cociente_de_medias'], 'Cociente de medias en cada franja de altura.')])))
     hoy = datetime.date.today().isoformat()
     chelsa = 'chelsa' in res
+    h_l, tol, cresta = terreno.H_LADERA_M, terreno.TOL_LADERA_M, terreno.CRESTA_LADERA_M
+    paso, alc, nref = terreno.PASO_LADERA_KM, terreno.ALCANCE_LADERA_KM, terreno.N_REF_LADERA - 1
     cab = f'''# Lluvia observada de la Tierra a la escala del planeta (~26 km): el objetivo de la lluvia de barlovento
 # y la revisión de c_P (decisión del responsable, 2026-11-05).
 # Generado por herramientas/analisis/lluvia_observada.py el {hoy}. No editar a mano: se regenera.
@@ -660,6 +695,15 @@ def escribir(ruta, res, extra):
 # Antártida = tierra al sur de 60° S; Groenlandia = tierra dentro de un polígono por los estrechos que la
 #   separan de Baffin, Ellesmere e Islandia. Su barlovento se elige por la roca bajo el hielo, que no es
 #   el relieve que ve la lluvia: por eso se da también sin ellas.
+# barlovento_ladera: la regla del responsable (2026-11-05), de la que sale el objetivo de la lluvia de
+#   barlovento (terreno.laderas_pie_cresta, la misma función para el planeta). Laderas que suben de cara
+#   al viento del modelo (m_oro > 1, h ≥ {h_l:.0f} m) desde el pie hasta la cresta: contra el viento,
+#   hasta el pie, todo es más bajo que la celda (fuera mesetas y sotaventos), y la cresta a la que sube
+#   (lo más alto a favor del viento antes de bajar más de {tol:.0f} m) pasa de {cresta:.0f} m. Se camina por el
+#   paralelo cada {paso:.0f} km, contra el viento hasta {alc:.0f} km o hasta el mar (que cuenta como 0 m).
+#   El pie es el primer punto que ya está a menos de {tol:.0f} m de lo más bajo de ese camino; si ese
+#   punto es el mar, el pie está en el mar y, sin lluvia observada sobre el mar, la ladera se omite.
+#   Referencia: la lluvia del llano del pie (el pie y hasta {nref} muestras más contra el viento, de tierra).
 '''
     os.makedirs(os.path.dirname(ruta), exist_ok=True)
     with open(ruta, 'w') as f:

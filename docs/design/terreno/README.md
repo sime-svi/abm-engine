@@ -292,3 +292,29 @@ Todo está medido en la batería de escenarios (escenario `planeta`, 34 métrica
 - el reparto por latitudes: subtrópicos demasiado secos y latitudes medias demasiado húmedas.
 
 Detalle técnico en `incremento-4-diseno.md` §9–§11; la adenda, en `adenda_balance_corteza.md`.
+
+### Bordes de placa limpios y flujo de la corteza (nota de bordes y adenda v3, 06-11-2026)
+
+**El problema.** Los bordes entre placas están dibujados con celdas, así que tienen dientes. Al moverse las placas, los dientes de una se metían en la otra también donde solo se deslizan (una **falla transformante**, como la de San Andrés) o donde se separan (una **dorsal**). El modelo lo trataba como si una placa se hundiera bajo la otra. Un cuarto del fondo oceánico que "se hundía" lo hacía en sitios donde en la Tierra no se hunde nada, así que el modelo hundía el doble de placa que la Tierra.
+
+**Lo que se hizo.**
+- **Borde suavizado.** El tipo de cada tramo se decide mirando el borde a 150 km, como lo ve una litosfera rígida, no la escalera de celdas. Es **transformante** si las placas se deslizan a menos de 20° del borde, el umbral que separa las clases en los datos reales de Bird.
+- **Dientes recolocados.** Solo se hunde placa donde las placas se acercan de verdad. El diente de un borde que se desliza no se destruye: se recoloca en el hueco que su placa deja detrás.
+- **Islas absorbidas.** Los trocitos sueltos de una placa dentro de otra pasan a la placa que los rodea, como un terreno que se pega a un continente.
+- **Flujo lateral.** La corteza muy gruesa ya no tiene tope. Su parte de abajo, caliente y blanda, se desparrama hacia los lados, como una masa de pan, y forma mesetas en vez de agujas.
+
+**Qué se consigue.**
+- El fondo que se hunde en bordes que no convergen baja del 26 al 3 %.
+- Se hunden 3,6 km² de fondo al año, frente a 2,7–3,4 en la Tierra; antes eran 6,3. Con ello, los arcos y la erosión por subducción caen en los valores de la Tierra.
+- La longitud total de los bordes y la de las dorsales se parecen a las de la Tierra medida igual.
+- Un choque como el de la India y Asia hace una meseta de unos 75 km de espesor, como el Tíbet, sin tope.
+- La tierra baja a 989 m de media (la Tierra, 671).
+
+**Lo que se descubrió al quitar el tope.** Sin tope, la corteza se apilaba hasta 1 525 km en algunos sitios. Había seis causas, todas por cómo está dibujado el modelo, no por la física. La principal: todo lo que un choque mete debajo iba a una sola celda. Ahora el máximo es de 113 km, y solo 3 de cada 500 pasos pasan de 80.
+
+**Lo que no cuadra todavía.**
+- **Las fosas miden el doble que en la Tierra.** Probando el suavizado entre 100 y 300 km siguen por encima de 1,5 veces. No es la forma de los bordes: son las fuerzas que mueven las placas.
+- **El fondo oceánico es demasiado viejo en parte.** La edad típica (mediana) ya es la de la Tierra, pero una cuarta parte pasa de 200 millones de años, porque falta el mecanismo que abre fosas nuevas en los bordes viejos de los océanos.
+- **La erosión manda al mar 3,1 km³ al año, frente a ~1,8 en la Tierra.** No es cosa del ritmo de la erosión: con uno casi el doble de lento, al mar llega lo mismo, porque a la larga la erosión se lleva lo que los arcos y los choques añaden. Lo que falta es que la base de la corteza engrosada se desprenda hacia el manto (la delaminación): en la Tierra se lleva ~1,1 km³ al año, en el modelo casi nada.
+
+**La lluvia de las laderas, medida bien.** Con la regla del responsable (laderas del pie a la cresta, sin mesetas, comparadas con la llanura de su pie), la Tierra observada da ×0,9–1,2 y el planeta ×1,05. El modelo ya está en el rango real.

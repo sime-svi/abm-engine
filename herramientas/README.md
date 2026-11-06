@@ -8,7 +8,7 @@ Programas fuera del motor para verificar, medir y consultar las corridas (CLAUDE
 | `escenarios.py` + `escenarios.toml` | Batería de escenarios de referencia: corridas fijas con unas pocas métricas clave, sus márgenes y su presupuesto de tiempo |
 | `no_regresion.sh` | Compara byte a byte la salida actual con la de un commit anterior (para los cambios que no deben alterar nada) |
 | `analisis/agentes.py` | Resume una corrida de agentes: población frente a `N_max`, fecundidad, esperanza de vida, hambre, mortalidad por sexo |
-| `analisis/terreno.py` | Resume y compara corridas del planeta: biomas, diagnóstico, `c_P`, relieve tectónico y, con el volcado por celda, la sombra pluviométrica |
+| `analisis/terreno.py` | Resume y compara corridas del planeta: biomas, diagnóstico, `c_P`, relieve tectónico y, con el volcado por celda, la sombra pluviométrica y las laderas de barlovento de pie a cresta |
 | `analisis/referencia_tierra.py` | Calcula las tablas de la Tierra con las que se compara el relieve (`config/referencias/tierra_relieve.toml`) |
 | `analisis/h5mini.py` | Lector mínimo de HDF5 (sin librerías): lee filas sueltas de rejillas contiguas por peticiones parciales |
 | `analisis/lluvia_observada.py` | Mide la lluvia observada de la Tierra (WorldClim y CHELSA) a la escala y con las definiciones del planeta, y la compara con la del planeta (`config/referencias/tierra_lluvia.toml`) |
@@ -75,10 +75,10 @@ La versión de referencia es la **roca sin hielo con el rebote isostático** (de
 ## Lluvia observada
 
 ```bash
-python3 -I herramientas/analisis/lluvia_observada.py   # ~30 s con las cachés; la primera vez, unos minutos más
+python3 -I herramientas/analisis/lluvia_observada.py   # ~40 s con las cachés; la primera vez, unos minutos más
 ```
 
-El objetivo de la lluvia de barlovento sale de lluvia observada, a la misma escala (~26 km) y con la misma definición de barlovento que el planeta (decisión del responsable). El ×1,36 de la referencia del relieve es la regla del modelo sobre el relieve real, no lluvia medida. El programa escribe `config/referencias/tierra_lluvia.toml`, solo con la Tierra. Al lado muestra lo mismo medido en el volcado del planeta con la lluvia del modelo (`output/escenarios/planeta_world.json`, de `escenarios.py --solo planeta`).
+El objetivo de la lluvia de barlovento sale de lluvia observada, a la misma escala (~26 km) y con la misma regla que el planeta: las laderas de barlovento de pie a cresta (decisión del responsable, 2026-11-05). El ×1,36 de la referencia del relieve es la regla del modelo sobre el relieve real, no lluvia medida. El programa escribe `config/referencias/tierra_lluvia.toml`, solo con la Tierra. Al lado muestra lo mismo medido en el volcado del planeta con la lluvia del modelo (`output/escenarios/planeta_world.json`, de `escenarios.py --solo planeta`).
 
 Datos, descargados una vez a `output/referencias/`:
 - **WorldClim 2.1:** lluvia mensual de 1970–2000 a 10' (~7 MB). Interpola pluviómetros, así que se queda corto en las montañas, y en los casquetes de hielo no sirve.
@@ -86,6 +86,11 @@ Datos, descargados una vez a `output/referencias/`:
 - **El relieve:** el de `referencia_tierra.py` (roca rebotada sin hielo), guardado en caché en `output/cache/`.
 
 Mide, en la Tierra y en el planeta, sobre las celdas de nivel 3:
+- **las laderas de barlovento de pie a cresta**, la regla del objetivo (`terreno.laderas_pie_cresta`, la misma función en los dos mundos):
+  - suben de cara al viento del modelo hasta una cresta de más de 2000 m, y contra el viento, hasta el pie, todo es más bajo que ellas: quedan fuera las mesetas y los sotaventos;
+  - se camina por el paralelo cada 10 km, contra el viento hasta 500 km o hasta el mar; el pie es el primer punto a menos de 100 m de lo más bajo de ese camino;
+  - se compara la lluvia de cada ladera con la del llano de su pie, también por franjas de altura; en la Tierra se omiten las de pie en el mar, y en el planeta se dan también con la lluvia del mar;
+  - `terreno.py` da el cociente del planeta (`barlovento_ladera_ratio`, cociente de las medias por área) y su área (`barlovento_ladera_area_km2`).
 - la lluvia de las laderas de barlovento de las cordilleras grandes, con la selección de `referencia_tierra.pendientes` y `terreno.py`;
 - el factor de barlovento observado, lo que en el modelo es `m_oro`: la lluvia de cada celda de barlovento entre la de la tierra baja (h < 300 m) a 50–300 km contra el viento, o entre la de la tierra baja de su franja de 1° de latitud;
 - el sotavento de las cordilleras grandes en latitudes medias y el resto, como `terreno.py`;
@@ -99,7 +104,7 @@ python3 -I herramientas/analisis/bordes_bird.py   # ~3 min; baja PB2002_steps de
 
 Una malla de 52 km no puede dibujar una línea más fina que sus celdas, así que la longitud de los bordes del modelo se compara con la Tierra medida igual (adenda de balance §10). El programa reconstruye las placas de Bird (2003) como regiones de la malla tectónica (nivel 2) y mide cada borde con el método de `clasificar_bordes` (`L = 2·A·|∇χ|`). Da el tipo de dos maneras:
 - **por la clase de Bird** del tramo más cercano (dorsal, rift, fosa, convergencia oceánica, choque, transformante oceánica y continental);
-- **con la regla del modelo:** la normal de la malla y la velocidad relativa del tramo de Bird. Es transformante si la velocidad normal es menor que 0,26 (≈15°) de la relativa; también se mide con 20°, el umbral que separa las clases de Bird. La corteza oceánica es la que tiene edad en Seton et al. (2020).
+- **con la regla del modelo:** la normal y la velocidad relativa del tramo de Bird. La regla vigente es la de `nota_bordes_placa.md` (`regla_nota`): la normal del borde suavizado a 150 km y transformante a menos de 20° (el umbral que separa las clases de Bird). Se miden también las reglas anteriores (normal sin suavizar, 15° y 20°). La corteza oceánica es la que tiene edad en Seton et al. (2020).
 
 Lo hace con las 52 placas de Bird y con una Tierra reducida a las 15 mayores (las pequeñas, fundidas con su vecina de más borde), como el modelo.
 

@@ -122,7 +122,6 @@ rho_s        = 2400.0      # sedimento compactado de los márgenes (corrección 
 h_oc_km      = 7.0
 h0_km        = 35.0        # corteza continental estable (± sigma_h0_km de ruido suave)
 sigma_h0_km  = 3.0
-h_max_km     = 80.0        # tope antes del colapso gravitatorio (lo más grueso de la Tierra: Tíbet, 70–80 km)
 h_nivel_km   = 32.0        # espesor continental que queda al nivel del mar (relación empírica)
 h_cont_min_km = 20.0       # un arco oceánico más grueso pasa a continental
 # Fondo oceánico (Parsons y Sclater, 1977; §5.3)
@@ -148,6 +147,8 @@ eta_col      = 0.5         # choque continente–continente: queda arriba (medid
 eta_arco     = 0.9         # choque arco–continente: queda arriba (medido: Luzón en Taiwán, ~90 %)
 h_del_km     = 50.0        # la base de la corteza pasa a eclogita (físico: 1,2–1,5 GPa)
 tau_del_myr  = 50.0        # delaminación del exceso (calibrado: ≈1,1 AU y espesor máximo 70–80 km)
+h_flujo_km   = 50.0        # por encima, la corteza inferior caliente fluye hacia los lados (adenda v3 §6.6b; físico, 45–60)
+d_flujo_km2_myr = 3000.0   # difusividad del flujo lateral (calibrado con India–Asia: espesor máximo 72–77 km sin tope; ~viscosidad 1e20 Pa·s)
 w_min_orog_km = 150.0
 w_margen_km  = 150.0
 f_rift       = 0.7
@@ -161,7 +162,9 @@ v_obj_cm_anio = 4.39       # RMS de la litosfera, NNR-MORVEL56 (Argus et al., 20
 recalibrar_myr = 50.0      # cada cuánto se recalibra c_b a v_obj
 v_inicial_min_cm_anio = 1.0  # empujón inicial al azar en el rango real (decisión del responsable)
 v_inicial_max_cm_anio = 10.0
-f_transformante = 0.26     # bordes a menos de 15° del desgarre puro cuentan como transformantes
+# Bordes de placa (nota_bordes_placa.md §5)
+theta_tr_grados = 20.0     # transformante a menos de 20° del desgarre puro (medido: separa las clases de Bird 2003)
+l_borde_km   = 150.0       # radio del borde suavizado (calibrado contra los bordes de Bird; escala de flexión 100–300 km)
 # Eventos de placas (§5.6)
 n_p0         = 12
 n_cratones   = 8

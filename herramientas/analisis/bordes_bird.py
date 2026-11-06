@@ -44,8 +44,9 @@ CLASES = ('OSR', 'CRB', 'SUB', 'OCB', 'CCB', 'OTF', 'CTF')
 TIPO = {'OSR': 'dorsal', 'CRB': 'dorsal', 'SUB': 'fosa', 'OCB': 'fosa', 'CCB': 'choque',
         'OTF': 'transformante', 'CTF': 'transformante'}
 TIPOS = ('dorsal', 'fosa', 'choque', 'transformante')
-F_MODELO = 0.26                      # config/terreno.toml, f_transformante (≈15°)
+F_MODELO = 0.26                      # regla anterior del modelo (≈15°, sin suavizar)
 F_BIRD = math.sin(math.radians(20))  # umbral que separa las clases de Bird (ver `umbral_de_bird`)
+L_BORDE = 150.0                      # nota_bordes_placa.md: radio del borde suavizado (km)
 V_MIN = 0.5                          # mm/año: por debajo, transformante (0,05 cm/año en el modelo)
 
 
@@ -233,7 +234,9 @@ def main():
     print(f'Placas reconstruidas en la malla: {nreg} (Bird: 52); celdas sin placa: {sin_placa}')
     print(f'Oblicuidad que separa las transformantes de Bird: p95 de las transformantes {u_tr:.1f}°, '
           f'p5 del resto {u_otras:.1f}°')
-    ctx = (tramos, vec, dirs, areas, medios, vec0, edades, n)
+    rt.log('vecindades de L_borde ...')
+    disco = vecindades(dirs, vec, max(L_BORDE, 1.5 * R * math.sqrt(4 * math.pi / num)))
+    ctx = (tramos, vec, dirs, areas, medios, vec0, edades, n, disco)
     todas = medir(etiqueta, ctx)
     informe(todas, vect, f'todas las placas ({nreg})')
     # Una Tierra con tantas placas como el modelo (~15): las pequeñas se funden, de menor a mayor,
@@ -248,6 +251,7 @@ def main():
             (f'bordes.{nombre}.malla_por_tipo_km', {t: sum(r['a'][c] for c in CLASES if TIPO[c] == t) for t in TIPOS}),
             (f'bordes.{nombre}.regla_modelo_15_km', dict(r['b']['modelo']) | {'total': sum(r['b']['modelo'].values())}),
             (f'bordes.{nombre}.regla_bird_20_km', dict(r['b']['bird']) | {'total': sum(r['b']['bird'].values())}),
+            (f'bordes.{nombre}.regla_nota_km', dict(r['b']['nota']) | {'total': sum(r['b']['nota'].values())}),
             (f'bordes.{nombre}.malla', {'placas': r['placas'], 'ambiguas_frac': r['ambiguas']}),
         ]
     secciones = [('bordes.vectorial_km', {c: vect[c] for c in CLASES} | {'total': sum(vect.values())}),
@@ -257,7 +261,8 @@ def main():
            '# Seton et al. (2020) para el tipo de corteza. Malla tectónica de nivel 2 (~52 km).\n'
            '# Longitudes en km: dorsales, choques y transformantes, la mitad de cada lado; fosas, el lado\n'
            '# que se hunde. "malla_clases": clase de Bird del tramo más cercano. "regla_modelo_15": tipo\n'
-           '# con la regla de clasificar_bordes (f_transformante 0,26); "regla_bird_20", con 20°.\n'
+           '# con la regla anterior de clasificar_bordes (f_transformante 0,26); "regla_bird_20", con 20°;\n'
+           '# "regla_nota": la de nota_bordes_placa.md (normal del borde suavizado a 150 km y 20°).\n'
            f'# "mayores_{a.placas}": las placas pequeñas fundidas con su vecina hasta quedar {a.placas}.\n')
     rt.escribir_toml(a.salida, secciones, cab)
     rt.log(f'escrito {a.salida}')
@@ -285,12 +290,71 @@ def fundir_pequenas(etiqueta, vec, areas, objetivo):
         et = [destino if e == menor else e for e in et]
 
 
+def vecindades(dirs, vec, radio_km):
+    """Celdas a menos de `radio_km` de cada celda (como `Vecindad` en deriva/suavizado.rs)."""
+    cos_max = math.cos(radio_km / R)
+    out = []
+    for k, x in enumerate(dirs):
+        visto = {k}
+        pila = [k]
+        disco = []
+        while pila:
+            c = pila.pop()
+            disco.append(c)
+            for v in vec[c]:
+                if v in visto:
+                    continue
+                visto.add(v)
+                if sum(x[i] * dirs[v][i] for i in range(3)) >= cos_max:
+                    pila.append(v)
+        out.append(disco)
+    return out
+
+
 def medir(etiqueta, ctx):
     """Longitud de los bordes por clase de Bird (A) y por tipo con la regla del modelo (B)."""
-    tramos, vec, dirs, areas, medios, vec0, edades, n = ctx
+    tramos, vec, dirs, areas, medios, vec0, edades, n, disco = ctx
     num = len(etiqueta)
     largo_a = {c: 0.0 for c in CLASES}
-    largo_b = {f: {t: 0.0 for t in TIPOS} for f in ('modelo', 'bird')}
+    largo_b = {f: {t: 0.0 for t in TIPOS} for f in ('modelo', 'bird', 'nota')}
+    memo = {}
+
+    def fi(k):
+        """Pertenencia suavizada a L_BORDE de la celda k: {región: fracción}."""
+        if k in memo:
+            return memo[k]
+        tot, f = 0.0, {}
+        for j in disco[k]:
+            tot += areas[j]
+            e = etiqueta[j]
+            if e >= 0:
+                f[e] = f.get(e, 0.0) + areas[j]
+        r = {e: a / tot for e, a in f.items()}
+        memo[k] = r
+        return r
+
+    def normal_suave(k, p, q):
+        """Normal del borde suavizado (crece φ_q − φ_p), por mínimos cuadrados sobre las vecinas."""
+        x = dirs[k]
+        e, nn = rt.este_norte(x)
+        f0 = fi(k).get(q, 0.0) - fi(k).get(p, 0.0)
+        sxx = sxy = syy = bx = by = 0.0
+        for v in vec[k]:
+            dv = [dirs[v][i] - x[i] for i in range(3)]
+            de = sum(dv[i] * e[i] for i in range(3)) * R
+            dn = sum(dv[i] * nn[i] for i in range(3)) * R
+            df = fi(v).get(q, 0.0) - fi(v).get(p, 0.0) - f0
+            sxx += de * de
+            sxy += de * dn
+            syy += dn * dn
+            bx += de * df
+            by += dn * df
+        det = sxx * syy - sxy * sxy
+        if abs(det) < 1e-12:
+            return None
+        ge, gn = (syy * bx - sxy * by) / det, (sxx * by - sxy * bx) / det
+        g = math.hypot(ge, gn)
+        return (ge / g, gn / g) if g > 0 else None
     cruce = {c: {t: 0.0 for t in TIPOS} for c in CLASES}   # clase de Bird → tipo con la regla del modelo
     ambiguas = total_b = 0.0
     for k in range(num):
@@ -345,7 +409,16 @@ def medir(etiqueta, ctx):
         kq = max((v for v in vec[k] if etiqueta[v] == q),
                  key=lambda v: (sum((dirs[v][i] - x[i]) * nrm3[i] for i in range(3)), -v))
         ep, eq = edades.edad(x), edades.edad(dirs[kq])
-        for umbral, f in ((F_MODELO, 'modelo'), (F_BIRD, 'bird')):
+        # Regla de la nota de bordes: normal del borde suavizado a L_BORDE y 20°.
+        ns = normal_suave(k, p, q)
+        if ns is not None:
+            alin_s = ns[0] * (-ca) + ns[1] * sa
+            s_s = 1.0 if alin_s >= 0 else -1.0
+            div_s = s_s * (ve * ns[0] + vn * ns[1])
+        else:
+            div_s = div
+        for umbral, f, dv in ((F_MODELO, 'modelo', div), (F_BIRD, 'bird', div), (F_BIRD, 'nota', div_s)):
+            div = dv
             if vmm < V_MIN or abs(div) < umbral * vmm:
                 tipo, cuenta = 'transformante', 0.5 * largo
             elif div > 0:
@@ -373,11 +446,12 @@ def informe(r, vect, titulo):
     print(f'{"total":<14}{tv:>11.0f}{ta:>13.0f}{ta / tv:>8.2f}')
     a_tipo = {t: sum(largo_a[c] for c in CLASES if TIPO[c] == t) for t in TIPOS}
     v_tipo = {t: sum(vect[c] for c in CLASES if TIPO[c] == t) for t in TIPOS}
-    print(f'\n{"tipo":<14}{"vectorial":>11}{"A: clases":>11}{"B: regla 15°":>14}{"B: regla 20°":>14}')
+    print(f'\n{"tipo":<14}{"vectorial":>11}{"A: clases":>11}{"B: regla 15°":>14}{"B: regla 20°":>14}{"C: nota":>11}')
     for t in TIPOS:
-        print(f'{t:<14}{v_tipo[t]:>11.0f}{a_tipo[t]:>11.0f}{largo_b["modelo"][t]:>14.0f}{largo_b["bird"][t]:>14.0f}')
+        print(f'{t:<14}{v_tipo[t]:>11.0f}{a_tipo[t]:>11.0f}{largo_b["modelo"][t]:>14.0f}{largo_b["bird"][t]:>14.0f}'
+              f'{largo_b["nota"][t]:>11.0f}')
     print(f'{"total":<14}{tv:>11.0f}{ta:>11.0f}{sum(largo_b["modelo"].values()):>14.0f}'
-          f'{sum(largo_b["bird"].values()):>14.0f}')
+          f'{sum(largo_b["bird"].values()):>14.0f}{sum(largo_b["nota"].values()):>11.0f}')
     print(f'\nCon la regla del modelo (15°), cada clase de Bird pasa a (km, mitad por lado):')
     print(f'{"":<6}' + ''.join(f'{t:>15}' for t in TIPOS))
     for c in CLASES:

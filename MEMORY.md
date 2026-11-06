@@ -997,3 +997,62 @@ Formato de entrada:
   - batería: `planeta` con 46 métricas (11 nuevas del balance; márgenes movidos con nota);
   - `verificar.sh` en verde; no regresión de los agentes idéntica byte a byte; la génesis tarda ~140 s (antes ~90).
 - **Pendiente:** la nota del responsable sobre los bordes, el inicio de subducción, el fondo oceánico y los rifts; después, calibrar `τ_del` y revisar `f_acr`. La definición de barlovento y el objetivo de la lluvia los decide el responsable.
+
+## [2026-11-06] Nota de bordes de placa, adenda v3 (flujo lateral sin tope), qué apilaba corteza y barlovento observado
+
+- **Qué:** el responsable entregó `docs/design/terreno/nota_bordes_placa.md` y la adenda v3 (`H_max` deja de ser regla; lo sustituye el flujo lateral §6.6b).
+  - Pidió:
+    - implementar la nota antes de calibrar nada de la adenda;
+    - investigar qué apilaba corteza hasta 150 km;
+    - volver a medir la exportación de sedimento;
+    - medir el barlovento con su regla: laderas del pie a la cresta, sin mesetas, frente a la llanura del pie.
+  - Dio por buenas mis decisiones anteriores (arco por placa, plataforma a −130 m, prueba de los arcos, `τ_ero` = 63). Pidió no recalibrar `c_P`.
+
+  Rama `terreno-bordes-placa`; detalle en `incremento-4-diseno.md` §12–§15 y explicación llana en el README de la fase.
+  - **Nota de bordes**, en `tectonica/deriva/suavizado.rs` y `deriva.rs`:
+    - pertenencia suavizada `φ` a `L_borde` = 150 km (radio efectivo de al menos 1,5 celdas en mallas gruesas) y normal del borde suavizado;
+    - transformante a 20° (`theta_tr_grados` sustituye a `f_transformante`);
+    - solo se consume en tramos convergentes;
+    - los dientes se recolocan en el hueco más cercano que toca su placa (antes de repartir los huecos);
+    - creación residual; suavizado de la pertenencia oceánica.
+  - **Extensiones (decisiones mías):**
+    - islas de menos de `L_borde²` absorbidas por la placa que las rodea, también continentales;
+    - una muestra suelta (`φ` < 0,15) no gana un solape;
+    - los dientes sin hueco se reparten por la vecindad;
+    - lo que se calcula para una celda va a la muestra que el mundo ve en ella (más las ocultas cuyo centro cae allí);
+    - el fondo de una cuenca cerrada no se erosiona.
+  - **Adenda v3:**
+    - fuera `h_max_km`; alarma de 80 km en las pruebas y en la batería;
+    - flujo lateral por la malla del mundo, también a través de las suturas de los choques continentales (desviación del texto "de la misma placa", avisada);
+    - `D_flujo` = 3 000 km²/Myr, calibrado con India–Asia (máximo 72–77 km).
+  - **Qué apilaba corteza** (sin tope y sin flujo, 527 km en India–Asia y 1 525 km en el planeta):
+    1. la franja de Voronoi de cada frente de choque, a veces de una sola celda;
+    2. islas de la placa de arriba que ganaban solapes y se comían la de abajo;
+    3. el flujo por la rejilla girada de la placa, donde las muestras gruesas estaban sueltas;
+    4. astillas de la placa de arriba rodeadas de otras placas;
+    5. dientes e islas repartidos en 1–3 celdas;
+    6. una montaña de sedimento por mezclar la muestra que se ve con la del centro.
+
+    Ahora el máximo de toda la deriva es 113 km, y pasan de 80 solo 3 pasos de 500.
+  - **Bird** (`bordes_bird.py`, regla de la nota): la Tierra de 15 placas da dorsales 86 700, fosas 37 300, choques 23 600, transformantes 34 900 y perímetro 182 600 km.
+  - **Barlovento** (subagente; `terreno.laderas_pie_cresta()`): la Tierra observada ×0,90 (WorldClim) y ×1,23 (CHELSA); el planeta ×1,05. El objetivo ~1,2 sustituye al ×2–3.
+- **Resultados** (planeta; entre paréntesis, la Tierra):
+  - consumo en bordes que no convergen 26 → 3,0 % (< 2 %); solape continental en ellos 31 → 4,5 %;
+  - `A_sub` 6,3 → 3,64 km²/año (2,7–3,4);
+  - perímetro 312 → 206 mil km (183 ± 25 %); dorsales 74 600 (86 700); **fosas 74 000 (37 300)**; choques 6 800; transformantes 51 200;
+  - edad media del fondo 132 Myr (64), mediana 59 (55), el 24 % pasa de 200 Myr;
+  - `f_cont` 0,363; `V_cont` −6,6 %;
+  - arcos 3,9 AU; erosión por subducción 1,4; sedimento subducido 0,38; choques 3,0; delaminación 0,05; al mar 3,1;
+  - tierra 36,6 % y 989 m de media (671).
+  - **Barrido de `L_borde`** 100/150/300 km: fosas 80 200 / 74 000 / 58 200 km. Ni con 300 bajan de 1,5 veces la Tierra: según la nota §11.2, la causa son las fuerzas de las placas.
+  - **Exportación al mar: no depende de `τ_ero`.** 3,07 AU tanto con 63 Myr (relajación 136 Myr) como con 110 (257 Myr). En equilibrio, la erosión se lleva lo que añaden arcos y choques. Lo que falta es la delaminación: 0,05 AU frente a ≈1,1, porque el flujo reparte la corteza antes de los 50 km de `h_del`. Una ley no lineal cambiaría dónde se erosiona, no el total. Pregunta para el responsable: ¿delaminación de las raíces de los arcos?
+  - **§11.3:** el 44,5 % del área subducida cae en tramos sin franja propia; el arco se sigue repartiendo por placa.
+- **Verificación:**
+  - pruebas nuevas:
+    - deslizamiento puro (consumo y creación exactamente 0 en 100 Myr; celdas de borde 1 536 → 768);
+    - separación oblicua (solo nace placa);
+    - un gran choque no apila por encima de 80 km;
+  - India–Asia como en `main` (velocidad tras el choque 5,8 frente a 5,5 cm/año);
+  - conservación a 10⁻¹⁴; batería del planeta con 53 métricas (márgenes movidos con nota); no regresión de los agentes idéntica byte a byte; `verificar.sh`.
+  - La génesis tarda ~160 s (presupuesto del escenario: 200).
+- **Pendiente:** las fuerzas de las placas (fosas ×2); la exportación al mar (delaminación de los arcos o erosión no lineal: decide el responsable); la nota del inicio de subducción, el fondo oceánico y los rifts; los 3 pasos sobre 80 km; después, `τ_del` y `f_acr`; la nota de la lluvia por latitudes.

@@ -451,6 +451,10 @@ fn balance_medio(metricas: &[MetricaMyr]) -> BalanceMedio {
         transformantes_km: media(|m| m.transformantes_km),
         espesor_max_medio_km: media(|m| m.espesor_max_km),
         espesor_max_final_km: ultima.espesor_max_km,
+        espesor_max_todo_km: metricas
+            .iter()
+            .map(|m| m.espesor_max_km)
+            .fold(0.0, f64::max),
         area_mas_70km_frac: media(|m| m.area_mas_70km_frac),
         area_mas_70km_final_frac: ultima.area_mas_70km_frac,
         v_cont_cambio_frac: if v_inicio > 0.0 {
@@ -459,5 +463,11 @@ fn balance_medio(metricas: &[MetricaMyr]) -> BalanceMedio {
             0.0
         },
         sedimento_medio_oceano_km: ultima.sedimento_medio_oceano_km,
+        perimetro_km: media(|m| m.perimetro_km),
+        dientes_recolocados_km2_anio: media(|m| m.dientes_recolocados_km2_anio),
+        dientes_sin_hueco_km2_anio: media(|m| m.dientes_sin_hueco_km2_anio),
+        creacion_residual_km2_anio: media(|m| m.creacion_residual_km2_anio),
+        area_reasignada_km2_anio: media(|m| m.area_reasignada_km2_anio),
+        dientes_continentales_au: media(|m| m.dientes_continentales_au),
     }
 }

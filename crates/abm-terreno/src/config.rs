@@ -154,7 +154,6 @@ pub struct TectonicaCfg {
     pub h_oc_km: f64,
     pub h0_km: f64,
     pub sigma_h0_km: f64,
-    pub h_max_km: f64,
     /// Espesor continental que queda al nivel del mar (relación empírica terrestre, §6.7).
     pub h_nivel_km: f64,
     pub h_cont_min_km: f64,
@@ -191,6 +190,10 @@ pub struct TectonicaCfg {
     /// tiempo característico `tau_del` (calibrado).
     pub h_del_km: f64,
     pub tau_del_myr: f64,
+    /// Flujo lateral de la corteza engrosada (adenda v3 §6.6b): por encima de `h_flujo` la corteza
+    /// inferior se desparrama hacia los lados con difusividad `d_flujo` (km²/Myr, calibrado).
+    pub h_flujo_km: f64,
+    pub d_flujo_km2_myr: f64,
     pub w_min_orog_km: f64,
     pub w_margen_km: f64,
     pub f_rift: f64,
@@ -210,9 +213,13 @@ pub struct TectonicaCfg {
     /// Empujón inicial: velocidad media de cada placa sorteada en este rango (cm/año).
     pub v_inicial_min_cm_anio: f64,
     pub v_inicial_max_cm_anio: f64,
-    /// Fracción de la velocidad relativa por debajo de la cual un borde cuenta como transformante
-    /// (sen 15°: bordes a menos de 15° del desgarre puro).
-    pub f_transformante: f64,
+    // --- Bordes de placa (nota_bordes_placa.md §5) ---
+    /// Ángulo (grados) entre la velocidad relativa y el borde suavizado por debajo del cual un tramo
+    /// es transformante (medido: separa las clases de Bird 2003).
+    pub theta_tr_grados: f64,
+    /// Radio del suavizado del borde (km): pertenencia, normal y tipo de tramo; también la distancia
+    /// máxima para recolocar un diente (calibrado contra la longitud de los bordes de Bird).
+    pub l_borde_km: f64,
     // --- Eventos de placas (§5.6) ---
     pub n_p0: u32,
     pub n_cratones: u32,
@@ -256,7 +263,6 @@ impl Default for TectonicaCfg {
             h_oc_km: 7.0,
             h0_km: 35.0,
             sigma_h0_km: 3.0,
-            h_max_km: 80.0,
             h_nivel_km: 32.0,
             h_cont_min_km: 20.0,
             d_r_m: 2500.0,
@@ -279,6 +285,8 @@ impl Default for TectonicaCfg {
             eta_arco: 0.9,
             h_del_km: 50.0,
             tau_del_myr: 50.0,
+            h_flujo_km: 50.0,
+            d_flujo_km2_myr: 3000.0,
             w_min_orog_km: 150.0,
             w_margen_km: 150.0,
             f_rift: 0.7,
@@ -291,7 +299,8 @@ impl Default for TectonicaCfg {
             recalibrar_myr: 50.0,
             v_inicial_min_cm_anio: 1.0,
             v_inicial_max_cm_anio: 10.0,
-            f_transformante: 0.26,
+            theta_tr_grados: 20.0,
+            l_borde_km: 150.0,
             n_p0: 12,
             n_cratones: 8,
             n_min: 8,
@@ -733,10 +742,15 @@ impl TectonicaCfg {
             && self.tau_del_myr > 0.0
             && self.h_del_km > 0.0
             && self.s_ero_km >= 0.0
-            && self.v_ero_cm_anio >= 0.0)
+            && self.v_ero_cm_anio >= 0.0
+            && self.h_flujo_km > 0.0
+            && self.d_flujo_km2_myr >= 0.0
+            && self.l_borde_km > 0.0
+            && self.theta_tr_grados > 0.0
+            && self.theta_tr_grados < 90.0)
         {
             return Err(invalid(
-                "se requiere p_arc_oc, p_arc_cont, p_se, s_ero_km, v_ero_cm_anio >= 0 y tau_del_myr, h_del_km > 0",
+                "se requiere p_arc_oc, p_arc_cont, p_se, s_ero_km, v_ero_cm_anio, d_flujo_km2_myr >= 0, tau_del_myr, h_del_km, h_flujo_km, l_borde_km > 0 y 0 < theta_tr_grados < 90",
             ));
         }
         if !(self.rho_w < self.rho_s
@@ -748,14 +762,8 @@ impl TectonicaCfg {
                 "se requiere rho_w < rho_s < rho_c < rho_m y rho_oc < rho_m",
             ));
         }
-        if !(self.h_oc_km > 0.0
-            && self.h_cont_min_km > self.h_oc_km
-            && self.h0_km > 0.0
-            && self.h_max_km > self.h0_km)
-        {
-            return Err(invalid(
-                "se requiere 0 < h_oc < h_cont_min y 0 < h0 < h_max",
-            ));
+        if !(self.h_oc_km > 0.0 && self.h_cont_min_km > self.h_oc_km && self.h0_km > 0.0) {
+            return Err(invalid("se requiere 0 < h_oc < h_cont_min y 0 < h0"));
         }
         if self.n_p0 < 2 || self.n_min < 2 || self.n_cratones > self.n_p0 {
             return Err(invalid(

@@ -75,7 +75,8 @@ abm/
 │   │   │   └── tectonica/           # Relieve tectónico (incremento 4): deriva de placas → relieve de nacimiento
 │   │   │       ├── [x] mod.rs       # Génesis tectónica, estado final, interpolación a las celdas del terreno
 │   │   │       ├── [x] malla.rs     # Malla tectónica (nivel 2 del cubo) y cuaterniones
-│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, arcos, choques, erosión, sedimento, eventos
+│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques, delaminación, flujo lateral, erosión, sedimento, eventos
+│   │   │       ├── [x] deriva/suavizado.rs # Borde suavizado (nota de bordes): pertenencia φ, normal, tipo de tramo, suavizado de la pertenencia, islas
 │   │   │       ├── [x] isostasia.rs # Altura isostática (con el agua), Parsons y Sclater, fosas, nivel del mar
 │   │   │       └── [x] historia.rs  # Eventos, métricas de cada Myr y cuentas de la corteza continental
 │   │   └── tests/
@@ -156,7 +157,8 @@ abm/
 │       │   ├── [x] propuesta_relieve_realista.md          # Diagnóstico del relieve (DECIDIDA: opción C con deriva)
 │       │   ├── [x] diseno_relieve_tectonico.md            # Diseño del responsable: relieve tectónico con deriva de placas (v1.0)
 │       │   ├── [x] incremento-4-diseno.md                 # Diseño técnico, calibraciones, resultados frente a la Tierra y hallazgos (IMPLEMENTADO, en medida)
-│       │   └── [x] adenda_balance_corteza.md              # Adenda del responsable (v2): balance de la corteza continental (IMPLEMENTADA; incremento-4-diseno.md §9)
+│       │   ├── [x] adenda_balance_corteza.md              # Adenda del responsable (v3): balance de la corteza continental y flujo lateral (IMPLEMENTADA; incremento-4-diseno.md §9 y §13)
+│       │   └── [x] nota_bordes_placa.md                   # Nota del responsable: borde suavizado, dientes, 20°, islas (IMPLEMENTADA; incremento-4-diseno.md §12)
 │       ├── paquetes/              # Fase: código dividido en el workspace de paquetes
 │       │   └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)
@@ -242,21 +244,21 @@ metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
   - deriva de placas de 500 Myr en la malla de nivel 2 (~52 km), ~35 s, en la caché de la génesis (`ABMGEN04`);
   - placas a 4,36 cm/año (la Tierra 4,39), con las correlaciones de Forsyth y Uyeda; India–Asia frena a 1/3 (`c_col` calibrado);
   - océano de 3 945 m (la Tierra 3 667), pero tierra demasiado alta (1 459 m, la Tierra 671): el mar queda 1 079 m bajo el dato;
-  - **balance de la corteza continental** (adenda v2, `incremento-4-diseno.md` §9): arcos y erosión por subducción por km² de placa que se hunde, régimen del margen, prisma, choques con `η_col`/`η_arco`, delaminación, sedimento al mar (y a cuencas cerradas) y balance exacto por paso; tope `H_max` = 80 km para toda corteza; `τ_ero` = 63 Myr calibrado con la relajación;
-    - en la Tierra se hunden 2,7–3,4 km²/año y en el modelo 6,3: los bordes miden 1,7 veces los de una Tierra de 15 placas medida igual (`tierra_bordes.toml`) y un tercio del consumo ocurre en bordes divergentes y transformantes;
+  - **balance de la corteza continental** (adenda v3, `incremento-4-diseno.md` §9 y §13): arcos y erosión por subducción por km² de placa que se hunde, régimen del margen, prisma, choques con `η_col`/`η_arco`, delaminación, flujo lateral sin tope (`D_flujo` = 3 000 km²/Myr), sedimento al mar (y a cuencas cerradas) y balance exacto por paso; `τ_ero` = 63 Myr calibrado con la relajación;
+  - **bordes de placa** (nota de bordes, §12): borde suavizado a 150 km, transformantes a 20°, dientes recolocados, islas absorbidas; se hunden 3,6 km²/año (la Tierra 2,7–3,4); el consumo en bordes que no convergen baja del 26 al 3 %;
   - referencia de la Tierra en `config/referencias/tierra_relieve.toml`;
   - interruptor `worldgen.relieve`: con `"ruido"`, salida idéntica byte a byte a la de `main`.
 
 **Pendiente (fases siguientes):**
 - **Pendientes obligatorios de realismo** (CLAUDE §2.8; responsable, 2026-11-05), en orden:
   - **relieve tectónico, lo que falta para que sea el de la Tierra** (hallazgos de `incremento-4-diseno.md` §6–§7):
-    1. ~~adenda del responsable: sumideros reales de corteza continental~~ hecho (adenda v2). **Próxima nota del responsable:** forma de los bordes (el modelo hunde el doble de placa y sus choques destruyen 7–12 veces más corteza que la Tierra), con los datos de `incremento-4-diseno.md` §9.3 y §10; rifts que estiren conservando (hoy `F_rift`, 0,11 AU, es un sumidero provisional). Después, calibrar `τ_del` y revisar `f_acr`;
+    1. ~~adenda de balance~~ y ~~nota de bordes~~ hechas. **Siguen:** las fuerzas de las placas (las fosas miden 2 veces las de la Tierra con cualquier `L_borde` de 100–300 km; nota de bordes §11.2); la exportación al mar (3,1 AU, ≈1,8): no depende de `τ_ero`; falta la delaminación (0,05 AU, ≈1,1): ¿raíces de los arcos o erosión no lineal? (decide el responsable); rifts que estiren conservando (`F_rift` provisional); los 3 pasos de 500 que pasan la alarma de 80 km; después, calibrar `τ_del` y revisar `f_acr`;
     2. inicio de subducción en márgenes pasivos viejos (hoy sobrevive un 15 % de fondo de más de 200 Myr);
     3. fondo oceánico real (sedimento abisal, mesetas y montes submarinos, puntos calientes) y márgenes continentales sumergidos: con 1–3, el nivel del mar debería volver al dato sin forzar `H_nivel`;
     4. acortamiento andino, ciclo de Wilson (rifts por suturas viejas), flexión de la litosfera (cuencas de antepaís), microplacas;
     5. ~~reducir el remuestreo de la deriva~~ hecho: conservación exacta (2·10⁻¹⁵); la polaridad de la subducción y los papeles de un choque se deciden **por par de placas**, provisional: en la Tierra quién se hunde puede cambiar a lo largo de un mismo borde;
-    5b. el umbral de las fallas transformantes del modelo es 15° (`f_transformante`, decisión técnica I4); Bird separa sus clases a ~20°;
-    6. lluvia: medida la observada a 26 km (`tierra_lluvia.toml`): con la definición actual de barlovento, la Tierra da ×0,7–1,2, no ×2–3, porque la definición coge mesetas. Revisar la definición (decisión del responsable); corregir la sombra pluviométrica (×0,79, la Tierra ×0,58) y el reparto por latitud; calibrar la lluvia de base con la media observada (CHELSA ~920 mm sin casquetes) y retirar `c_P`;
+    5b. ~~umbral de transformantes a 20°~~ hecho (`theta_tr_grados`, nota de bordes);
+    6. lluvia: barlovento medido con la regla del responsable (laderas del pie a la cresta, sin mesetas): la Tierra observada ×0,90 (WorldClim) – ×1,23 (CHELSA), el planeta ×1,05; queda el reparto por latitudes (nota propia, tras cerrar la tectónica; `c_P` sin recalibrar);
   - **casquetes polares** (relieve de hielo; con ellos, el agua total pasa a ser océano + hielo);
   - **competencia con jerarquía** entre agentes (los fuertes comen primero; en las hambrunas mueren antes
     crías y viejos);

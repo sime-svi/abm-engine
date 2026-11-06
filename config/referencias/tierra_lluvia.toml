@@ -1,6 +1,6 @@
 # Lluvia observada de la Tierra a la escala del planeta (~26 km): el objetivo de la lluvia de barlovento
 # y la revisión de c_P (decisión del responsable, 2026-11-05).
-# Generado por herramientas/analisis/lluvia_observada.py el 2026-11-05. No editar a mano: se regenera.
+# Generado por herramientas/analisis/lluvia_observada.py el 2026-11-06. No editar a mano: se regenera.
 #
 # Conjuntos de datos:
 # - WorldClim 2.1 (Fick y Hijmans, 2017, Int. J. Climatol. 37, 4302–4315, doi:10.1002/joc.5086), versión
@@ -31,6 +31,15 @@
 # Antártida = tierra al sur de 60° S; Groenlandia = tierra dentro de un polígono por los estrechos que la
 #   separan de Baffin, Ellesmere e Islandia. Su barlovento se elige por la roca bajo el hielo, que no es
 #   el relieve que ve la lluvia: por eso se da también sin ellas.
+# barlovento_ladera: la regla del responsable (2026-11-05), de la que sale el objetivo de la lluvia de
+#   barlovento (terreno.laderas_pie_cresta, la misma función para el planeta). Laderas que suben de cara
+#   al viento del modelo (m_oro > 1, h ≥ 300 m) desde el pie hasta la cresta: contra el viento,
+#   hasta el pie, todo es más bajo que la celda (fuera mesetas y sotaventos), y la cresta a la que sube
+#   (lo más alto a favor del viento antes de bajar más de 100 m) pasa de 2000 m. Se camina por el
+#   paralelo cada 10 km, contra el viento hasta 500 km o hasta el mar (que cuenta como 0 m).
+#   El pie es el primer punto que ya está a menos de 100 m de lo más bajo de ese camino; si ese
+#   punto es el mar, el pie está en el mar y, sin lluvia observada sobre el mar, la ladera se omite.
+#   Referencia: la lluvia del llano del pie (el pie y hasta 2 muestras más contra el viento, de tierra).
 
 [franjas_10]
 # Límite sur de cada franja de 10° de latitud.
@@ -130,6 +139,31 @@ resto_area_km2 = 4.04342e+07
 # Cociente de las dos lluvias.
 sotavento_entre_resto = 0.580519
 
+[worldclim.barlovento_ladera]
+# Área de las laderas de barlovento de pie a cresta.
+area_km2 = 4.01543e+06
+# Lluvia media de las laderas con referencia.
+lluvia_mm = 667.381
+# Lluvia media del llano de su pie.
+referencia_mm = 739.844
+# El objetivo: lluvia media de las laderas entre la del llano de su pie.
+cociente_de_medias = 0.902057
+mediana = 1.08696
+media = 5.28453
+# Fracción del área con el pie en el mar.
+pie_en_mar_frac = 0.0618037
+# Fracción con dato sin referencia de tierra (el pie en el mar): se omite.
+omitida_frac = 0.0623109
+# Altura media del pie (m) de las laderas con referencia.
+pie_h_medio_m = 998.396
+
+[worldclim.barlovento_ladera.por_altura]
+limites_m = [300, 1000, 2000]
+# Fracción de las laderas en cada franja de altura.
+area_frac = [0.169026, 0.299184, 0.531789]
+# Cociente de medias en cada franja de altura.
+cociente_de_medias = [1.12804, 1.03889, 0.752871]
+
 [chelsa.tierra]
 lluvia_media_mm = 874.078
 lluvia_media_sin_antartida_ni_groenlandia_mm = 923.904
@@ -200,3 +234,19 @@ sotavento_area_km2 = 6.3475e+06
 resto_lluvia_mm = 740.602
 resto_area_km2 = 4.04342e+07
 sotavento_entre_resto = 0.574831
+
+[chelsa.barlovento_ladera]
+area_km2 = 4.01543e+06
+lluvia_mm = 1020.98
+referencia_mm = 833.26
+cociente_de_medias = 1.22528
+mediana = 1.32161
+media = 1.93666
+pie_en_mar_frac = 0.0618037
+omitida_frac = 0.0618037
+pie_h_medio_m = 997.977
+
+[chelsa.barlovento_ladera.por_altura]
+limites_m = [300, 1000, 2000]
+area_frac = [0.169026, 0.299184, 0.531789]
+cociente_de_medias = [1.23075, 1.33901, 1.17206]

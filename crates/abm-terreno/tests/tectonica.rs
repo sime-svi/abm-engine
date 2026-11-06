@@ -8,6 +8,11 @@ use abm_terreno::geometry::lat_lon;
 use abm_terreno::tectonica::deriva::Deriva;
 use abm_terreno::tectonica::malla::{Malla, NADA};
 
+/// Adenda de balance v3 §6.6b: `H_max = 80 km` ya no es una regla, solo una alarma. Ninguna celda
+/// debe pasarlo; si alguna se acerca a los 150 km vistos antes del tope, algún proceso apila corteza.
+/// Se comprueba en mallas de 52 km o más finas (aquí, el choque India–Asia; en el planeta, la batería).
+const ALARMA_ESPESOR_KM: f64 = 80.0;
+
 /// Mapa en texto (equirectangular) de las placas: mayúscula = continental, minúscula = oceánica.
 fn mapa(d: &Deriva) -> String {
     let (w, h) = (96usize, 36usize);
@@ -751,11 +756,12 @@ fn mover_las_placas_conserva_exactamente_la_corteza() {
     );
     assert_eq!(c.sedimento_sin_destino_km3, 0.0);
     assert!(c.arcos_km3 > 0.0 && c.erosion_subduccion_km3 > 0.0 && c.delaminacion_km3 >= 0.0);
+    // La alarma de espesor (ALARMA_ESPESOR_KM) se comprueba en el planeta, con la malla de 52 km
+    // (batería de escenarios): en esta malla de ~200 km la franja de un choque es una sola celda y
+    // el flujo lateral no llega a repartir.
     for m in &d.metricas {
         assert!(
-            m.f_arc_au.is_finite()
-                && m.error_balance_rel < 1e-9
-                && m.espesor_max_km <= cfg.h_max_km + 1e-9,
+            m.f_arc_au.is_finite() && m.error_balance_rel < 1e-9,
             "métrica del paso {m:?}"
         );
     }
@@ -908,4 +914,209 @@ fn calibracion_relajacion() {
             "tau_ero = {tau:>5}: espesor máximo al detener {h0:.1} km, baja de 38 km en {t:.0} Myr"
         );
     }
+}
+
+// --- Bordes de placa (nota_bordes_placa.md §10) ------------------------------------------------
+
+/// Celdas del mundo con alguna vecina de otra placa (la longitud del borde en celdas).
+fn celdas_de_borde(d: &Deriva) -> usize {
+    (0..d.malla.num)
+        .filter(|&k| {
+            d.malla.vec[k]
+                .iter()
+                .any(|&v| v != NADA && d.dueno[v as usize] != d.dueno[k])
+        })
+        .count()
+}
+
+#[test]
+fn dos_placas_que_solo_se_deslizan_no_crean_ni_consumen() {
+    // Nota de bordes §10, prueba 1: dos placas oceánicas que se deslizan a lo largo del ecuador
+    // (la del norte gira alrededor del eje de los polos), con el borde en dientes de una celda.
+    // Ni se consume ni nace placa, y los dientes no crecen.
+    let cfg = TectonicaCfg::default();
+    let malla = Malla::new(48, 1, 6371.0);
+    let dirs = malla.dir.clone();
+    let mut d = Deriva::desde(&cfg, 11, malla, 0.0, &[1, 2], |k| {
+        let (la, lo) = lat_lon(dirs[k]);
+        let (la, lo) = (la.to_degrees(), lo.to_degrees());
+        // Dientes de ~1° (una celda) cada 3° de longitud.
+        let f = (lo / 3.0).rem_euclid(1.0);
+        let borde = if f < 0.5 { 1.0 } else { -1.0 };
+        if la > borde {
+            (0, corteza(false, 7.0, 60.0))
+        } else {
+            (1, corteza(false, 7.0, 100.0))
+        }
+    });
+    d.placas[0].omega = [0.0, 0.0, 50.0 / 6371.0];
+    let borde0 = celdas_de_borde(&d);
+    let (mut consumo, mut creacion) = (0.0, 0.0);
+    for _ in 0..100 {
+        d.paso_cinematico();
+        consumo += d.consumo_paso.iter().map(|x| x.1).sum::<f64>();
+        creacion += d
+            .creacion_paso
+            .iter()
+            .map(|&k| d.malla.area[k as usize])
+            .sum::<f64>();
+    }
+    // Lo que crearía una dorsal del mismo largo a la misma velocidad: 5 cm/año · 40 000 km · 100 Myr.
+    let dorsal = 50.0 * 40_030.0 * 100.0;
+    println!(
+        "deslizamiento puro: consumo {:.2e} km² y creación {:.2e} km² ({:.3} % y {:.3} % de una dorsal); celdas de borde {borde0} → {}",
+        consumo,
+        creacion,
+        100.0 * consumo / dorsal,
+        100.0 * creacion / dorsal,
+        celdas_de_borde(&d)
+    );
+    assert!(consumo < 1e-3 * dorsal, "consumo {consumo:.3e} km²");
+    assert!(creacion < 1e-2 * dorsal, "creación {creacion:.3e} km²");
+    assert!(celdas_de_borde(&d) <= borde0, "aparecen dientes nuevos");
+}
+
+#[test]
+fn una_separacion_oblicua_solo_crea_placa() {
+    // Nota de bordes §10, prueba 2: la placa del este se separa de la del oeste en diagonal (45° en
+    // el ecuador) a lo largo del meridiano 0. Allí solo nace placa; no se consume nada.
+    let cfg = TectonicaCfg::default();
+    let malla = Malla::new(48, 1, 6371.0);
+    let dirs = malla.dir.clone();
+    let mut d = Deriva::desde(&cfg, 13, malla, 0.0, &[1, 2], |k| {
+        let (_, lo) = lat_lon(dirs[k]);
+        if lo.to_degrees() >= 0.0 {
+            (1, corteza(false, 7.0, 60.0))
+        } else {
+            (0, corteza(false, 7.0, 60.0))
+        }
+    });
+    let w = 50.0 / 6371.0;
+    d.placas[1].omega = [0.0, -w, w];
+    let cerca = |d: &Deriva, k: u32| {
+        let (la, lo) = lat_lon(d.malla.dir[k as usize]);
+        la.to_degrees().abs() < 55.0 && lo.to_degrees().abs() < 15.0
+    };
+    let (mut consumo, mut creacion) = (0.0, 0.0);
+    for _ in 0..30 {
+        d.paso_cinematico();
+        consumo += d
+            .consumo_paso
+            .iter()
+            .filter(|x| cerca(&d, x.0))
+            .map(|x| x.1)
+            .sum::<f64>();
+        creacion += d
+            .creacion_paso
+            .iter()
+            .filter(|&&k| cerca(&d, k))
+            .map(|&k| d.malla.area[k as usize])
+            .sum::<f64>();
+    }
+    println!("separación oblicua: consumo {consumo:.3e} km², creación {creacion:.3e} km²");
+    assert!(creacion > 0.0);
+    assert!(
+        consumo <= 1e-3 * creacion,
+        "consumo {consumo:.3e} km² en una dorsal"
+    );
+}
+
+#[test]
+#[ignore = "exploratoria: calibración de D_flujo (adenda v3 §6.6b) con el choque India–Asia"]
+fn calibracion_flujo_lateral() {
+    let lista: Vec<f64> = std::env::var("D_FLUJO")
+        .ok()
+        .map(|x| x.split(',').filter_map(|v| v.parse().ok()).collect())
+        .unwrap_or(vec![0.0, 2000.0]);
+    let nivel: u32 = std::env::var("NIVEL")
+        .ok()
+        .and_then(|x| x.parse().ok())
+        .unwrap_or(2);
+    for &dfl in &lista {
+        let cfg = TectonicaCfg {
+            d_flujo_km2_myr: dfl,
+            ..cfg_india_asia()
+        };
+        let mut d = choque_india_asia(&cfg, nivel, 48);
+        let mut serie = Vec::new();
+        for paso in 1..=60u64 {
+            d.dar_paso();
+            if paso % 10 == 0 {
+                // Meseta: corteza de más de 55 km entre 70° y 100°E; anchura norte–sur y área.
+                let (mut la_min, mut la_max, mut area) = (90.0f64, -90.0f64, 0.0);
+                for k in 0..d.malla.num {
+                    let Some(c) = d.corteza(k) else { continue };
+                    if !c.cont || c.h <= 55.0 {
+                        continue;
+                    }
+                    let (la, lo) = lat_lon(d.malla.dir[k]);
+                    let (la, lo) = (la.to_degrees(), lo.to_degrees());
+                    if (70.0..=100.0).contains(&lo) {
+                        la_min = la_min.min(la);
+                        la_max = la_max.max(la);
+                        area += d.malla.area[k];
+                    }
+                }
+                let ancho = if la_max > la_min {
+                    (la_max - la_min) * 111.2
+                } else {
+                    0.0
+                };
+                serie.push(format!(
+                    "{paso} Myr: máx {:.0} km, meseta {:.0} km × {:.2} Mkm²",
+                    d.espesor_max_continental(),
+                    ancho,
+                    area / 1e6
+                ));
+            }
+        }
+        println!("D_flujo = {dfl:>6}: {}", serie.join(" | "));
+    }
+}
+
+#[test]
+fn un_gran_choque_no_apila_corteza_por_encima_de_80_km() {
+    // Adenda de balance v3 §6.6b: sin tope, el flujo lateral reparte la corteza del choque
+    // India–Asia (malla de 104 km) y ninguna celda pasa de la alarma de 80 km... salvo por la
+    // resolución: en 104 km la franja del choque son dos celdas; se admite un 10 %.
+    let cfg = cfg_india_asia();
+    let mut d = choque_india_asia(&cfg, 1, 48);
+    let mut maximo = 0.0f64;
+    for _ in 0..50 {
+        d.dar_paso();
+        maximo = maximo.max(d.espesor_max_continental());
+    }
+    assert!(maximo > 60.0, "el choque debe engrosar: {maximo:.1} km");
+    assert!(
+        maximo <= 1.1 * ALARMA_ESPESOR_KM,
+        "corteza de {maximo:.1} km"
+    );
+}
+
+#[test]
+#[ignore = "exploratoria: evolución de la relajación"]
+fn exploracion_relajacion() {
+    let cfg = cfg_india_asia();
+    let mut d = choque_india_asia(&cfg, 1, 48);
+    for _ in 0..50 {
+        d.dar_paso();
+    }
+    let mut serie = Vec::new();
+    for i in 1..=600u64 {
+        d.paso_sin_movimiento();
+        if i % 50 == 0 {
+            // La celda más gruesa: espesor, sedimento y si es continental.
+            let k = (0..d.malla.num)
+                .filter(|&k| d.corteza(k).is_some_and(|c| c.cont))
+                .max_by(|&a, &b| d.corteza(a).unwrap().h.total_cmp(&d.corteza(b).unwrap().h))
+                .unwrap();
+            let c = d.corteza(k).unwrap();
+            let z = d.alturas()[k];
+            serie.push(format!(
+                "{i}: {:.1} (hc {:.1} sed {:.2} z {:.0} zeta {:.0} edad_orog {:.0})",
+                c.h, c.hc, c.sed, z, d.zeta_m, c.edad_orog
+            ));
+        }
+    }
+    println!("{}", serie.join(" | "));
 }

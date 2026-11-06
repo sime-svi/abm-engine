@@ -9,8 +9,12 @@
 //! una placa durante 500 pasos no arrastra error de interpolación.
 
 use crate::geometry::{
-    MOORE8, V3, cell_area, center_dir, cross, dot, face_n, locate, neighbor_addr,
+    MOORE8, V3, angle_between, cell_area, center_dir, cross, dir_at, dot, face_n, locate,
+    neighbor_addr,
 };
+
+/// Índices de [`MOORE8`] de las cuatro vecinas de lado, en el orden de [`Malla::lado_comun`].
+pub const LADOS: [usize; 4] = [1, 3, 4, 6];
 
 /// Celda inexistente / sin muestra.
 pub const NADA: u32 = u32::MAX;
@@ -36,6 +40,10 @@ pub struct Malla {
     pub dvec: Vec<[f64; 8]>,
     /// Lado medio de celda (km): raíz del área media.
     pub lado_km: f64,
+    /// Longitud (km) del lado que cada celda comparte con sus vecinas de lado ([`LADOS`]).
+    pub lado_comun: Vec<[f64; 4]>,
+    /// Distancia mínima (km) entre los centros de dos vecinas de lado.
+    pub dist_lado_min_km: f64,
 }
 
 impl Malla {
@@ -46,11 +54,24 @@ impl Malla {
         let mut dir = Vec::with_capacity(num);
         let mut area = Vec::with_capacity(num);
         let mut vec = Vec::with_capacity(num);
+        let mut lado_comun = Vec::with_capacity(num);
         for c in 0..6u8 {
             for j in 0..n {
                 for i in 0..n {
                     dir.push(center_dir(c, i, j, n));
                     area.push(cell_area(c, i, j, n, r_km));
+                    // Esquinas de la celda y lados compartidos con (0,−1), (−1,0), (1,0) y (0,1).
+                    let (fi, fj) = (i as f64, j as f64);
+                    let v00 = dir_at(c, fi, fj, n);
+                    let v10 = dir_at(c, fi + 1.0, fj, n);
+                    let v01 = dir_at(c, fi, fj + 1.0, n);
+                    let v11 = dir_at(c, fi + 1.0, fj + 1.0, n);
+                    lado_comun.push([
+                        angle_between(v00, v10) * r_km,
+                        angle_between(v00, v01) * r_km,
+                        angle_between(v10, v11) * r_km,
+                        angle_between(v01, v11) * r_km,
+                    ]);
                     let mut v = [NADA; 8];
                     for (k, &(di, dj)) in MOORE8.iter().enumerate() {
                         if let Some((c2, i2, j2)) = neighbor_addr(c, i, j, n, di, dj) {
@@ -62,17 +83,21 @@ impl Malla {
             }
         }
         let lado_km = (4.0 * std::f64::consts::PI * r_km * r_km / num as f64).sqrt();
-        let dvec = (0..num)
+        let dvec: Vec<[f64; 8]> = (0..num)
             .map(|a| {
                 let mut d = [f64::INFINITY; 8];
                 for (j, &b) in vec[a].iter().enumerate() {
                     if b != NADA {
-                        d[j] = crate::geometry::angle_between(dir[a], dir[b as usize]) * r_km;
+                        d[j] = angle_between(dir[a], dir[b as usize]) * r_km;
                     }
                 }
                 d
             })
             .collect();
+        let dist_lado_min_km = dvec
+            .iter()
+            .flat_map(|d| LADOS.iter().map(move |&j| d[j]))
+            .fold(f64::INFINITY, f64::min);
         Self {
             n,
             nivel,
@@ -83,6 +108,8 @@ impl Malla {
             vec,
             dvec,
             lado_km,
+            lado_comun,
+            dist_lado_min_km,
         }
     }
 
