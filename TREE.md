@@ -17,6 +17,7 @@ abm/
 ├── [x] DATABASE_SCHEMA.md         # Arquitectura de la BD
 ├── [x] TREE.md                    # Este archivo
 ├── [x] README.md                  # Puesta en marcha para humanos
+├── [x] LICENSE                    # Licencia propietaria: todos los derechos reservados (los datos de terceros conservan las suyas)
 ├── [x] Cargo.toml                 # Workspace: miembros + versiones de dependencias ([workspace.dependencies])
 ├── [x] Cargo.lock                 # Versiones exactas (reproducibilidad)
 ├── [x] rust-toolchain.toml        # Fija la versión de Rust (reproducibilidad)

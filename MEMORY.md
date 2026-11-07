@@ -1348,3 +1348,14 @@ Formato de entrada:
   3. la representación que fabrica escalones y fondo viejo;
   4. las mesetas y los puntos calientes;
   5. lo que sigue de §45.
+
+## [2026-11-07] Licencia propietaria y repositorio en GitHub
+
+- **Qué pidió el responsable:** una licencia que deje claro que el proyecto es solo suyo, y subir el repositorio a `https://github.com/sime-svi/abm-engine.git` (remoto `origin`).
+- **Hecho.**
+  - `LICENSE` con «todos los derechos reservados», en español y con traducción al inglés: no se concede ningún permiso de uso, copia ni distribución sin autorización escrita.
+  - Los datos de terceros de los que derivan las tablas de referencia (ETOPO, Paxman et al., Seton et al., GlobSed, Bird, CHELSA, WorldClim) conservan sus licencias.
+  - Commit en `main` (2a15c2b), sobre 5c8ef1c, y fusionado en la rama `terreno-cierre-tectonica` sin reescribir su historia.
+  - Antes de subir se comprobó que el historial no tiene secretos: solo `infra/.env.example`, con marcadores; el `.env` real está ignorado y nunca se commiteó.
+  - Se suben `main` y la rama de trabajo; las ramas antiguas ya están dentro de ellas.
+- **A tener en cuenta:** si el repositorio de GitHub es público, sus condiciones de servicio dejan a otros verlo y bifurcarlo dentro de GitHub, diga lo que diga la licencia. Para que nadie lo vea, hay que hacerlo privado.
