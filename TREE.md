@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-05 — relieve tectónico (incremento 4 del terreno, rama `terreno-tectonica`): deriva de placas, referencia de la Tierra, diagnóstico v6
+Última actualización: 2026-11-08 — relieve tectónico (incremento 4 del terreno, rama `terreno-cierre-tectonica`): última ronda (adenda v9 y nota de rifts); la capa tectónica queda congelada
 
 ---
 
@@ -77,16 +77,16 @@ abm/
 │   │   │   └── tectonica/           # Relieve tectónico (incremento 4): deriva de placas → relieve de nacimiento
 │   │   │       ├── [x] mod.rs       # Génesis tectónica, estado final, interpolación a las celdas del terreno
 │   │   │       ├── [x] malla.rs     # Malla tectónica (nivel 2 del cubo) y cuaterniones
-│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques con η según el grosor (adenda v7), delaminación, flujo lateral cúbico (adenda v6), erosión, sedimento (solo al océano mundial), eventos, márgenes pasivos; procedencia de cada muestra (diagnóstico: cómo nació, lote, vías de su corteza continental)
+│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques con η según el grosor (adenda v7) y el origen de arco por fracción (adenda v9), delaminación, flujo lateral cúbico (adenda v6; la red se amplía en vez de rehacerse), erosión, sedimento (solo al océano mundial), eventos, márgenes pasivos y su perfil; procedencia de cada muestra (diagnóstico: cómo nació, lote, vías de su corteza continental)
 │   │   │       ├── [x] deriva/suavizado.rs # Borde suavizado (nota de bordes): pertenencia φ, normal, tipo de tramo, suavizado de la pertenencia, islas
 │   │   │       ├── [x] deriva/fosas.rs     # Ciclo de las fosas (nota de fosas v6): tramos difusos y activos, nacimientos (espontáneos solo en transformantes), invasión de transformantes y márgenes pasivos, polaridad, losa, rotura de la losa tras un choque, convergencia difusa
-│   │   │       ├── [x] deriva/rifts.rs     # Adelgazamiento de los márgenes en los rifts (adenda v8 §6.10): la abertura se rellena estirando la corteza en rampa, conservando el volumen, hasta la rotura
+│   │   │       ├── [x] deriva/rifts.rs     # Rifts (nota de rifts): suturas como líneas, bloques continentales, ruptura por área (λ_A), trazado por la sutura más larga o un círculo, división por cualquier corte; adelgazamiento de los márgenes (adenda v8 §6.10): la abertura se rellena estirando la corteza en rampa, conservando el volumen, hasta la rotura
 │   │   │       ├── [x] isostasia.rs # Altura isostática (con el agua), Parsons y Sclater, fosas, nivel del mar
 │   │   │       └── [x] historia.rs  # Eventos, métricas de cada Myr y cuentas de la corteza continental
 │   │   └── tests/
 │   │       ├── [x] terreno.rs       # incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación…) + lluvia y w vs resolución + diagnóstico
 │   │       ├── [x] erosion.rs       # incr. 3 (material, hondonadas, camino, tope, caché…) + relieve orográfico + mundo plano
-│   │       └── [x] tectonica.rs     # incr. 4: determinismo, giro rígido, sin continentes, India–Asia, rift, caché (+ exploratorias: deriva_en_varias_semillas, calibraciones, diagnostico_pilas, diagnostico_fondo_viejo)
+│   │       └── [x] tectonica.rs     # incr. 4: determinismo, giro rígido, sin continentes, India–Asia, rifts (por la sutura, bloque pequeño, determinismo), caché (+ exploratorias: deriva_en_varias_semillas, calibraciones, diagnostico_pilas, diagnostico_fondo_viejo)
 │   │
 │   ├── abm-metrics/               # OBSERVADORES + LOD de almacenamiento (→ core, ruleset, persistence)
 │   │   ├── [x] Cargo.toml
@@ -163,9 +163,10 @@ abm/
 │       │   ├── [x] propuesta_relieve_realista.md          # Diagnóstico del relieve (DECIDIDA: opción C con deriva)
 │       │   ├── [x] diseno_relieve_tectonico.md            # Diseño del responsable: relieve tectónico con deriva de placas (v1.0)
 │       │   ├── [x] incremento-4-diseno.md                 # Diseño técnico, calibraciones, resultados frente a la Tierra y hallazgos (IMPLEMENTADO, en medida)
-│       │   ├── [x] adenda_balance_corteza.md              # Adenda del responsable (v5): balance de la corteza, flujo lateral, erosión con la altura (IMPLEMENTADA; incremento-4-diseno.md §9, §13, §23 y §28; E_1 y n_ero provisionales)
+│       │   ├── [x] adenda_balance_corteza.md              # Adenda del responsable (v9): balance de la corteza, flujo lateral, erosión con la altura, η según el grosor, rifts que estiran, origen de arco por fracción (IMPLEMENTADA; incremento-4-diseno.md §9, §13, §23, §28, §47, §51 y §60)
 │       │   ├── [x] nota_bordes_placa.md                   # Nota del responsable: borde suavizado, dientes, 20°, islas (IMPLEMENTADA; incremento-4-diseno.md §12)
-│       │   └── [x] nota_ciclo_fosas.md                    # Nota del responsable (v2): nacimiento, vida y muerte de las fosas (IMPLEMENTADA; incremento-4-diseno.md §24–§27; fosa ×1,55: medidas de fuerzas, espera decisión)
+│       │   ├── [x] nota_ciclo_fosas.md                    # Nota del responsable (v6): nacimiento, vida y muerte de las fosas (IMPLEMENTADA; incremento-4-diseno.md §24–§27, §31, §40 y §51)
+│       │   └── [x] nota_rifts.md                          # Nota del responsable: rifts por área y por suturas, ciclo de Wilson; la última de la tectónica (IMPLEMENTADA; incremento-4-diseno.md §59–§65)
 │       ├── paquetes/              # Fase: código dividido en el workspace de paquetes
 │       │   └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)
@@ -247,14 +248,15 @@ Estado:
 nacimientos y muertes continuos, gracias a la relación `g < m < apetito` (regeneración por celda <
 metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
 
-- **Relieve tectónico (incremento 4, `docs/design/terreno/incremento-4-diseno.md`):**
-  - deriva de placas de 500 Myr en la malla de nivel 2 (~52 km), ~35 s, en la caché de la génesis (`ABMGEN04`);
-  - placas a 4,36 cm/año (la Tierra 4,39), con las correlaciones de Forsyth y Uyeda; India–Asia frena a 1/3 (`c_col` calibrado);
-  - océano de 3 945 m (la Tierra 3 667), pero tierra demasiado alta (1 459 m, la Tierra 671): el mar queda 1 079 m bajo el dato;
-  - **balance de la corteza continental** (adenda v3, `incremento-4-diseno.md` §9 y §13): arcos y erosión por subducción por km² de placa que se hunde, régimen del margen, prisma, choques con `η_col`/`η_arco`, delaminación, flujo lateral sin tope (`D_flujo` = 3 000 km²/Myr), sedimento al mar (y a cuencas cerradas) y balance exacto por paso; `τ_ero` = 63 Myr calibrado con la relajación;
-  - **bordes de placa** (nota de bordes, §12): borde suavizado a 150 km, transformantes a 20°, dientes recolocados, islas absorbidas; se hunden 3,6 km²/año (la Tierra 2,7–3,4); el consumo en bordes que no convergen baja del 26 al 3 %;
-  - referencia de la Tierra en `config/referencias/tierra_relieve.toml`;
-  - interruptor `worldgen.relieve`: con `"ruido"`, salida idéntica byte a byte a la de `main`.
+- **Relieve tectónico (incremento 4, `docs/design/terreno/incremento-4-diseno.md`; capa congelada el 2026-11-08):**
+  - deriva de placas de 500 Myr en la malla de nivel 2 (~52 km), en la caché de la génesis; el planeta entero tarda 243 s sin caché, y 250,4 en la batería (presupuesto 250: pendiente de decidir);
+  - placas a 4,65 cm/año (la Tierra 4,39), con las correlaciones de Forsyth y Uyeda; India–Asia frena a 1/3 (`c_col` calibrado);
+  - balance de la corteza continental (adenda de balance v9): arcos, erosión por subducción, prisma, choques con `η` según el grosor y el origen de arco por fracción, delaminación, flujo lateral cúbico, erosión con la altura y sedimento al mar, con balance exacto por paso;
+  - bordes de placa (nota de bordes) y ciclo de las fosas (nota de fosas v6): nacimiento, invasión de márgenes pasivos, rotura de la losa;
+  - rifts por bloques y por suturas (nota de rifts): ~5,8 rupturas por 100 Myr, ~1 de cada 4 por una sutura, con márgenes que se estiran (adenda v8);
+  - tabla de cierre (5 semillas, `herramientas/planeta_semillas.py`): fondo oceánico de 88 Myr de media (la Tierra 64), nivel del mar a −164 m, ΔV_cont −8 %, choques de 21 200 km (Bird 23 000). Siguen lejos de la Tierra la fosa (×1,9), el sedimento al mar (5,1 AU, ≈1,8), la pérdida en choques (1,4 AU, 0,4–0,7), los márgenes pasivos y el relieve (tierra a 1 235 m de media, la Tierra 671);
+  - referencias de la Tierra en `config/referencias/`;
+  - interruptor `worldgen.relieve`: con `"ruido"`, el relieve de ruido de antes.
 
 **Pendiente (fases siguientes):**
 - **Pendientes obligatorios de realismo** (CLAUDE §2.8; responsable, 2026-11-05), en orden:
@@ -265,9 +267,14 @@ metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
        - Con las edades y el sedimento reales, la curva de profundidad del modelo, que desde el 2026-11-07 es la placa ajustada a la mediana del zócalo real, deja el mar a −150 m. Con la media, que incluye esos relieves, quedaría a −25 m (`tierra_regla_modelo.py`, `incremento-4-diseno.md` §46).
        - Con la curva vieja de Parsons y Sclater, a −386 m.
        - Siguen pendientes el sedimento abisal propio y los márgenes continentales sumergidos;
-    4. acortamiento andino, ciclo de Wilson (rifts por suturas viejas), flexión de la litosfera (cuencas de antepaís), microplacas;
+    4. acortamiento andino, flexión de la litosfera (cuencas de antepaís), microplacas. ~~Ciclo de Wilson (rifts por suturas viejas)~~ hecho (nota de rifts, 2026-11-08); quedan la ruptura por plumas, los rifts fallidos y el aislamiento térmico de los supercontinentes;
     5. ~~reducir el remuestreo de la deriva~~ hecho: conservación exacta (2·10⁻¹⁵); la polaridad de la subducción y los papeles de un choque se deciden **por par de placas**, provisional: en la Tierra quién se hunde puede cambiar a lo largo de un mismo borde;
     5b. ~~umbral de transformantes a 20°~~ hecho (`theta_tr_grados`, nota de bordes);
+    5c. **artefactos de representación de la deriva, para más adelante** (decisión del responsable, 2026-11-07; `incremento-4-diseno.md` §56). Fabrican escalones de edad enormes en el fondo oceánico (fondo viejo junto a fondo de menos de la mitad de su edad, dentro de una misma placa) que la Tierra no tiene:
+       - el **relleno de huecos con fondo de edad 0** donde no hay dorsal (la creación residual en tramos transformantes o convergentes): 33–48 % de la longitud de los escalones;
+       - las **muestras ocultas que reaparecen** junto a fondo joven (la clase «dorsal» sin evento, dos fondos de dorsal del mismo lote): 20–44 %;
+       - los movimientos de muestras sueltas (dientes, islas, suavizado de la pertenencia): 4–23 %.
+       No vienen del estado inicial ni de procesos de la Tierra, y alimentan el fondo de más de 180 Myr que ninguna fosa consume;
     6. lluvia: barlovento medido con la regla del responsable (laderas del pie a la cresta, sin mesetas): la Tierra observada ×0,90 (WorldClim) – ×1,23 (CHELSA), el planeta ×1,05; queda el reparto por latitudes (nota propia, tras cerrar la tectónica; `c_P` sin recalibrar);
   - **casquetes polares** (relieve de hielo; con ellos, el agua total pasa a ser océano + hielo);
   - **competencia con jerarquía** entre agentes (los fuertes comen primero; en las hambrunas mueren antes

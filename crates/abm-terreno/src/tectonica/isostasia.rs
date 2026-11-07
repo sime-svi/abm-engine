@@ -164,7 +164,7 @@ mod tests {
             let k = Corteza {
                 h,
                 hc: h - 7.0,
-                arco: true,
+                arco: 1.0,
                 edad_oc: 30.0,
                 ..Corteza::oceanica(7.0)
             };

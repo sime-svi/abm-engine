@@ -1370,3 +1370,53 @@ Formato de entrada:
   - Se borró la historia vieja del almacén local y se subieron `main` y `terreno-cierre-tectonica` forzando.
   - CLAUDE.md §9: la herramienta nunca se añade a los commits (ni autor, ni coautor, ni enlaces de sesión, ni firmas), y el remoto `origin` va por SSH.
 - **A tener en cuenta:** GitHub puede seguir mostrando un tiempo los commits viejos si alguien tiene su identificador exacto, hasta su limpieza interna. Su gráfico de contribuidores tarda en actualizarse.
+
+## [2026-11-08] Última ronda de la tectónica: adenda v9 (arco por fracción), nota de rifts (por área y por suturas), erosión recalibrada y flujo lateral sin rehacer su red
+
+- **Qué pidió el responsable.**
+  - Contestar el §11 de la nota de rifts con referencias al código e implementarla, sustituyendo a `τ_rift`; calibrar `λ_A` con ~4–7 rupturas por 100 Myr y 5 semillas.
+  - Implementar la adenda v9 (el origen de arco como fracción `a_i` mezclada por volumen, `η = a_i·η_arco + (1 − a_i)·η(h)`) y recalibrar `η_min` con 0,4–0,7 AU.
+  - Aceptar `D_0` = 400; ampliar la tolerancia de la India tras la rotura para que entren 5,8 cm/año, sin tocar `c_col`.
+  - Recalibrar `E_1` y `n_ero` con el mar nuevo (relajación en 100–200 Myr y exportación de ~1,8 AU) y decir si no se cumplen a la vez.
+  - Subir el presupuesto del planeta a 250 s y, si era sencillo, hacer implícito el flujo lateral.
+  - Anotar en TREE los escalones de edad del relleno de huecos y de las muestras que reaparecen como artefactos de representación.
+  - Repetir la tabla de cierre y dejar `main` al día si pasan las pruebas. Después, congelar la capa.
+- **Respuestas al §11** (`incremento-4-diseno.md` §59).
+  - `τ_rift` era global, repartido por placa.
+  - Las suturas no se guardaban como líneas (solo el evento y el `lote` de la procedencia).
+  - `partir` solo cortaba por un círculo con ruido, pero generalizarlo costaba poco.
+  - Además: con `p ∝ A`, el ritmo global no depende de lo juntos que estén los continentes.
+- **Hecho** (§60).
+  - **v9:** `Corteza.arco` pasa a fracción, con `de_arco()` y `continente()`. Se mezcla en `sumar_hc`, el flujo lateral y el estiramiento de los rifts, y `η` sale de la fórmula de la adenda.
+  - **Decisión de realismo que se aparta de la letra de la adenda:** lo que deja un choque fuera de un continente conserva la fracción de arco de lo solapado; sobre un continente, 0. Con la letra, 0,93 AU de arco al año pasaban a «continental» y se perdían en el choque siguiente.
+  - **Rifts** (`deriva/rifts.rs`):
+    - suturas marcadas en las muestras al fundirse dos placas (`Corteza.sutura`);
+    - bloques continentales, con una tirada por bloque `1 − exp(−λ_A·A·Δt)`;
+    - trazado por la sutura más larga (de al menos 450 km) con la partición por fuente más cercana, o un círculo por el centro del bloque, con trazado alternativo;
+    - `partir_por_lados` para cualquier corte;
+    - eventos `rift` (trozos, sutura) y `rotura_rift`, y métricas de bloques y del perfil de los márgenes;
+    - se retiran `τ_rift` y la regla vieja.
+  - Tres pruebas nuevas de la nota: la sutura, el bloque pequeño y el determinismo.
+  - **No regresión:** con los interruptores de medida apagados, el planeta era idéntico al de 1f8814d sin las claves nuevas. Después se retiraron los interruptores.
+- **El flujo lateral.** El perfil mostró que no costaban los subpasos (~110 por paso), sino rehacer la red ~50 veces por paso: el 60 % del flujo. Un paso implícito no ahorraría (`D·Δt/d²` ≈ 7–10: tantas iteraciones de gradiente conjugado como subpasos). Se hacen cuatro ahorros idénticos byte a byte:
+  - la red se amplía en vez de rehacerse;
+  - solo se apuntan para mirar después las celdas que aún no son fuente;
+  - se aplica por la posición de la muestra;
+  - el nivel del mar y el sedimento comparten las alturas, y la bisección de `sed_hasta` sale cuando ya no puede estrecharse.
+  Además, los bloques y el perfil de los márgenes calculan una vez qué celdas son de continente. El flujo pasa de ~60 a ~20 s por deriva.
+- **Calibración** (5 semillas; §61–§63).
+  - `λ_A` = 4·10⁻⁴: 4,9 ± 1,7 rupturas por 100 Myr en la deriva y 5,8 en el planeta.
+  - `η_min` = 0,5, el techo: con 0,4 la pérdida sube.
+  - **`E_1` = 0,0075** (con `n_ero` = 2,5): relajación en 171 Myr. **No se cumplen a la vez:** todas las combinaciones que relajan en 100–200 Myr exportan 5,1–5,5 AU. Las dos metas dependen de la erosión por encima de 2–3 km, y la causa es la base: el fondo que se hunde va a 4,6 km²/año y la tierra es demasiado alta.
+- **India–Asia:** la tolerancia tras la rotura pasa a 0,55 veces la velocidad de antes (5,8 cm/año entra; la India real siguió frenando, queda como causa pendiente). La relajación cumple con `E_1` nuevo.
+- **Tabla de cierre** (§64).
+  - Mejoran: la edad media del fondo (119 → 88 Myr), el fondo de más de 180 Myr (22 → 13 %), el nivel del mar (−305 → −164 m), los choques (21 200 km, como Bird) y ΔV_cont (−8 %).
+  - Empeoran: la fosa (×1,89), el área que se hunde (4,6), el sedimento al mar (5,1 AU), la pérdida en choques (1,4 AU) y el relieve.
+  - Los márgenes de rift se estiran (95 km de franja), pero son el 10 % de la costa: el resto es del estado inicial.
+  - **Planeta solo: 243 s; en la batería, con los agentes a la vez, 250,4 s: se pasa del presupuesto de 250 por 0,4 s** (con cinco a la vez, 264).
+- **Batería:** 38 márgenes del planeta movidos con su nota (otra realización) y dos métricas nuevas (rupturas por 100 Myr y fracción por sutura). El presupuesto del planeta, a 250 s. Agentes sin cambios.
+- **Herramientas:**
+  - en `deriva_en_varias_semillas`: rifts, márgenes de rift, ciclos de supercontinente, coste del flujo y de la erosión y las métricas, y el arco que dejan los choques;
+  - en `planeta_semillas.py`, las filas de la nota de rifts.
+- **`main` no se actualiza** (sigue en a5b6583): `verificar.sh` pasa fmt, clippy, las 109 pruebas y todas las métricas de la batería, pero el planeta se pasa del presupuesto por 0,4 s. Por la regla del responsable, no se sube sin preguntar. Decide él: ~275 s o abaratar más.
+- **Pendiente** (§65, en orden): la fosa y el área que se hunde; el relieve alto; los márgenes del estado inicial; la pérdida en choques; los artefactos de representación; la India que se acelera; el mar del escenario de relajación; las ampliaciones de la nota de rifts; lo que sigue de §58; el tiempo (243 s solo, 250,4 en la batería).

@@ -321,7 +321,7 @@ fn dos_placas_que_se_separan_hacen_una_dorsal_limpia() {
 fn cfg_india_asia() -> TectonicaCfg {
     TectonicaCfg {
         a_min_frac: 0.0,
-        tau_rift_myr: 1e12,
+        lambda_a_rift: 0.0,
         // Escenario del choque: sin invasión por los bordes artificiales (meridianos) de los
         // extremos del Tetis, que cambiaría cómo se mueve la placa de la India.
         v_inv_km_myr: 0.0,
@@ -573,7 +573,7 @@ fn sin_cratones_solo_los_arcos_hacen_corteza_continental() {
         // Sin cratones, la única corteza continental posible es la de los arcos (adenda de
         // balance: un arco oceánico rápido llega a ~20 km en unas decenas de Myr).
         assert!(
-            !c.cont || c.arco,
+            !c.cont || c.arco > 0.0,
             "corteza continental que no viene de un arco en un planeta sin cratones"
         );
         if c.h == cfg.h_oc_km && c.hc == 0.0 && c.sed == 0.0 {
@@ -616,8 +616,12 @@ fn dos_continentes_chocan_frenan_y_levantan_una_cordillera() {
         antes > 8.0,
         "antes del choque la India avanza deprisa ({antes:.1} cm/año)"
     );
+    // Tras romperse la losa, la tolerancia es de 0,55 veces la velocidad de antes (decisión del
+    // responsable, 2026-11-07; antes, 0,5). La India del modelo se acelera tras la rotura por el giro
+    // que le dan las fosas de los lados (§40), mientras que la real siguió frenando (Molnar y Stock
+    // 2009): queda como causa pendiente, no se toca `c_col`.
     assert!(
-        durante < 0.5 * antes && despues < 0.5 * antes,
+        durante < 0.5 * antes && despues < 0.55 * antes,
         "el choque frena la convergencia: {antes:.1} → {durante:.1} con la losa colgando y {despues:.1} tras romperse (cm/año)"
     );
     assert!(
@@ -628,9 +632,9 @@ fn dos_continentes_chocan_frenan_y_levantan_una_cordillera() {
 
 #[test]
 fn un_continente_se_parte_y_abre_un_oceano_simetrico() {
-    // Un continente de 30° en una placa; τ_rift = Δt fuerza el rift en el primer paso.
+    // Un continente de 30° en una placa; λ_A enorme fuerza el rift en el primer paso.
     let cfg = TectonicaCfg {
-        tau_rift_myr: 1.0,
+        lambda_a_rift: 1e3,
         n_min: 2,
         ..TectonicaCfg::default()
     };
@@ -650,7 +654,7 @@ fn un_continente_se_parte_y_abre_un_oceano_simetrico() {
     let rift = d.eventos.iter().find(|e| e.tipo == "rift").cloned();
     let rift = rift.expect("el continente se parte en el primer paso");
     let (h1, h2) = (rift.placas[1], rift.placas[2]);
-    d.cfg.tau_rift_myr = 1e12;
+    d.cfg.lambda_a_rift = 0.0;
     for _ in 0..30 {
         d.dar_paso();
     }
@@ -683,12 +687,12 @@ fn un_continente_se_parte_y_abre_un_oceano_simetrico() {
 #[test]
 fn un_rift_estira_sus_bordes_en_rampa_conservando_el_volumen_y_despues_abre_el_oceano() {
     // Adenda v8 §6.10: un continente de 35 km (casquete de 30°) se parte en el primer paso
-    // (τ_rift = Δt); después las hijas se separan a v_rift sin fuerzas. Mientras la abertura no
+    // (λ_A enorme); después las hijas se separan a v_rift sin fuerzas. Mientras la abertura no
     // llega a E_rot = W_m·(h_0 − h_rot)/h_0 (~107 km), se rellena estirando la corteza de los
     // bordes y el volumen continental se conserva exactamente. Al romperse, cada borde es una
     // rampa de h_rot junto al eje a h_0 a W_m, y lo que se abre después es fondo oceánico.
     let cfg = TectonicaCfg {
-        tau_rift_myr: 1.0,
+        lambda_a_rift: 1e3,
         n_min: 2,
         lambda_esp: 0.0,
         ..TectonicaCfg::default()
@@ -713,7 +717,7 @@ fn un_rift_estira_sus_bordes_en_rampa_conservando_el_volumen_y_despues_abre_el_o
         .cloned()
         .expect("el continente se parte en el primer paso");
     let (h1, h2) = (rift.placas[1], rift.placas[2]);
-    d.cfg.tau_rift_myr = 1e12;
+    d.cfg.lambda_a_rift = 0.0;
     let v0 = d.inventario_continental();
     let joven = |d: &Deriva| {
         (0..d.malla.num)
@@ -764,6 +768,168 @@ fn un_rift_estira_sus_bordes_en_rampa_conservando_el_volumen_y_despues_abre_el_o
         h[0] < 20.0 && h[0] < h[1] && h[1] < h[2] && h[2] <= h[3] + 1.0 && h[3] > 33.0,
         "rampa de h_rot junto al eje a h_0 lejos: {h:?} km a <50 / 50–100 / 100–150 / 200–300 km"
     );
+}
+
+// --- Rifts (nota_rifts.md §10) -------------------------------------------------------------------
+
+/// Configuración de las pruebas de rifts: la regla por bloques con `λ_A` enorme (cada bloque que
+/// puede romperse se rompe en el paso) y sin erosión ni nacimientos espontáneos que la enmascaren.
+fn cfg_rifts() -> TectonicaCfg {
+    TectonicaCfg {
+        lambda_a_rift: 1e3,
+        n_min: 2,
+        lambda_esp: 0.0,
+        e1_km_myr: 1e-12,
+        ..TectonicaCfg::default()
+    }
+}
+
+#[test]
+fn un_bloque_grande_se_rompe_por_su_sutura_y_conserva_la_corteza() {
+    // Nota de rifts §10, prueba 1: un continente de 35 km (casquete de 30°) con una sutura curva y
+    // descentrada (de una placa fundida antes), de |z| < 0,3 rad, a ~640 km del centro. Con λ_A alto
+    // se rompe en el primer paso por la sutura, no por un círculo por su centro, y la corteza
+    // continental se conserva al partirlo y al estirar los bordes.
+    let cfg = cfg_rifts();
+    let malla = Malla::new(48, 2, 6371.0);
+    let dirs = malla.dir.clone();
+    let curva = |z: f64| 0.1 + 0.05 * (8.0 * z).sin();
+    let mut d = Deriva::desde(&cfg, 3, malla, 0.0, &[10, 20], |k| {
+        let x = dirs[k];
+        if x[0] > 0.0 {
+            let cont = x[0] > 30f64.to_radians().cos();
+            let mut c = corteza(cont, if cont { 35.0 } else { 7.0 }, 60.0);
+            let dy = x[1] - curva(x[2]);
+            if cont && x[2].abs() < 0.3 && dy.abs() < 0.012 {
+                c.sutura = 2 + u32::from(dy > 0.0);
+            }
+            (0, c)
+        } else {
+            (1, corteza(false, 7.0, 60.0))
+        }
+    });
+    d.arrancar_con(&[[0.0; 3], [0.0; 3]]);
+    let v0 = d.inventario_continental();
+    d.dar_paso();
+    let rift = d
+        .eventos
+        .iter()
+        .find(|e| e.tipo == "rift")
+        .cloned()
+        .expect("el bloque se rompe en el primer paso");
+    assert_eq!(rift.clase.as_deref(), Some("sutura"), "sigue la sutura");
+    let largo = rift.sutura_km.expect("longitud de la sutura");
+    assert!(
+        largo > 1500.0,
+        "la sutura mide ~3 800 km dentro del bloque: {largo:.0} km"
+    );
+    let trozos = rift.trozos_km2.expect("áreas de los trozos");
+    assert!(
+        trozos[0] < trozos[1],
+        "el corte descentrado deja un trozo menor del lado 1: {trozos:?} km²"
+    );
+    // Cada lado de la sutura, en su hija: la primera hija es el lado 1.
+    let idx = |id: u64| d.placas.iter().position(|p| p.id == id && p.viva);
+    let (Some(i1), Some(i2)) = (idx(rift.placas[1]), idx(rift.placas[2])) else {
+        panic!("las dos hijas siguen vivas");
+    };
+    let (mut bien, mut mal) = (0, 0);
+    for k in 0..d.malla.num {
+        let x = d.malla.dir[k];
+        if !d.corteza(k).is_some_and(|c| c.cont) || x[2].abs() >= 0.25 {
+            continue;
+        }
+        let dy = x[1] - curva(x[2]);
+        let esperada = if dy > 0.03 {
+            i1
+        } else if dy < -0.03 {
+            i2
+        } else {
+            continue;
+        };
+        if d.dueno[k] as usize == esperada {
+            bien += 1;
+        } else {
+            mal += 1;
+        }
+    }
+    assert!(
+        bien > 0 && mal * 100 < bien,
+        "el corte sigue la sutura: {mal} celdas del lado equivocado de {}",
+        bien + mal
+    );
+    assert!(
+        d.placas
+            .iter()
+            .filter(|p| p.viva)
+            .all(|p| p.cort.iter().all(|c| c.sutura == 0)),
+        "una sutura reabierta deja de serlo"
+    );
+    let dv = (d.inventario_continental() - v0).abs() / v0;
+    assert!(dv < 1e-9, "partir el bloque conserva la corteza: {dv:.2e}");
+    d.cfg.lambda_a_rift = 0.0;
+    for _ in 0..3 {
+        d.paso_cinematico();
+    }
+    let dv = (d.inventario_continental() - v0).abs() / v0;
+    assert!(
+        dv < 1e-9,
+        "estirar los bordes conserva la corteza: {dv:.2e}"
+    );
+}
+
+#[test]
+fn un_bloque_pequeno_no_se_rompe_nunca() {
+    // Nota de rifts §10, prueba 2: con λ_A enorme, un continente de menos de 2·A_trozo,min
+    // (casquete de 3,5°, ~0,48 Mkm²) no se rompe en 20 Myr; uno de ~1,4 Mkm² (6°) sí.
+    let rompe = |radio_grados: f64| {
+        let cfg = cfg_rifts();
+        let malla = Malla::new(48, 1, 6371.0);
+        let dirs = malla.dir.clone();
+        let mut d = Deriva::desde(&cfg, 4, malla, 0.0, &[10, 20], |k| {
+            let x = dirs[k];
+            if x[0] > 0.0 {
+                let cont = x[0] > radio_grados.to_radians().cos();
+                (0, corteza(cont, if cont { 35.0 } else { 7.0 }, 60.0))
+            } else {
+                (1, corteza(false, 7.0, 60.0))
+            }
+        });
+        d.arrancar_con(&[[0.0; 3], [0.0; 3]]);
+        for _ in 0..20 {
+            d.dar_paso();
+        }
+        d.eventos.iter().filter(|e| e.tipo == "rift").count()
+    };
+    assert_eq!(rompe(3.5), 0, "un bloque de menos de 1 Mkm² no se rompe");
+    assert!(rompe(6.0) > 0, "uno de 1,4 Mkm² sí se rompe");
+}
+
+#[test]
+fn la_misma_semilla_da_las_mismas_rupturas() {
+    // Nota de rifts §10, prueba 3: una tirada por bloque y paso, en orden fijo.
+    let cfg = TectonicaCfg {
+        lambda_a_rift: 2e-3,
+        ..cfg_rapida()
+    };
+    let rupturas = |semilla: u64| {
+        let mut d = Deriva::nueva(&cfg, semilla, Malla::new(12, 1, 6371.0));
+        for _ in 0..40 {
+            d.dar_paso();
+        }
+        d.eventos
+            .iter()
+            .filter(|e| e.tipo == "rift" || e.tipo == "rotura_rift")
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    let (a, b) = (rupturas(42), rupturas(42));
+    assert!(
+        a.iter().filter(|e| e.tipo == "rift").count() > 0,
+        "con λ_A alto hay rupturas"
+    );
+    assert_eq!(a, b, "misma semilla, mismas rupturas");
+    assert_ne!(a, rupturas(43), "otra semilla, otras rupturas");
 }
 
 #[test]
@@ -837,7 +1003,7 @@ fn mover_las_placas_conserva_exactamente_la_corteza() {
     let cfg = TectonicaCfg {
         t_deriva_myr: 80.0,
         t_rodaje_myr: 10.0,
-        tau_rift_myr: 60.0, // fuerza rifts, suturas y absorciones en una deriva corta
+        lambda_a_rift: 1e-3, // fuerza rifts, suturas y absorciones en una deriva corta
         ..TectonicaCfg::default()
     };
     let mut d = Deriva::nueva(&cfg, 9, Malla::new(12, 2, 6371.0));
@@ -903,7 +1069,7 @@ fn un_planeta_sin_fosas_solo_delamina_y_erosiona() {
     // sumideros de fosa, solo la delaminación y la erosión (con su sedimento, que no se pierde).
     let cfg = TectonicaCfg {
         n_min: 1,
-        tau_rift_myr: 1e12,
+        lambda_a_rift: 0.0,
         a_min_frac: 0.0,
         ..TectonicaCfg::default()
     };
@@ -1430,6 +1596,39 @@ struct InformeDeriva {
     /// estirada: la distancia a la que llega al 90 % del espesor de 200–300 km (km).
     margen_perfil: [f64; 5],
     franja_estirada_km: f64,
+    /// Lo mismo solo para los márgenes nacidos de un rift (su costa, corteza estirada en la abertura)
+    /// y la fracción de la costa de los márgenes pasivos que son de rift.
+    margen_perfil_rift: [f64; 5],
+    franja_rift_km: f64,
+    costa_rift_frac: f64,
+    /// Nota de rifts (tras el rodaje): rupturas, las que siguen una sutura, roturas (nace el océano
+    /// en un lado) y suturas hechas, por 100 Myr; bloques continentales y fracción del mayor (media);
+    /// índice de supercontinente (mínimo, media y máximo) y supercontinentes formados; espesor en la
+    /// costa de los márgenes y anchura de su franja estirada al final, del modelo (km).
+    rifts_100: f64,
+    rifts_sutura_100: f64,
+    roturas_rift_100: f64,
+    suturas_100: f64,
+    bloques: f64,
+    bloque_mayor: f64,
+    supercontinente: [f64; 3],
+    super_formados: f64,
+    costa_final: f64,
+    franja_final: f64,
+    /// Coste del flujo lateral: subpasos por paso, muestras de la red por subpaso y fracción de los
+    /// subpasos por clase del espesor máximo (50–60, …, >100 km).
+    flujo_subpasos: f64,
+    flujo_muestras: f64,
+    flujo_por_hmax: [f64; 6],
+    /// Veces que se rehace la red por paso, lados por subpaso y segundos en rehacerla y en los
+    /// subpasos.
+    flujo_rehechos: f64,
+    flujo_lados: f64,
+    flujo_seg: [f64; 2],
+    seg_partes: [f64; 8],
+    /// Adenda v9: corteza de arco que los choques dejan arriba sobre un continente y fuera de él
+    /// (AU).
+    arco_choque: [f64; 2],
 }
 
 fn diagnosticar_deriva(semilla: u64, variante: &str) -> InformeDeriva {
@@ -1806,57 +2005,75 @@ fn diagnosticar_deriva(semilla: u64, variante: &str) -> InformeDeriva {
             }
             false
         };
-        let cont = |k: usize| d.corteza(k).is_some_and(|c| c.cont && !c.arco);
-        let mut dist = vec![f64::INFINITY; num];
-        let mut cola = std::collections::BinaryHeap::new();
-        for (k, dk) in dist.iter_mut().enumerate() {
-            if !cont(k) {
-                continue;
-            }
-            let costa = d.malla.vec[k].iter().any(|&v| {
-                v != NADA
-                    && d.dueno[v as usize] == d.dueno[k]
-                    && d.corteza(v as usize).is_some_and(|c| !c.cont)
-            });
-            if costa && !otra_cerca(k) {
-                *dk = 0.5 * d.malla.lado_km;
-                cola.push(std::cmp::Reverse(((*dk * 1000.0) as u64, k)));
-            }
-        }
-        while let Some(std::cmp::Reverse((_, k))) = cola.pop() {
-            for (j, &v) in d.malla.vec[k].iter().enumerate() {
-                if v == NADA || d.dueno[v as usize] != d.dueno[k] || !cont(v as usize) {
+        let cont = |k: usize| d.corteza(k).is_some_and(|c| c.continente());
+        // Perfil desde las celdas de costa que cumplen `vale`: espesor medio por distancia a la
+        // costa, franja estirada y número de celdas de costa.
+        let perfil = |vale: &dyn Fn(usize) -> bool| -> ([f64; 5], f64, usize) {
+            let mut dist = vec![f64::INFINITY; num];
+            let mut cola = std::collections::BinaryHeap::new();
+            let mut n_costa = 0;
+            for (k, dk) in dist.iter_mut().enumerate() {
+                if !cont(k) {
                     continue;
                 }
-                let nd = dist[k] + d.malla.dvec[k][j];
-                if nd < dist[v as usize] && nd < 300.0 {
-                    dist[v as usize] = nd;
-                    cola.push(std::cmp::Reverse(((nd * 1000.0) as u64, v as usize)));
+                let costa = d.malla.vec[k].iter().any(|&v| {
+                    v != NADA
+                        && d.dueno[v as usize] == d.dueno[k]
+                        && d.corteza(v as usize).is_some_and(|c| !c.cont)
+                });
+                if costa && !otra_cerca(k) && vale(k) {
+                    *dk = 0.5 * d.malla.lado_km;
+                    cola.push(std::cmp::Reverse(((*dk * 1000.0) as u64, k)));
+                    n_costa += 1;
                 }
             }
-        }
-        let limites = [50.0, 100.0, 150.0, 200.0, 300.0];
-        let mut suma = [(0.0f64, 0.0f64); 5];
-        for (k, &dk) in dist.iter().enumerate() {
-            if !dk.is_finite() {
-                continue;
+            while let Some(std::cmp::Reverse((_, k))) = cola.pop() {
+                for (j, &v) in d.malla.vec[k].iter().enumerate() {
+                    if v == NADA || d.dueno[v as usize] != d.dueno[k] || !cont(v as usize) {
+                        continue;
+                    }
+                    let nd = dist[k] + d.malla.dvec[k][j];
+                    if nd < dist[v as usize] && nd < 300.0 {
+                        dist[v as usize] = nd;
+                        cola.push(std::cmp::Reverse(((nd * 1000.0) as u64, v as usize)));
+                    }
+                }
             }
-            let i = limites.iter().position(|&x| dk < x).unwrap_or(4);
-            if let Some(c) = d.corteza(k) {
-                suma[i].0 += c.h * d.malla.area[k];
-                suma[i].1 += d.malla.area[k];
+            let limites = [50.0, 100.0, 150.0, 200.0, 300.0];
+            let mut suma = [(0.0f64, 0.0f64); 5];
+            for (k, &dk) in dist.iter().enumerate() {
+                if !dk.is_finite() {
+                    continue;
+                }
+                let i = limites.iter().position(|&x| dk < x).unwrap_or(4);
+                if let Some(c) = d.corteza(k) {
+                    suma[i].0 += c.h * d.malla.area[k];
+                    suma[i].1 += d.malla.area[k];
+                }
             }
-        }
-        for (i, x) in suma.iter().enumerate() {
-            inf.margen_perfil[i] = if x.1 > 0.0 { x.0 / x.1 } else { f64::NAN };
-        }
-        let interior = inf.margen_perfil[4];
-        let centros = [25.0, 75.0, 125.0, 175.0, 250.0];
-        inf.franja_estirada_km = centros
-            .iter()
-            .zip(inf.margen_perfil)
-            .find(|&(_, h)| h >= 0.9 * interior)
-            .map_or(f64::NAN, |(&c, _)| c);
+            let mut pf = [f64::NAN; 5];
+            for (i, x) in suma.iter().enumerate() {
+                pf[i] = if x.1 > 0.0 { x.0 / x.1 } else { f64::NAN };
+            }
+            let centros = [25.0, 75.0, 125.0, 175.0, 250.0];
+            let franja = centros
+                .iter()
+                .zip(pf)
+                .find(|&(_, h)| h >= 0.9 * pf[4])
+                .map_or(f64::NAN, |(&c, _)| c);
+            (pf, franja, n_costa)
+        };
+        let (pf, franja, n_todas) = perfil(&|_| true);
+        inf.margen_perfil = pf;
+        inf.franja_estirada_km = franja;
+        // Solo los márgenes nacidos de un rift: su costa es corteza estirada en la abertura.
+        let (pf, franja, n_rift) = perfil(&|k| {
+            d.corteza(k)
+                .is_some_and(|c| c.proc.nace == abm_terreno::tectonica::deriva::nace::RIFT)
+        });
+        inf.margen_perfil_rift = pf;
+        inf.franja_rift_km = franja;
+        inf.costa_rift_frac = n_rift as f64 / (n_todas as f64).max(1.0);
     }
     for (fila, x) in inf.por_via.iter_mut().zip(d.diag_choque_km3[1]) {
         let t: f64 = x.iter().sum();
@@ -1902,6 +2119,60 @@ fn diagnosticar_deriva(semilla: u64, variante: &str) -> InformeDeriva {
     inf.choques_acabados = nc;
     inf.duracion_choques = if vs > 0.0 { dv / vs } else { f64::NAN };
     inf.en_cuencas = d.cuentas.sedimento_en_cuencas_km3 / anios;
+    // Nota de rifts: los eventos de los pasos tras el rodaje (un evento lleva el Myr del principio
+    // de su paso).
+    let t_ini = d
+        .metricas
+        .iter()
+        .rev()
+        .find(|m| m.rodaje)
+        .map_or(f64::NEG_INFINITY, |m| m.myr);
+    let cuenta = |f: &dyn Fn(&abm_terreno::tectonica::historia::EventoTectonico) -> bool| {
+        d.eventos.iter().filter(|e| e.myr >= t_ini && f(e)).count() as f64 * 100.0 / n
+    };
+    inf.rifts_100 = cuenta(&|e| e.tipo == "rift");
+    inf.rifts_sutura_100 = cuenta(&|e| e.tipo == "rift" && e.clase.as_deref() == Some("sutura"));
+    inf.roturas_rift_100 = cuenta(&|e| e.tipo == "rotura_rift");
+    inf.suturas_100 = cuenta(&|e| e.tipo == "sutura");
+    // Ciclos con histéresis: el índice pasa de menos de 0,5 a 0,7 o más.
+    let mut abajo = false;
+    for m in &val {
+        if m.supercontinente < 0.5 {
+            abajo = true;
+        } else if abajo && m.supercontinente >= 0.7 {
+            abajo = false;
+            inf.super_formados += 1.0;
+        }
+    }
+    inf.bloques = media(|m| m.bloques_continentales as f64);
+    inf.bloque_mayor = media(|m| m.bloque_mayor_frac);
+    inf.supercontinente = [
+        val.iter()
+            .map(|m| m.supercontinente)
+            .fold(f64::INFINITY, f64::min),
+        media(|m| m.supercontinente),
+        val.iter().map(|m| m.supercontinente).fold(0.0, f64::max),
+    ];
+    if let Some(u) = val.last() {
+        inf.costa_final = u.costa_margen_km;
+        inf.franja_final = u.franja_estirada_km;
+    }
+    inf.flujo_subpasos = d.flujo_subpasos as f64 / pasos as f64;
+    inf.flujo_muestras = d.flujo_muestras as f64 / (d.flujo_subpasos as f64).max(1.0);
+    for (f, &x) in inf
+        .flujo_por_hmax
+        .iter_mut()
+        .zip(&d.flujo_subpasos_por_hmax)
+    {
+        *f = x as f64 / (d.flujo_subpasos as f64).max(1.0);
+    }
+    inf.flujo_rehechos = d.flujo_rehechos as f64 / pasos as f64;
+    inf.flujo_lados = d.flujo_lados as f64 / (d.flujo_subpasos as f64).max(1.0);
+    inf.flujo_seg = d.flujo_seg;
+    inf.seg_partes = d.seg_partes;
+    for (f, &x) in inf.arco_choque.iter_mut().zip(&d.diag_arco_choque_km3) {
+        *f = x / anios;
+    }
     inf
 }
 
@@ -2199,6 +2470,63 @@ fn deriva_en_varias_semillas() {
             r(|i| i.en_cuencas)
         );
         println!(
+            "### rifts (nota de rifts): rupturas {} por 100 Myr, por sutura {}; roturas {}; suturas {}; bloques continentales {} (el mayor, {} del continente); supercontinente mín {} media {} máx {}, ciclos (de <0,5 a ≥0,7) {}; márgenes al final: costa {} km, franja estirada {} km",
+            r(|i| i.rifts_100),
+            r(|i| i.rifts_sutura_100),
+            r(|i| i.roturas_rift_100),
+            r(|i| i.suturas_100),
+            r(|i| i.bloques),
+            r(|i| i.bloque_mayor),
+            r(|i| i.supercontinente[0]),
+            r(|i| i.supercontinente[1]),
+            r(|i| i.supercontinente[2]),
+            r(|i| i.super_formados),
+            r(|i| i.costa_final),
+            r(|i| i.franja_final)
+        );
+        println!(
+            "### márgenes nacidos de un rift ({} de la costa de los márgenes pasivos): espesor a 0–50 / 50–100 / 100–150 / 150–200 / 200–300 km {} / {} / {} / {} / {} km; franja estirada {} km",
+            r(|i| i.costa_rift_frac),
+            r(|i| i.margen_perfil_rift[0]),
+            r(|i| i.margen_perfil_rift[1]),
+            r(|i| i.margen_perfil_rift[2]),
+            r(|i| i.margen_perfil_rift[3]),
+            r(|i| i.margen_perfil_rift[4]),
+            r(|i| i.franja_rift_km)
+        );
+        println!(
+            "### adenda v9: arco que dejan los choques sobre un continente {} AU y fuera de él {} AU",
+            r(|i| i.arco_choque[0]),
+            r(|i| i.arco_choque[1])
+        );
+        println!(
+            "### flujo lateral: {} subpasos por paso con {} muestras y {} lados en la red; la red se rehace {} veces por paso; segundos en rehacerla {} y en los subpasos {}; subpasos por espesor máximo (50–60, 60–70, 70–80, 80–90, 90–100, >100 km): {:?}",
+            r(|i| i.flujo_subpasos),
+            r(|i| i.flujo_muestras),
+            r(|i| i.flujo_lados),
+            r(|i| i.flujo_rehechos),
+            r(|i| i.flujo_seg[0]),
+            r(|i| i.flujo_seg[1]),
+            (0..6)
+                .map(
+                    |j| (1000.0 * g.iter().map(|i| i.flujo_por_hmax[j]).sum::<f64>()
+                        / g.len() as f64)
+                        .round()
+                        / 10.0
+                )
+                .collect::<Vec<_>>()
+        );
+        println!(
+            "### coste (s): erosión {}, nivel del mar {}, sedimento al mar {}; métricas: márgenes pasivos {}, perfil de márgenes {}, bloques {}, índice de supercontinente {}",
+            r(|i| i.seg_partes[0]),
+            r(|i| i.seg_partes[1]),
+            r(|i| i.seg_partes[2]),
+            r(|i| i.seg_partes[3]),
+            r(|i| i.seg_partes[4]),
+            r(|i| i.seg_partes[5]),
+            r(|i| i.seg_partes[6])
+        );
+        println!(
             "### tiempo de la deriva {:.0} s de media",
             tiempo.iter().sum::<f64>() / tiempo.len() as f64
         );
@@ -2404,7 +2732,7 @@ fn una_fosa_invade_un_margen_pasivo_y_separa_su_oceano_conservando_la_corteza() 
     // el tramo invadido, y la corteza se conserva.
     let cfg = TectonicaCfg {
         v_inv_km_myr: 300.0,
-        tau_rift_myr: 1e12,
+        lambda_a_rift: 0.0,
         lambda_esp: 0.0,
         ..TectonicaCfg::default()
     };
@@ -2477,7 +2805,7 @@ fn un_margen_pasivo_sin_fosa_cerca_no_se_hunde_nunca() {
     // solo es de transformantes con contraste de edad).
     let cfg = TectonicaCfg {
         lambda_esp: 1.0,
-        tau_rift_myr: 1e12,
+        lambda_a_rift: 0.0,
         ..TectonicaCfg::default()
     };
     let mut d = margen_pasivo_aislado(&cfg);
@@ -2862,7 +3190,7 @@ fn diagnostico_pilas() {
                 })
                 .collect();
             ctx = format!(
-                "al final h {:.0} hc {:.0} sed {:.1} arco {} edad_oc {:.0}; placa id {} con {} muestras ({} continentales, fosa de arriba {:.0} km); la ven {ven} celdas (centro en {}); borde más cercano {dmin:.0} km ({tipo}); vecinas [{}]",
+                "al final h {:.0} hc {:.0} sed {:.1} arco {:.2} edad_oc {:.0}; placa id {} con {} muestras ({} continentales, fosa de arriba {:.0} km); la ven {ven} celdas (centro en {}); borde más cercano {dmin:.0} km ({tipo}); vecinas [{}]",
                 c.h,
                 c.hc,
                 c.sed,
@@ -3158,7 +3486,7 @@ fn diagnostico_procedencia_del_fondo() {
                             let Some(c) = (if p == NADA { None } else { d.corteza(k) }) else {
                                 continue;
                             };
-                            if !c.cont || c.arco {
+                            if !c.continente() {
                                 continue;
                             }
                             let mut viejo: Option<(f64, u8)> = None;

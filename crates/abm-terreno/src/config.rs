@@ -263,7 +263,16 @@ pub struct TectonicaCfg {
     pub n_cratones: u32,
     pub n_min: u32,
     pub a_min_frac: f64,
-    pub tau_rift_myr: f64,
+    /// Rifts por bloques (nota de rifts §6): cada bloque continental se rompe en el paso con
+    /// probabilidad `1 − exp(−λ_A·A_k·Δt)` y el trazado sigue su sutura más larga. `λ_A` es la
+    /// probabilidad de ruptura por Mkm² de continente y por Myr (1/(Mkm²·Myr)), calibrada con el
+    /// ritmo de la ruptura de Pangea, ~4–7 rupturas por 100 Myr.
+    pub lambda_a_rift: f64,
+    /// Área mínima de continente de cada trozo tras la ruptura (Mkm²; Madagascar, ~0,6, es de los
+    /// trozos más pequeños separados por un rift).
+    pub a_trozo_min_mkm2: f64,
+    /// Longitud mínima de una sutura para guiar la ruptura (km; 3·`L_borde`).
+    pub l_sut_min_km: f64,
     pub v_rift_cm_anio: f64,
     pub v_sutura_cm_anio: f64,
     pub t_sutura_myr: f64,
@@ -361,11 +370,13 @@ impl Default for TectonicaCfg {
             n_cratones: 8,
             n_min: 8,
             a_min_frac: 0.005,
-            tau_rift_myr: 150.0,
+            lambda_a_rift: 4.0e-4,
+            a_trozo_min_mkm2: 0.5,
+            l_sut_min_km: 450.0,
             v_rift_cm_anio: 2.0,
             v_sutura_cm_anio: 0.5,
             t_sutura_myr: 10.0,
-            e1_km_myr: 0.005,
+            e1_km_myr: 0.0075,
             n_ero: 2.5,
             deformacion: 0.06,
             nivel_malla: 2,
@@ -874,17 +885,16 @@ impl TectonicaCfg {
         if !(self.detalle_persistencia > 0.0 && self.detalle_persistencia < 1.0) {
             return Err(invalid("se requiere 0 < detalle_persistencia < 1"));
         }
-        if !(self.tau_rift_myr > 0.0
-            && self.e1_km_myr > 0.0
-            && self.n_ero > 0.0
-            && self.t_sat_myr > 0.0)
-        {
-            return Err(invalid(
-                "se requiere tau_rift, e1_km_myr, n_ero y t_sat > 0",
-            ));
+        if !(self.e1_km_myr > 0.0 && self.n_ero > 0.0 && self.t_sat_myr > 0.0) {
+            return Err(invalid("se requiere e1_km_myr, n_ero y t_sat > 0"));
         }
         if !(self.w_margen_km >= 0.0 && self.h_rot_km > 0.0) {
             return Err(invalid("se requiere w_margen_km >= 0 y h_rot_km > 0"));
+        }
+        if !(self.lambda_a_rift >= 0.0 && self.a_trozo_min_mkm2 > 0.0 && self.l_sut_min_km >= 0.0) {
+            return Err(invalid(
+                "se requiere lambda_a_rift >= 0, a_trozo_min_mkm2 > 0 y l_sut_min_km >= 0",
+            ));
         }
         Ok(())
     }

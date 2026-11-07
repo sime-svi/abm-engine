@@ -1497,3 +1497,216 @@ Mientras tanto se le aplica `η(h)` según su grosor (`h` = 7 km + `hc`, casi si
    - la erosión con la exportación (3,5 AU frente a ≈1,8);
    - la lluvia por latitudes;
    - el acortamiento andino, la flexión, el retroceso de fosas y los casquetes.
+
+## 59. Respuestas a las preguntas de la nota de rifts (§11, 2026-11-07 g)
+
+1. **La regla de `τ_rift` era global, repartida por placa** (`rifts()` en `deriva.rs`).
+   - Cada placa con corteza continental se partía en el paso con probabilidad `Δt/τ_rift · A_cont,p/A_cont,total`. El planeta entero tenía, de media, `Δt/τ_rift` rupturas por paso: 0,67 por 100 Myr con 150 Myr, se repartiera como se repartiera la corteza.
+   - `A_cont,p` era toda la corteza continental de la placa (`c.cont`, también arcos que pasaron a continental), aunque estuviera en trozos separados.
+   - El corte era un círculo máximo por su centro de masas, con orientación al azar.
+   - Si una mitad quedaba por debajo de `A_min` (0,5 % del planeta, 2,55 Mkm²), no había ruptura ni se reintentaba.
+2. **Las suturas no se guardaban como líneas.**
+   - `suturas()` fundía la placa menor en la mayor y emitía el evento `sutura` con la mitad de la longitud del frente y un punto. El borde desaparecía y nada marcaba dónde estuvo.
+   - La única huella era `proc.lote`, que marca toda la placa absorbida (no la línea), es diagnóstico y se sobrescribe con el siguiente evento.
+   - El diseño principal sí lo pedía («La línea de choque se registra como sutura con su edad», §6.5; «lista de suturas internas», `Historial`).
+3. **La división no podía cortar por una línea cualquiera, pero generalizarla costaba poco.**
+   - `partir` decidía el lado de cada muestra con el signo de `dot(x, polo) + ruido`. Es lo único que dependía de la forma del corte; crear las hijas, heredar fosas e invasiones, el tamaño mínimo y los dueños del mundo, no.
+   - La partición por fuente más cercana de la v5 (`partir_por_zona_fractura`, en 17b9ce2) sirve de base.
+   - El estiramiento de la v8 (`iniciar_estiramiento`) ya valía para cualquier corte.
+
+**Dos observaciones antes de calibrar.**
+- Con `p_k ∝ A_k`, el ritmo global es `λ_A·A_cont` se reparta como se reparta la corteza. Un supercontinente no se rompe más por km² que la misma corteza en varios continentes; solo quedan fuera los bloques de menos de `2·A_trozo,min`. El aislamiento térmico de la nota (§2) no «queda implícito» por km². Si sale un ciclo de supercontinentes, saldrá del trazado por las suturas. No se cambia la nota.
+- Una placa de menos de `A_min` se absorbe en su vecina en el mismo paso (`absorciones`), lo que desharía el rift. Además de `A_trozo,min` en cada trozo del bloque, se exige `A_min` a cada mitad de la placa; si no se cumple, se prueba el trazado alternativo.
+
+## 60. Decisiones del responsable y su implementación (2026-11-07 g, la última ronda de la tectónica)
+
+**Decisiones.**
+- Adenda v9: el origen de arco como fracción `a_i` (0–1), mezclada por volumen, y `η = a_i·η_arco + (1 − a_i)·η(h)`; después, recalibrar `η_min` con la pérdida a largo plazo (0,4–0,7 AU).
+- Nota de rifts: la ruptura por bloques con probabilidad `1 − exp(−λ_A·A_k·Δt)` y el trazado por la sutura más larga, en lugar de `τ_rift`; calibrar `λ_A` con ~4–7 rupturas por 100 Myr.
+- India–Asia: se acepta `D_0` = 400. La tolerancia de la velocidad de la India tras romperse la losa se amplía para que entren 5,8 cm/año, sin tocar `c_col`.
+- Recalibrar `E_1` y `n_ero` con el mar nuevo: relajación en 100–200 Myr y exportación de ~1,8 AU, y decir si no se cumplen a la vez.
+- El presupuesto del planeta sube a 250 s; si es sencillo, hacer implícito el flujo lateral para que no necesite subpasos.
+- Los escalones de edad del relleno de huecos y de las muestras que reaparecen se anotan en TREE como artefactos de representación, para más adelante.
+- Repetir la tabla de cierre con 5 semillas. Después se congela la capa.
+
+**Adenda v9: la fracción de arco** (`Corteza.arco`, de 0 a 1; `de_arco()` si pasa de 0,5, `continente()` la corteza continental que no es sobre todo de arco).
+- `sumar_hc` mezcla por volumen: `a ← (a·h_c + f·dh)/(h_c + roca + dh)`, con el sedimento que pasa a corteza a fracción 0.
+  - `f` = 1 lo que hace un arco.
+  - `f` = 0 la acreción de sedimento.
+  - Los traslados (dientes, islas, fusiones, convergencia difusa) llevan la fracción de la corteza que llega.
+- El flujo lateral transporta el volumen de arco con el volumen (cada flujo lleva la fracción de su fuente), y el estiramiento de un rift deja en su franja la fracción media.
+- En los choques, `η = a_i·η_arco + (1 − a_i)·η(h)`. El diagnóstico por grosor y por vía cuenta la parte que no es de arco.
+- Donde el modelo preguntaba «continental y no de arco» (régimen de los arcos, márgenes pasivos, cuerpos de la invasión), ahora pregunta `continente()`.
+- **Lo que deja un choque: una decisión de realismo que se aparta de la letra de la adenda.**
+  - La adenda dice que la corteza de un choque se mezcla con fracción 0. Así es sobre un continente: la corteza de arco que llega se une a él, que es justo lo que define `a_i` («de un arco que aún no se ha unido a un continente»).
+  - Pero el frente de un choque reparte lo que retiene por toda la placa de arriba a menos de `W_min_orog`, también sobre fondo oceánico o sobre otro arco. Ahí la corteza de arco no se ha unido a ningún continente.
+  - Medido (5 semillas, sin rifts nuevos): de la corteza de arco que retienen los choques, 1,1 AU queda sobre un continente y 0,93 AU fuera de él. Con fracción 0, esa corteza pasaría a «continental» y se perdería con `η_min` en el siguiente choque: es la misma pérdida por cambio de etiqueta que la v9 quería quitar.
+  - **Regla adoptada:** sobre un continente, fracción 0; fuera de él, la fracción de arco de lo solapado. Comparación en §62.
+- **No regresión:** con la regla de todo o nada (interruptor de medida, ya retirado), el planeta era idéntico al de 1f8814d sin las claves nuevas de la salida.
+
+**Nota de rifts** (`deriva/rifts.rs`).
+- **Suturas como líneas** (`Corteza.sutura` = `2·id + lado`). Al fundirse dos placas, `marcar_sutura` marca las muestras de los dos lados del frente de choque (bordes `Colision` entre las dos), con el lado de cada una. Viajan con su muestra y su Myr queda en `Deriva::suturas_hechas`.
+- **Bloques continentales:** regiones conexas, por las ocho vecinas, de celdas del mundo con `continente()` y el mismo dueño; en orden de su primera celda.
+- **Regla (§6.1):** cada bloque de al menos `2·A_trozo,min` que no tenga celdas en una franja de rift que aún se estira se rompe con probabilidad `1 − exp(−λ_A·A_k·Δt)`. Hay una tirada por bloque, con el generador por contador (placa, primera celda).
+- **Trazado (§6.2).**
+  - La sutura más larga del bloque con sus dos lados dentro, si mide al menos `L_sut,min` (450 km). Su longitud es la del lado más corto, en celdas por lado de celda.
+  - El corte por la sutura (`lados_por_sutura`) reparte cada celda de la placa al lado de la fuente más cercana entre las celdas de los dos lados (camino mínimo por las celdas de la placa). Más allá de los extremos, la frontera entre las dos regiones sigue recta hasta la costa y luego por el océano de la placa. Lo que no se alcanza (muestras ocultas bajo otra placa) toma el lado más cercano por toda la esfera.
+  - Sin sutura, un círculo máximo por el centro del bloque con orientación sorteada.
+  - Si algún trozo queda con menos de `A_trozo,min` de continente, o una mitad de la placa con menos de `A_min`, se prueba el trazado alternativo: un círculo con otra orientación. Si tampoco vale, no hay ruptura.
+  - Una sutura que se reabre deja de serlo.
+- **División (§6.3):** `partir_por_lados` parte por cualquier corte. El empujón de apertura gira alrededor del eje a 90° del centro en el plano de corte; para una sutura, el polo es la diferencia de los centros de sus dos lados. Lo demás es la v8: `iniciar_estiramiento` y `estirar_rifts`.
+- **Eventos (§7):** `rift` con el área del bloque, la de cada trozo (`trozos_km2`), la clase (`sutura` o `circulo`) y la longitud de la sutura (`sutura_km`); `rotura_rift` cuando un lado se rompe y nace el océano, con su extensión (`extension_km`).
+- **Métricas (§8):**
+  - por paso: bloques que pueden romperse y fracción del continente en el mayor, lados que se estiran, y en los márgenes pasivos el espesor en la costa y la anchura de la franja estirada;
+  - en el resumen: rupturas, las que siguen una sutura y roturas por 100 Myr, y ciclos de supercontinente (el índice pasa de menos de 0,5 a 0,7 o más).
+- **Se retiran `τ_rift` y la regla vieja.**
+- **Pruebas (§10):**
+  - `un_bloque_grande_se_rompe_por_su_sutura_y_conserva_la_corteza`: una sutura curva y descentrada de ~3 800 km. Se rompe por ella, no por un círculo por el centro, con menos del 1 % de celdas del lado equivocado, y el volumen continental cambia menos de 10⁻⁹ al partir y al estirar.
+  - `un_bloque_pequeno_no_se_rompe_nunca`: 0,48 Mkm² no se rompe en 20 Myr, y 1,4 Mkm² sí.
+  - `la_misma_semilla_da_las_mismas_rupturas`.
+- **No regresión:** con la regla de `τ_rift` (interruptor de medida, ya retirado), el planeta era idéntico al de 1f8814d sin las claves nuevas.
+
+**El flujo lateral: lo que costaba no eran los subpasos.** El perfil (5 semillas) lo muestra:
+- De media, ~110 subpasos por paso, con el espesor máximo de la red casi siempre entre 70 y 90 km, sobre una red de ~7 000–9 000 muestras.
+- La red se **rehacía entera ~50 veces por paso**, cada vez que una celda pasaba de `h_flujo` al recibir. Rehacerla se llevaba el 60 % del coste del flujo (99 s de 160, con 20 derivas a la vez).
+- **Un paso implícito no ahorraría.** El sistema es poco rígido: `D·Δt/d²` vale ~7–10 con 70–90 km. Un gradiente conjugado necesitaría tantas iteraciones como subpasos tiene hoy, cada una del coste de un subpaso. Además, la ley cúbica pediría iterarlo para no aplastar de más los picos.
+- **Se hacen dos cambios que no alteran ningún bit:**
+  - la red se amplía con las fuentes nuevas, en vez de rehacerse: dentro del paso no cambian los dueños, los representantes ni las muestras, así que los lados de una fuente son siempre los mismos;
+  - solo se apuntan, para mirar después, las celdas que aún no son fuente.
+- **Resultado:** idéntica byte a byte. Rehacer la red pasa de 99 a 2 s y los subpasos de 61 a 28 s (con 15–20 derivas a la vez).
+
+## 61. Cada cambio por separado y todos juntos (5 semillas, deriva sola, `λ_A` = 2,5·10⁻⁴)
+
+| | Nada (1f8814d) | v9 | Rifts | v9 + rifts | v9 que conserva el arco | Conserva + rifts | Objetivo |
+|---|---|---|---|---|---|---|---|
+| Rupturas por 100 Myr | 0,49 | 0,58 | 3,1 | 3,6 | 0,62 | 4,1 | 4–7 |
+| Las que siguen una sutura (por 100 Myr) | 0 | 0 | 0,49 | 0,71 | 0 | 0,84 | apreciable |
+| Pérdida en choques (AU) | 1,10 | 0,94 | 1,40 | 1,26 | 0,84 | 1,11 | 0,4–0,7 |
+| Delaminación (AU) | 2,26 | 2,86 | 2,67 | 2,82 | 2,56 | 2,77 | ≈1,1 |
+| Sedimento al mar (AU) | 3,51 | 4,00 | 3,90 | 4,07 | 3,80 | 3,91 | ≈1,8 |
+| ΔV_cont | −10,2 % | −13,7 % | −12,6 % | −12,6 % | −10,5 % | −9,1 % | ±10 % |
+| Edad media del fondo en la deriva (Myr) | 93 | 95 | 88 | 81 | 92 | 76 | 64 |
+| Fondo de más de 180 Myr al final | 22 % | 25 % | 23 % | 15 % | 21 % | 15 % | < 1 % |
+| Márgenes que acaban: vida (Myr) | 111 | 111 | 103 | 106 | 117 | 108 | 130–180 |
+| Arco que retienen los choques, sobre un continente / fuera (AU) | 0,46 / 0,57 | 1,11 / 0,93 | 0,52 / 0,62 | 1,29 / 1,06 | 1,19 / 1,50 | 1,53 / 1,99 | — |
+
+- **La v9 sola baja la pérdida** (1,10 → 0,94 AU), pero las cordilleras retienen más arco y engordan. Suben la delaminación (2,3 → 2,9) y el sedimento al mar (3,5 → 4,0), y el volumen continental pasa de −10 a −14 %.
+- **Conservar el arco fuera de los continentes** (§60) acerca todo lo que se mide: pérdida 0,84, delaminación 2,6 y ΔV_cont −10,5 %. Con los rifts, la pérdida queda en 1,11 y ΔV_cont en −9,1 %.
+- **Los rifts rejuvenecen el fondo** (93 → 76 Myr de media en la deriva; fondo de más de 180 Myr, 22 → 15 %), pero alargan las fosas (§62) y meten corteza fina en los choques: la pérdida sube.
+- **Con la v9, lo que se pierde sobre fondo oceánico ya no es arco.** Es sedimento que pasó a corteza (33–48 %), lo que dejan los choques sobre el fondo de la placa de arriba (23–34 %) y astillas de borde (11–13 %). El arco baja del 44–45 % al 10–18 %.
+
+## 62. `λ_A` y `η_min` (5 semillas; v9 que conserva el arco y rifts por bloques)
+
+| | `λ_A` 2,5·10⁻⁴ | **4·10⁻⁴** | 6·10⁻⁴ | 4·10⁻⁴ y `η_min` 0,4 | Objetivo |
+|---|---|---|---|---|---|
+| Rupturas por 100 Myr | 4,1 ± 0,7 | **4,9 ± 1,7** | 7,5 ± 0,9 | 4,9 ± 0,5 | 4–7 |
+| Las que siguen una sutura | 21 % | 22 % | 17 % | 19 % | apreciable |
+| Roturas de un lado por 100 Myr | 5,8 | 6,9 | 10,1 | 7,1 | — |
+| Suturas por 100 Myr | 2,6 | 2,8 | 4,4 | 2,2 | — |
+| Edad media del fondo en la deriva (Myr) | 76 | 75 | 65 | — | 64 |
+| Fondo de más de 180 Myr al final | 15 % | 16 % | 12 % | — | < 1 % |
+| Márgenes que acaban: vida (Myr) | 108 | 100 | 95 | 109 | 130–180 |
+| Longitud de fosa (km) | 87 200 | 88 500 | 105 500 | 83 800 | ~51 000 |
+| Área que se hunde (km²/año) | 4,15 | 4,28 | 4,91 | 4,01 | 2,7–3,4 |
+| Pérdida en choques (AU) | 1,11 | 1,16 | 1,36 | 1,23 | 0,4–0,7 |
+
+- **`λ_A` = 4·10⁻⁴**, en el centro del objetivo. Es más que el 2,5·10⁻⁴ de la nota porque el modelo tiene menos continente (`f_cont` 0,32 frente a 0,40).
+- **Más rifts rejuvenecen el fondo, pero alargan las fosas.** Cada rift deja dos márgenes nuevos, y la invasión de la v4 los convierte pronto en fosas (550–600 km/Myr de margen invadido). La fosa (×1,37 antes) y el área que se hunde ya pasaban del objetivo: es la ampliación futura de fosa.
+- **`η_min` se queda en 0,5, el techo de su rango.** Con 0,4 la pérdida sube (1,16 → 1,23 AU). La pérdida que queda es corteza fina sobre fondo oceánico (61–64 %), sobre todo sedimento hecho corteza y lo que los choques reparten por el fondo de la placa de arriba. `η_min` no puede bajarla.
+
+## 63. `E_1` y `n_ero`: relajación y exportación con el mar nuevo
+
+**Relajación en India–Asia** (`calibracion_relajacion`; el mar del escenario, a −1 255 m):
+
+| `n_ero` \ `E_1` (km/Myr) | 0,005 | 0,006 | 0,0075 | 0,008 | 0,009 | 0,011 | 0,012 | 0,016 |
+|---|---|---|---|---|---|---|---|---|
+| 2,0 | — | — | — | 281 | — | — | 200 | 153 |
+| 2,5 | 242 | 210 | **171** | — | 140 | 121 | — | — |
+| 3,0 | 132 | 111 | 94 | — | 77 | 65 | — | — |
+
+**Exportación en el planeta** (5 semillas, `λ_A` = 4·10⁻⁴) de las combinaciones que cumplen la relajación:
+
+| `n_ero`; `E_1` | 2,5; 0,005 (antes) | **2,5; 0,0075** | 3,0; 0,005 | 2,0; 0,014 | Objetivo |
+|---|---|---|---|---|---|
+| Relajación (Myr) | 242 ✗ | 171 ✓ | 132 ✓ | ~175 ✓ | 100–200 |
+| Sedimento al mar (AU) | 3,94 | 5,06 | 5,54 | 5,37 | ≈1,8 |
+| Delaminación (AU) | 2,74 | 2,41 | 2,01 | 2,60 | ≈1,1 |
+| ΔV_cont | −8,7 % | −8,0 % | −7,2 % | −10,1 % | ±10 % |
+| Pérdida en choques (AU) | 1,16 | 1,38 | 1,38 | 1,38 | 0,4–0,7 |
+
+**No se cumplen a la vez.** La relajación pide más erosión y la exportación, la mitad de la de hoy. Las dos dependen de lo mismo: entre el 62 y el 70 % de la erosión del planeta sale de la tierra a más de 3 km sobre el mar, y ahí está también la cola lenta de la relajación (2–4 km). `n_ero` no puede separarlas.
+
+**La causa está en la base, no en `E_1`** (CLAUDE §2.8):
+- Entra demasiada corteza. El fondo que se hunde va a 4,0–4,9 km²/año (Tierra, 2,7–3,4) y los arcos suman 4,4–5,4 AU, porque la fosa mide 1,7–1,9 veces la de la Tierra.
+- La tierra es demasiado alta: el 27–29 % pasa de 2 km, frente a ~11 % en la Tierra.
+- Además, el mar del propio escenario de relajación está a −1 255 m (Asia, a 1,7 km sobre el mar). Con un mar realista, el orógeno sobresaldría menos y haría falta todavía más erosión.
+
+**Se elige `E_1` = 0,0075 con `n_ero` = 2,5.** Es el cambio mínimo que cumple la relajación (171 Myr) y el de menos exportación de los tres. Bajar `E_1` hasta ~1,8 AU dejaría las cordilleras sin gastarse en 400 Myr: forzar un parámetro para tapar otra irrealidad.
+- `E = E_1·z^2,5` da 7,5 m/Myr a 1 km, 117 a 3 km y 420 a 5 km. No es alto: el Himalaya se erosiona a 1–5 km/Myr.
+- Con `n_ero` = 3 baja la delaminación (2,0) y el pico de la deriva, pero exporta algo más. La diferencia entre las dos queda dentro de la dispersión entre semillas (±0,3–0,5 AU).
+
+## 64. Tabla de cierre (5 semillas, planeta entero; v9, rifts por bloques, `λ_A` = 4·10⁻⁴, `E_1` = 0,0075)
+
+| | Modelo | Tierra u objetivo | Ronda f (§57) | |
+|---|---|---|---|---|
+| Tierra emergida | 0,326 ± 0,025 | 0,284 | 0,334 | ✗ |
+| Altura media de la tierra | 1 235 ± 160 m | 671 m | 1 143 | ✗ |
+| Tierra por debajo de 200 m | 0,087 ± 0,025 | 0,283 | 0,068 | ✗ |
+| Pendiente media (±25 km) | 0,0167 | 0,0052 | 0,0128 | ✗ |
+| Anchura de la plataforma | 8,1 ± 1,7 km | 42,8 km | 8,2 | ✗ |
+| Nivel del mar al final de la deriva | −164 ± 123 m | 0 (la Tierra real con la regla: −150) | −305 | — |
+| Profundidad media del océano | 3 915 ± 136 m | 3 667 m | 3 952 | ✗ |
+| Corteza máxima al final / en toda la deriva | 80 ± 10 / 123 ± 13 km | 70–80 km | 79 / 117 | ✓ / ✗ |
+| Edad media del fondo al final; más de 180 Myr | 88 ± 23 Myr; 13,1 % | 64,2; < 1 % | 119; 21,8 % | ✗ |
+| `f_cont`; cambio de volumen | 0,323; −8,0 ± 4,6 % | 0,40; ±10 % | 0,318; −10,3 % | ✗ / ✓ |
+| Velocidad de las placas | 4,65 ± 0,25 cm/año | 4,39 | 4,40 | ✓ |
+| Sedimento al mar | 5,06 ± 1,04 AU | ≈1,8 | 3,51 | ✗ |
+| Longitud de fosa | 96 300 ± 13 800 km | ~51 000 ± 25 % | 69 800 | ✗ (×1,89) |
+| Área que se hunde | 4,64 ± 0,48 km²/año | 2,7–3,4 | 3,37 | ✗ |
+| Márgenes pasivos: vida de los que acaban | 103 ± 11 Myr | 130–180 | 111 | ✗ |
+| Márgenes al final: edad media / máxima | 182 / 646 Myr | ~104 / ~180 | 228 / 643 | ✗ |
+| Choques: longitud, convergencia, duración | 21 200 km; 1,45 cm/año; 63 Myr | CCB 23 000 km; 1,87 | 12 100; 1,76; 63 | — |
+| Choques: pérdida con la losa / tras la rotura / total | 1,23 / 0,15 / 1,38 AU | total 0,4–0,7 | 1,06 / 0,04 / 1,10 | ✗ |
+| **Rupturas por 100 Myr** | **5,8 ± 1,2** | ~4–7 | 0,2–0,8 | ✓ |
+| Rupturas que siguen una sutura | 29 % (13–65 %) | apreciable | — | ✓ (blando) |
+| Roturas de un lado (nace el océano) por 100 Myr | 8,5 ± 3,4 | — | — | — |
+| Márgenes pasivos: franja estirada; corteza en la costa | 55 km; 35,7 km | 100–300 por lado | 65; 35,2 | ✗ |
+| Mayor bloque continental (media) | 0,18 del continente | — | — | — |
+| Ciclos de supercontinente (de < 0,5 a ≥ 0,7) en 450 Myr | 3,6 ± 2,4 | ~1,5 en 630 Myr (~1,1) | — | ✗ (blando) |
+| Tiempo de cálculo del planeta | 264 ± 9 s con cinco a la vez; **243 s solo** y 250,4 s en la batería (semilla 42) | 250 s | 246 con cinco; 230 solo | ✗ (por 0,4 s) |
+
+**Lo que mejora.**
+- **Rupturas a ritmo terrestre** (5,8 por 100 Myr), una de cada tres o cuatro por una sutura.
+- **El fondo rejuvenece:** de 119 a 88 Myr de media al final (68 de media en la deriva), y el de más de 180 Myr, del 22 al 13 %.
+- **El nivel del mar sube a −164 m**, casi el de la Tierra real con la regla del modelo (−150), y el océano tiene 3 915 m.
+- **Los choques duran y miden como los de la Tierra** (21 200 km frente a los 23 000 de Bird) y ΔV_cont cumple (−8 %).
+
+**Lo que empeora, y su causa.**
+- **La fosa (×1,89) y el área que se hunde (4,6 km²/año).** Cada rift deja dos márgenes que la invasión convierte pronto en fosas, con más placas (28 en la semilla 42). Ya pasaban del objetivo (ampliación futura de fosa).
+- **El sedimento al mar (5,1 AU) y la pérdida en choques (1,4 AU),** por la erosión más fuerte que pide la relajación (§63) y porque entra más corteza: los arcos crecen con el área que se hunde.
+- **El relieve sigue alto** (1 235 m de media; el 27–29 % de la tierra por encima de 2 km).
+- **Los márgenes pasivos no se parecen a los de la Tierra.** Los nacidos de un rift sí se estiran: con la calibración elegida, 28 km de corteza en la costa y una franja de 95 ± 27 km (5 semillas; 95–115 en las otras variantes), casi en 100–300. Pero son el 8–12 % de la costa de los márgenes. El resto son los bordes de los continentes del estado inicial, que nunca se estiraron, y viven más de lo real (edad máxima 646 Myr). En la Tierra, casi todos vienen de la rotura de Pangea.
+- **Los ciclos de supercontinente** (3,6 frente a ~1,1): el índice oscila entre 0,3 y 0,9 sin un supercontinente que dure. Con `p ∝ A` el ritmo de ruptura no depende de lo juntos que estén los continentes (§59).
+
+**El tiempo.**
+- Con la red ampliada y los demás ahorros, todos idénticos byte a byte, el flujo lateral pasa de ~60 a ~20 s por deriva.
+- Las placas y bordes de más que traen los rifts cuestan casi lo mismo. El planeta solo tarda 243 s; en la batería, con los escenarios de agentes a la vez, 250,4 s: **se pasa del presupuesto de 250 por 0,4 s**.
+- Por la regla del responsable, el presupuesto no se sube sin preguntar. Por eso `main` no se actualiza en esta ronda: decide el responsable.
+- Lo que más cuesta ahora es el reparto del sedimento al mar (22 s por deriva), la rasterización (19 s), el flujo (20 s), la erosión (10 s), las métricas (13 s) y, fuera de la deriva, la génesis geológica.
+
+## 65. Pendientes al congelar la capa (2026-11-08, en orden)
+
+La capa tectónica queda congelada: no se le añaden más reglas. Lo que sigue queda como trabajo futuro, en orden de lo que más aleja el planeta de la Tierra.
+
+1. **La longitud de fosa y el área que se hunde** (×1,89 y 4,6 km²/año): las fuerzas de las placas y la invasión de los márgenes (550–700 km/Myr de margen invadido). Arrastran los arcos, el sedimento al mar y la pérdida en los choques.
+2. **El relieve demasiado alto** (1 235 m; el 27–29 % de la tierra por encima de 2 km): es la base de la exportación al mar (§63). Con él, `E_1` no puede cumplir a la vez la relajación y ~1,8 AU.
+3. **Los márgenes del estado inicial,** que nunca se estiraron y viven 600 Myr: un estado inicial más terrestre (un supercontinente que se rompe) o una deriva más larga.
+4. **La pérdida en los choques** (1,4 AU frente a 0,4–0,7): corteza fina sobre fondo oceánico, sobre todo sedimento hecho corteza y lo que el frente de un choque reparte por el fondo de la placa de arriba (`W_min_orog`).
+5. **Los artefactos de representación de la deriva** (TREE): el relleno de huecos con fondo de edad 0, las muestras que reaparecen y los movimientos de muestras sueltas, que fabrican escalones de edad y fondo viejo (§56).
+6. **La India que se acelera tras romperse la losa** (5,8 cm/año; la real siguió frenando): el giro que le dan las fosas de los lados. La prueba admite hasta 0,55 veces la velocidad de antes (decisión del responsable).
+7. **El mar del escenario de relajación** (−1 255 m; Asia a 1,7 km sobre el mar): con un mar realista, el orógeno sobresaldría menos y haría falta más erosión.
+8. **Ampliaciones de la nota de rifts:** plumas del manto, rifts fallidos, aislamiento térmico de los supercontinentes y cuencas de trasarco.
+9. **Lo que sigue de §58:** mesetas oceánicas, montes submarinos y puntos calientes (~150 m de nivel del mar); el acortamiento andino, la flexión, el retroceso de las fosas y los casquetes; la lluvia por latitudes.
+10. **El tiempo: 243 s solo y 250,4 s en la batería, frente a un presupuesto de 250.** Decide el responsable entre:
+    - subir el presupuesto a ~275 s (lo medido en la batería, con un 10 % de margen);
+    - o abaratar el reparto del sedimento al mar (dos inundaciones por prioridad en cada paso), la rasterización o la génesis geológica, que en esta máquina no se pueden perfilar con herramienta (no hay `perf`).

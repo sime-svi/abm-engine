@@ -521,3 +521,41 @@ Con esa ficha el planeta da exactamente los mismos números: solo se lleva la cu
   - una cordillera tarda en relajarse unos 240 millones de años (el objetivo era 100–200);
   - la India va algo más deprisa de lo previsto tras romperse la losa.
   - Su arreglo depende de decisiones del responsable.
+
+### Continentes que se parten por sus cicatrices, y arcos que siguen siendo arcos (07-11-2026, séptima y última parte de la tectónica)
+
+Es la última ronda del relieve tectónico. Después, la capa se congela: no se le añaden más reglas.
+
+**Los continentes se parten a un ritmo terrestre.**
+- Antes, el planeta entero tenía de media un rift cada 150 millones de años, se repartiera como se repartiera el continente. Un rift es la grieta por la que se abre un continente hasta que nace un océano entre los dos trozos. Salían uno a cuatro en toda la historia.
+- Ahora cada bloque continental (cada trozo de continente conectado dentro de una placa) puede romperse en cada paso, con una probabilidad proporcional a su área. Los trozos de menos de medio millón de km² (Madagascar tiene 0,6) no se separan.
+- Salen unas **5 rupturas cada 100 millones de años**, el ritmo de la rotura de Pangea.
+- **Se rompen por sus cicatrices.** Cuando dos continentes chocan y se sueldan, la línea del choque (la sutura) queda ahora marcada dentro del continente que forman. Si un bloque tiene una sutura larga, la grieta la sigue y se prolonga recta hasta la costa. Si no, se parte por una línea recta con orientación al azar.
+  - Así se abrió el Atlántico, por donde se había cerrado un océano anterior. Es el ciclo de Wilson.
+  - En el modelo, una de cada cuatro o cinco rupturas sigue una sutura.
+- **El fondo oceánico rejuvenece.** Con océanos nuevos, la edad media del fondo baja de 119 a 88 millones de años (en la Tierra, 64), y el fondo de más de 180 millones de años, del 22 al 13 % (en la Tierra, menos del 1 %).
+- **Pero aparecen más fosas.** Cada rift deja dos bordes de continente nuevos, y las fosas los invaden pronto. La longitud de fosa ya era el 137 % de la de la Tierra y ahora es el 189 %. Es la ampliación futura de las fosas, que ya estaba anotada.
+
+**Los arcos siguen siendo arcos (adenda v9).**
+- Un arco es la cadena de volcanes que crece sobre una fosa, como Japón. Su corteza flota menos que la de un continente, pero cuando choca con uno, casi toda se queda pegada a él.
+- Antes, el modelo marcaba una columna como «de arco» o «de continente», sin término medio. Bastaba con que le llegara un poco de corteza de otro origen para que todo el arco pasara a contar como continente y, al chocar, se perdiera la mitad.
+- Ahora cada columna guarda qué fracción de su corteza viene de un arco, y se mezcla por volúmenes.
+- **Una decisión en la que me aparto de la letra de la adenda.** La adenda dice que lo que deja un choque cuenta como corteza continental, sin nada de arco. Es lo correcto sobre un continente: el arco se une a él. Pero un choque también deja corteza fuera de los continentes, sobre el fondo oceánico o sobre otro arco. Ahí el arco no se ha unido a ningún continente y sigue siendo arco.
+  - Esa corteza es casi la mitad del arco que retienen los choques.
+  - Con la regla literal, se perdería en el choque siguiente: el mismo error que la v9 quería quitar.
+- **Lo que salió:** la pérdida de corteza en los choques baja, pero no llega al objetivo (0,4–0,7 km³ al año). Lo que queda por perder ya no es arco, sino corteza fina sobre el fondo oceánico: sedimento que acabó convertido en corteza y lo que los choques reparten por el fondo de la placa de arriba. Bajar el parámetro de la pérdida solo la aumenta.
+
+**Las montañas viejas ya se gastan en 100–200 millones de años, pero no a la vez que llega al mar el sedimento de la Tierra.**
+- Para que una cordillera se relaje (vuelva a una corteza normal, de menos de 38 km) en 100–200 millones de años, la erosión tiene que ser un 50 % más fuerte. Entonces llegan al mar unos 5 km³ de sedimento al año, frente a ~1,8 en la Tierra.
+- No es un problema del ritmo de la erosión: el planeta tiene demasiada tierra alta y demasiadas fosas que fabrican corteza. Se elige la erosión que relaja las montañas como las reales; la exportación queda como hallazgo de la base.
+
+**El tiempo de cálculo.**
+- El planeta se pasaba del presupuesto porque la corteza que se desparrama por debajo de las cordilleras (el flujo lateral) rehacía su red de cálculo unas 50 veces en cada paso. Ahora la amplía en lugar de rehacerla, con exactamente los mismos resultados, y ese cálculo es cinco veces más rápido.
+- Pero las placas y bordes de más que traen los rifts cuestan casi lo mismo. El planeta tarda 243 s, y en la batería, junto a los demás escenarios, 250,4: se pasa por muy poco del nuevo presupuesto de 250 s.
+- Subirlo más le toca decidirlo al responsable.
+
+**Lo que queda para más adelante.** Los escalones de edad imposibles del fondo oceánico, que fabrica la manera de representar las placas, quedan apuntados como artefactos de representación. También quedan:
+- la longitud de las fosas;
+- la tierra demasiado alta;
+- los bordes de continente del principio, que nunca se estiraron;
+- la India del modelo, que se acelera tras romperse la losa, mientras que la real siguió frenando.

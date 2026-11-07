@@ -986,7 +986,7 @@ impl Deriva {
         // de su placa de al menos (3·L_borde)², ~0,2 Mkm²; Madagascar, 0,59) con fondo oceánico suyo
         // de más de a_inv al lado. Ni una celda continental suelta (un diente) ni un arco de islas que
         // aún no se ha unido a un continente son un margen pasivo.
-        let continente = |c: &Corteza| c.cont && !c.arco;
+        let continente = |c: &Corteza| c.continente();
         let a_cuerpo = (3.0 * cfg.l_borde_km).powi(2);
         let mut cuerpo_grande = vec![false; num];
         {

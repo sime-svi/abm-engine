@@ -2,7 +2,10 @@
 
 Documento de diseño. Complementa a diseno_relieve_tectonico.md (incremento 4 del terreno).
 
-Estado: versión 8. Diseño cerrado.
+Estado: versión 9. Diseño cerrado.
+
+Cambios de la versión 9:
+- El origen de arco deja de ser todo o nada: cada celda guarda qué fracción de su corteza viene de un arco (a_i entre 0 y 1). Antes, un poco de corteza de otra procedencia convertía el arco entero en "continental", y eso explicaba el 44 % de la pérdida en los choques sobre fondo oceánico.
 
 Cambios de la versión 8:
 - Los rifts adelgazan la corteza de los bordes antes de que nazca el océano (6.10). Así se forman márgenes estirados como los reales, sobre los que se asientan las plataformas continentales, y la regla de pérdida en los choques (6.5) tiene corteza fina sobre la que actuar.
@@ -124,7 +127,7 @@ Datos globales nuevos: los flujos por proceso y el volumen continental.
 |---|---|---|---|
 | h_c,i | Espesor de corteza de tipo continental en la celda i. Incluye lo que un arco ha añadido sobre litosfera oceánica (solo lo añadido, no los 7 km basálticos de base). | real | 0–80 km |
 | S_i | Espesor de sedimento en la celda i, como roca compactada | real | 0–15 km |
-| a_i | Origen de arco: 1 si la corteza continental de la celda la formó un arco que aún no se ha unido a un continente | booleano | 0 / 1 |
+| a_i | Fracción de la corteza de tipo continental de la celda que procede de un arco aún no unido a un continente | real | 0–1 |
 | z_i | Altura sobre el nivel del mar (ya existe) | real | km |
 | A_i | Área de la celda (ya existe) | real | km² |
 | A_sub,j | Área de la placa que baja consumida en la fosa j durante el paso. La da exacta el remuestreo conservativo. | real | km² |
@@ -184,7 +187,11 @@ La producción es proporcional a cuánta placa se hunde, que es el control princ
 
 Además, el área consumida apenas depende de lo dentado que esté el borde. Para placas rígidas, el área neta que cruza un borde entre dos puntos es la misma sea el borde recto o en zigzag; solo los dientes muy exagerados la inflan. Por eso los flujos no se multiplican aunque las fosas del modelo midan más que las reales.
 
-ΔV_arc,j se suma a h_c en las celdas de arco de la placa de arriba, según la regla de colocación del documento principal. Si el arco crece sobre litosfera oceánica, esas celdas pasan a a_i = 1.
+ΔV_arc,j se suma a h_c en las celdas de arco de la placa de arriba, según la regla de colocación del documento principal. La fracción de arco de esas celdas se actualiza mezclando volúmenes:
+
+a_i ← (a_i · V_i + ΔV_arc,i) / (V_i + ΔV_arc,i),   con V_i = h_c,i · A_i antes de añadir
+
+Cualquier otro aporte de corteza (acreción de sedimento, choques, sedimento que pasa a corteza) se mezcla igual, con fracción de arco 0. El remuestreo y el flujo lateral transportan la fracción junto con el volumen.
 
 F_arc = Σ_j ΔV_arc,j / (10⁶ · Δt)
 
@@ -219,8 +226,7 @@ F_sed es la suma de lo que pasa al manto.
 
 Cuando la corteza de tipo continental de la placa de abajo se solapa con la de arriba, sea V_sol el volumen solapado en el paso. Se elige la eficacia según el origen de esa corteza:
 
-- η = η_arco si la corteza solapada es de arco (a_i = 1);
-- si es continental, η depende del grosor h de la corteza que entra:
+η = a_i · η_arco + (1 − a_i) · η(h): la parte de arco se conserva con η_arco, y el resto según el grosor h de la corteza que entra:
 
   η(h) = η_min + (1 − η_min) · min(1, max(0, (h − h_1) / (h_2 − h_1)))
 

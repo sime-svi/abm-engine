@@ -8,9 +8,10 @@ use serde::{Deserialize, Serialize};
 pub struct EventoTectonico {
     /// Tiempo (Myr; negativo = antes del final de la deriva).
     pub myr: f64,
-    /// `rift`, `inicio_subduccion`, `inicio_colision`, `sutura`, `absorcion`, `salto_dorsal`,
-    /// `acrecion_arco`, `supercontinente_formado`, `supercontinente_roto`, `inicio_choque`,
-    /// `fin_choque`, `cambio_regimen` o `retroceso_margen` (adenda de balance §7).
+    /// `rift`, `rotura_rift`, `inicio_subduccion`, `inicio_colision`, `sutura`, `absorcion`,
+    /// `salto_dorsal`, `acrecion_arco`, `supercontinente_formado`, `supercontinente_roto`,
+    /// `inicio_choque`, `fin_choque`, `cambio_regimen` o `retroceso_margen` (adenda de balance §7;
+    /// nota de rifts §7).
     pub tipo: String,
     /// Placas implicadas (madre e hijas, las dos del borde, absorbida y receptora…).
     pub placas: Vec<u64>,
@@ -45,6 +46,16 @@ pub struct EventoTectonico {
     /// choque al acabar (Myr).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tiempo_choque_myr: Option<f64>,
+    /// Nota de rifts §7: al iniciarse un rift, el área continental de cada trozo (km²; el del lado
+    /// que se aleja primero) y, si sigue una sutura, su longitud dentro del bloque (km).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trozos_km2: Option<[f64; 2]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sutura_km: Option<f64>,
+    /// Nota de rifts §7: en la rotura de un lado de un rift (nace el océano), la extensión
+    /// acumulada de ese lado (km).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extension_km: Option<f64>,
 }
 
 /// Métricas agregadas de un paso de la deriva (§8, «cada Myr»).
@@ -161,6 +172,21 @@ pub struct MetricaMyr {
     pub margen_fin_km: f64,
     #[serde(default)]
     pub margen_fin_vida_km_myr: f64,
+    /// Nota de rifts §8: bloques continentales que pueden romperse (de al menos `2·A_trozo,min`),
+    /// fracción del continente en el mayor bloque, lados de rift que aún se estiran y, en los
+    /// márgenes pasivos, el espesor de la corteza en la costa (km, media de los primeros 50 km) y la
+    /// anchura de su franja estirada (km: distancia a la costa en que la corteza llega al 90 % de la
+    /// de 200–300 km; 0 si no hay márgenes).
+    #[serde(default)]
+    pub bloques_continentales: u32,
+    #[serde(default)]
+    pub bloque_mayor_frac: f64,
+    #[serde(default)]
+    pub rifts_estirando: u32,
+    #[serde(default)]
+    pub costa_margen_km: f64,
+    #[serde(default)]
+    pub franja_estirada_km: f64,
 }
 
 /// Cuentas del material continental (km³) a lo largo de la deriva (adenda de balance §6 y §8).
@@ -391,4 +417,26 @@ pub struct BalanceMedio {
     pub duracion_media_choques_myr: f64,
     #[serde(default)]
     pub choques_terminados: u32,
+    /// Nota de rifts §8 y §10 (tras el rodaje): rupturas por 100 Myr y fracción que sigue una
+    /// sutura, roturas (nace el océano en un lado) por 100 Myr, bloques continentales y fracción del
+    /// mayor (medias de los pasos), espesor de la corteza en la costa de los márgenes pasivos y
+    /// anchura de su franja estirada al final (km), y ciclos de supercontinente: veces que el índice
+    /// de supercontinente pasa de menos de 0,5 a 0,7 o más (histéresis; la Tierra, ~1,5 ciclos en
+    /// 630 Myr).
+    #[serde(default)]
+    pub rifts_100myr: f64,
+    #[serde(default)]
+    pub rifts_sutura_frac: f64,
+    #[serde(default)]
+    pub roturas_rift_100myr: f64,
+    #[serde(default)]
+    pub bloques_continentales: f64,
+    #[serde(default)]
+    pub bloque_mayor_frac: f64,
+    #[serde(default)]
+    pub costa_margen_final_km: f64,
+    #[serde(default)]
+    pub franja_estirada_final_km: f64,
+    #[serde(default)]
+    pub ciclos_supercontinente: u32,
 }

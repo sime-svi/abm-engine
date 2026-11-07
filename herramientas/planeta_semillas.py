@@ -105,7 +105,17 @@ FILAS = [
     ('tect_bal_choques_con_losa_au', 'Choques: pérdida con la losa colgando (AU)', None, None),
     ('tect_bal_choques_sin_losa_au', 'Choques: pérdida tras la rotura (AU)', None, None),
     ('tect_bal_choques_au', 'Choques: pérdida total (AU)', '0,4–0,7', lambda x: 0.4 <= x <= 0.7),
-    ('tiempo_s', 'Tiempo de cálculo del planeta (s)', '≤ 200', lambda x: x <= 200.0),
+    # Nota de rifts §10 (Pangea: 6–10 rupturas grandes en ~150 Myr; Bradley 2008; Seton et al. 2020).
+    ('tect_bal_rifts_100myr', 'Rifts: rupturas por 100 Myr', '~4–7', lambda x: 4.0 <= x <= 7.0),
+    ('tect_bal_rifts_sutura_frac', 'Rifts: fracción que sigue una sutura', 'apreciable', None),
+    ('tect_bal_roturas_rift_100myr', 'Rifts: roturas de un lado (nace el océano) por 100 Myr', None, None),
+    ('tect_bal_franja_estirada_final_km', 'Márgenes pasivos: franja estirada al final (km)', '100–300',
+     lambda x: 100.0 <= x <= 300.0),
+    ('tect_bal_costa_margen_final_km', 'Márgenes pasivos: corteza en la costa al final (km)', None, None),
+    ('tect_bal_bloque_mayor_frac', 'Mayor bloque continental (fracción del continente, media)', None, None),
+    ('tect_bal_ciclos_supercontinente', 'Ciclos de supercontinente tras el rodaje (450 Myr)',
+     '~1,5 en 630 Myr (~1,1 en 450)', None),
+    ('tiempo_s', 'Tiempo de cálculo del planeta (s)', '≤ 250', lambda x: x <= 250.0),
 ]
 
 

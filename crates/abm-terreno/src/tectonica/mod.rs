@@ -432,6 +432,18 @@ fn balance_medio(
     };
     let n = val.len() as f64;
     let media = |f: fn(&MetricaMyr) -> f64| val.iter().map(|m| f(m)).sum::<f64>() / n;
+    // Eventos de los pasos que cuentan: un evento lleva el Myr del principio de su paso, el de la
+    // métrica del paso anterior.
+    let t_ini = metricas
+        .iter()
+        .rev()
+        .find(|m| m.rodaje)
+        .map_or(f64::NEG_INFINITY, |m| m.myr);
+    let tras_rodaje = |tipo: &'static str| {
+        eventos
+            .iter()
+            .filter(move |e| e.tipo == tipo && e.myr >= t_ini)
+    };
     // V_cont al acabar el rodaje: el del último paso de rodaje (o el primero válido si no hay).
     let v_inicio = metricas
         .iter()
@@ -592,6 +604,36 @@ fn balance_medio(
                 .iter()
                 .map(|&x| if t > 0.0 { x / t } else { 0.0 })
                 .collect()
+        },
+        rifts_100myr: tras_rodaje("rift").count() as f64 * 100.0 / n,
+        rifts_sutura_frac: {
+            let total = tras_rodaje("rift").count();
+            let por_sutura = tras_rodaje("rift")
+                .filter(|e| e.clase.as_deref() == Some("sutura"))
+                .count();
+            if total > 0 {
+                por_sutura as f64 / total as f64
+            } else {
+                0.0
+            }
+        },
+        roturas_rift_100myr: tras_rodaje("rotura_rift").count() as f64 * 100.0 / n,
+        bloques_continentales: media(|m| m.bloques_continentales as f64),
+        bloque_mayor_frac: media(|m| m.bloque_mayor_frac),
+        costa_margen_final_km: ultima.costa_margen_km,
+        franja_estirada_final_km: ultima.franja_estirada_km,
+        ciclos_supercontinente: {
+            let mut abajo = false;
+            let mut ciclos = 0;
+            for m in &val {
+                if m.supercontinente < 0.5 {
+                    abajo = true;
+                } else if abajo && m.supercontinente >= 0.7 {
+                    abajo = false;
+                    ciclos += 1;
+                }
+            }
+            ciclos
         },
     }
 }
