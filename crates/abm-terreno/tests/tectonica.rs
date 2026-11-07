@@ -1120,3 +1120,461 @@ fn exploracion_relajacion() {
     }
     println!("{}", serie.join(" | "));
 }
+
+/// Placas distintas a menos de `radio_km` de la celda `k` (por la superficie).
+fn placas_cerca(d: &Deriva, k: usize, radio_km: f64) -> usize {
+    let cos_max = (radio_km / d.malla.r_km).cos();
+    let x = d.malla.dir[k];
+    let mut visto = std::collections::HashSet::new();
+    let mut placas = std::collections::HashSet::new();
+    let mut pila = vec![k];
+    visto.insert(k);
+    while let Some(c) = pila.pop() {
+        if d.dueno[c] != NADA {
+            placas.insert(d.dueno[c]);
+        }
+        for &v in &d.malla.vec[c] {
+            let vu = v as usize;
+            if v == NADA || !visto.insert(vu) {
+                continue;
+            }
+            let dv = d.malla.dir[vu];
+            if x[0] * dv[0] + x[1] * dv[1] + x[2] * dv[2] >= cos_max {
+                pila.push(vu);
+            }
+        }
+    }
+    placas.len()
+}
+
+/// Lo que deja una deriva del planeta para el diagnóstico de las uniones triples, los picos de
+/// espesor y el coste de cada etapa.
+#[derive(Default)]
+struct InformeDeriva {
+    semilla: u64,
+    h_del_arco: f64,
+    tau_ero: f64,
+    /// Reparto de la erosión potencial `Σ (h_eq − h0)·A` (sin descontar las cuencas cerradas) por
+    /// exceso sobre `h0`: 0–2, 2–5, 5–10, 10–20 y más de 20 km, tras el rodaje.
+    erosion_por_exceso: [f64; 5],
+    /// Consumo (km²) y solape continental (km³) tras el rodaje, por código de borde (0 sin borde,
+    /// 1 dorsal, 2 fosa, 3 choque, 4 transformante) y por si la celda está en una unión triple.
+    consumo: [[f64; 2]; 5],
+    solape: [[f64; 2]; 5],
+    /// Longitud de borde (km·paso) en uniones triples y en total, tras el rodaje.
+    borde_triple_km: f64,
+    borde_total_km: f64,
+    /// Celdas·paso de más de 80 km (todas y en uniones triples), pasos con alguna, y por etapa
+    /// que más subió el máximo en esos pasos.
+    picos: u64,
+    picos_triples: u64,
+    pasos_con_picos: u64,
+    pasos_con_picos_rodaje: u64,
+    etapa_de_los_picos: std::collections::BTreeMap<&'static str, u64>,
+    h_max: f64,
+    /// Pasos en los que la muestra más gruesa está oculta (no la ve el mundo).
+    pasos_maximo_oculto: u64,
+    /// Celdas·paso de más de 80 km según su muestra en el paso anterior: ya visible, oculta y de
+    /// más de 60 km (reaparece), u otra (nueva, o fina el paso anterior).
+    picos_seguian: u64,
+    picos_reaparecen: u64,
+    picos_otros: u64,
+    /// Espesor máximo de una muestra continental oculta y de una visible (km), tras el rodaje.
+    max_oculta: f64,
+    max_visible: f64,
+    /// Consumo asignado a celdas transformantes por oblicuidad del movimiento relativo (km²; clases
+    /// 0–5, 5–10, 10–15, 15–20 y más de 20°).
+    oblicuidad_transf: [f64; 5],
+    /// Consumo asignado a celdas transformantes a menos de `L_borde` de una fosa del mismo par de
+    /// placas (el final de una fosa), y en total (km²).
+    transf_junto_a_fosa: f64,
+    transf_total: f64,
+    h_max_paso: u64,
+    h_max_etapa: &'static str,
+    /// Tiempo de pared por etapa (s) y total.
+    segundos: std::collections::BTreeMap<&'static str, f64>,
+    /// Balance tras el rodaje (medias, AU) y cambio de V_cont desde el final del rodaje.
+    arcos: f64,
+    choques: f64,
+    delam: f64,
+    delam_arcos: f64,
+    al_mar: f64,
+    v_cont: f64,
+    f_cont: f64,
+    placas: u32,
+    a_sub: f64,
+    fosas_km: f64,
+    conv_fosas: f64,
+}
+
+fn diagnosticar_deriva(semilla: u64, h_del_arco: f64, tau_ero: f64) -> InformeDeriva {
+    let cfg =
+        abm_terreno::config::TerrenoConfig::load("../../config/terreno.toml").expect("config");
+    let mut tc = cfg.tectonica.clone();
+    tc.h_del_arco_km = h_del_arco;
+    tc.tau_orog_myr = tau_ero;
+    let malla = Malla::new(cfg.planet.n0, tc.nivel_malla, cfg.planet.r_km);
+    let mut d = Deriva::nueva(&tc, semilla, malla);
+    d.traza = Some(Vec::new());
+    let pasos = (tc.t_deriva_myr / tc.dt_myr).round() as u64;
+    let rodaje = (tc.t_rodaje_myr / tc.dt_myr).round() as u64;
+    let mut inf = InformeDeriva {
+        semilla,
+        h_del_arco,
+        tau_ero,
+        ..Default::default()
+    };
+    let mut h_prev = 0.0;
+    // Muestras visibles (por placa y celda local) y ocultas gruesas del paso anterior.
+    let mut vis_ant: Vec<Vec<bool>> = Vec::new();
+    let mut ocultas_ant: std::collections::HashMap<(u32, u32), f64> = Default::default();
+    for paso in 1..=pasos {
+        d.dar_paso();
+        let en_rodaje_v = paso <= rodaje;
+        let mut vis: Vec<Vec<bool>> = d.placas.iter().map(|p| vec![false; p.mapa.len()]).collect();
+        for k in 0..d.malla.num {
+            if d.dueno[k] != NADA && d.rep[k] != NADA {
+                vis[d.dueno[k] as usize][d.rep[k] as usize] = true;
+            }
+        }
+        let mut ocultas = std::collections::HashMap::new();
+        for (pi, p) in d.placas.iter().enumerate().filter(|(_, p)| p.viva) {
+            for (s, c) in p.cort.iter().enumerate() {
+                let l = p.celda[s];
+                if c.cont && !vis[pi][l as usize] {
+                    if !en_rodaje_v {
+                        inf.max_oculta = inf.max_oculta.max(c.h);
+                    }
+                    if c.h > 60.0 {
+                        ocultas.insert((pi as u32, l), c.h);
+                    }
+                }
+            }
+        }
+        let traza = d.traza.replace(Vec::new()).unwrap_or_default();
+        // La etapa que más sube el máximo de espesor en este paso.
+        let (mut sube, mut etapa) = (f64::NEG_INFINITY, "");
+        let mut ant = h_prev;
+        for e in &traza {
+            *inf.segundos.entry(e.etapa).or_insert(0.0) += e.segundos;
+            if e.h_max_km - ant > sube {
+                sube = e.h_max_km - ant;
+                etapa = e.etapa;
+            }
+            ant = e.h_max_km;
+        }
+        let h_fin = traza.last().map_or(0.0, |e| e.h_max_km);
+        // El máximo de las muestras (con las ocultas) frente al que ve el mundo.
+        let h_visible = d.espesor_max_continental();
+        if h_fin > h_visible + 1.0 {
+            inf.pasos_maximo_oculto += 1;
+        }
+        let h_paso = traza.iter().map(|e| e.h_max_km).fold(0.0, f64::max);
+        if h_paso > inf.h_max {
+            inf.h_max = h_paso;
+            inf.h_max_paso = paso;
+            inf.h_max_etapa = etapa;
+        }
+        h_prev = h_fin;
+        let en_rodaje = paso <= rodaje;
+        let mut picos_paso = 0;
+        for k in 0..d.malla.num {
+            if !en_rodaje && let Some(c) = d.corteza(k).filter(|c| c.cont) {
+                inf.max_visible = inf.max_visible.max(c.h);
+            }
+            if d.corteza(k)
+                .is_some_and(|c| c.cont && c.h > ALARMA_ESPESOR_KM)
+            {
+                picos_paso += 1;
+                inf.picos += 1;
+                if placas_cerca(&d, k, tc.l_borde_km) >= 3 {
+                    inf.picos_triples += 1;
+                }
+                let clave = (d.dueno[k], d.rep[k]);
+                let antes = vis_ant
+                    .get(clave.0 as usize)
+                    .is_some_and(|v| v[clave.1 as usize]);
+                if antes {
+                    inf.picos_seguian += 1;
+                } else if ocultas_ant.contains_key(&clave) {
+                    inf.picos_reaparecen += 1;
+                } else {
+                    inf.picos_otros += 1;
+                }
+            }
+        }
+        vis_ant = vis;
+        ocultas_ant = ocultas;
+        if !en_rodaje {
+            for p in d.placas.iter().filter(|p| p.viva) {
+                for (s, c) in p.cort.iter().enumerate() {
+                    if !c.cont {
+                        continue;
+                    }
+                    let x = c.h_eq(tc.rho_s, tc.rho_c) - tc.h0_km;
+                    if x > 0.0 {
+                        let i = [2.0, 5.0, 10.0, 20.0].partition_point(|&l| l <= x);
+                        inf.erosion_por_exceso[i] += x * d.malla.area[p.celda[s] as usize];
+                    }
+                }
+            }
+        }
+        if picos_paso > 0 {
+            if en_rodaje {
+                inf.pasos_con_picos_rodaje += 1;
+            } else {
+                inf.pasos_con_picos += 1;
+            }
+            *inf.etapa_de_los_picos.entry(etapa).or_insert(0) += 1;
+        }
+        if en_rodaje {
+            continue;
+        }
+        let mut borde_en = std::collections::HashMap::new();
+        let mut fosas_par: std::collections::HashMap<(u32, u32), Vec<usize>> = Default::default();
+        for b in &d.bordes {
+            borde_en.insert(b.k, *b);
+            if b.tipo == abm_terreno::tectonica::deriva::TipoBorde::Subduccion {
+                fosas_par
+                    .entry((b.p.min(b.q), b.p.max(b.q)))
+                    .or_default()
+                    .push(b.k as usize);
+            }
+        }
+        let cos_borde = (tc.l_borde_km / d.malla.r_km).cos();
+        for &(k, tipo, a) in &d.consumo_en_borde_paso {
+            let t = (placas_cerca(&d, k as usize, tc.l_borde_km) >= 3) as usize;
+            inf.consumo[tipo as usize][t] += a;
+            if tipo == 4
+                && let Some(b) = borde_en.get(&k)
+            {
+                // Oblicuidad: ángulo entre el movimiento relativo y el borde.
+                let x = d.malla.dir[k as usize];
+                let (wp, wq) = (d.placas[b.p as usize].omega, d.placas[b.q as usize].omega);
+                let w = [wp[0] - wq[0], wp[1] - wq[1], wp[2] - wq[2]];
+                let v = [
+                    w[1] * x[2] - w[2] * x[1],
+                    w[2] * x[0] - w[0] * x[2],
+                    w[0] * x[1] - w[1] * x[0],
+                ]
+                .map(|c| c * d.malla.r_km);
+                let vm = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+                let ang = if vm > 0.0 {
+                    (b.v_n.abs() / vm).min(1.0).asin().to_degrees()
+                } else {
+                    0.0
+                };
+                inf.oblicuidad_transf[((ang / 5.0) as usize).min(4)] += a;
+                inf.transf_total += a;
+                let cerca = fosas_par
+                    .get(&(b.p.min(b.q), b.p.max(b.q)))
+                    .is_some_and(|ks| {
+                        ks.iter().any(|&j| {
+                            let y = d.malla.dir[j];
+                            x[0] * y[0] + x[1] * y[1] + x[2] * y[2] >= cos_borde
+                        })
+                    });
+                if cerca {
+                    inf.transf_junto_a_fosa += a;
+                }
+            }
+        }
+        for &(k, tipo, v) in &d.solape_en_borde_paso {
+            let t = (placas_cerca(&d, k as usize, tc.l_borde_km) >= 3) as usize;
+            inf.solape[tipo as usize][t] += v;
+        }
+        if paso % 10 == 0 {
+            for b in &d.bordes {
+                inf.borde_total_km += b.largo_km;
+                if placas_cerca(&d, b.k as usize, tc.l_borde_km) >= 3 {
+                    inf.borde_triple_km += b.largo_km;
+                }
+            }
+        }
+    }
+    let val: Vec<_> = d.metricas.iter().filter(|m| !m.rodaje).collect();
+    let n = val.len() as f64;
+    let media = |f: fn(&abm_terreno::tectonica::historia::MetricaMyr) -> f64| {
+        val.iter().map(|m| f(m)).sum::<f64>() / n
+    };
+    inf.arcos = media(|m| m.f_arc_au);
+    inf.choques = media(|m| m.f_col_au);
+    inf.delam = media(|m| m.f_del_au);
+    inf.delam_arcos = media(|m| m.f_del_arcos_au);
+    inf.al_mar = media(|m| m.f_den_au);
+    inf.a_sub = media(|m| m.area_subducida_km2_anio);
+    inf.fosas_km = media(|m| m.fosas_km);
+    inf.conv_fosas = val
+        .iter()
+        .map(|m| m.convergencia_media_fosas_cm_anio * m.fosas_km)
+        .sum::<f64>()
+        / val.iter().map(|m| m.fosas_km).sum::<f64>();
+    let v_inicio = d
+        .metricas
+        .iter()
+        .rev()
+        .find(|m| m.rodaje)
+        .map_or(val[0].inventario_km3, |m| m.inventario_km3);
+    let ultima = val[val.len() - 1];
+    inf.v_cont = ultima.inventario_km3 / v_inicio - 1.0;
+    inf.f_cont = ultima.area_continental_frac;
+    inf.placas = ultima.n_placas;
+    inf
+}
+
+#[test]
+#[ignore = "exploratoria: la deriva del planeta en varias semillas a la vez (SEMILLAS=42,1,2,3,4; H_DEL_ARCO y TAU_ERO, listas): balance, uniones triples, picos de espesor, finales de fosa y coste por etapa (~4 min con 10 derivas en paralelo)"]
+fn deriva_en_varias_semillas() {
+    let semillas: Vec<u64> = std::env::var("SEMILLAS")
+        .unwrap_or_else(|_| "42".into())
+        .split(',')
+        .map(|x| x.trim().parse().expect("semilla"))
+        .collect();
+    let umbrales: Vec<f64> = std::env::var("H_DEL_ARCO")
+        .unwrap_or_else(|_| "40".into())
+        .split(',')
+        .map(|x| x.trim().parse().expect("h_del_arco"))
+        .collect();
+    let taus: Vec<f64> = std::env::var("TAU_ERO")
+        .unwrap_or_else(|_| "63".into())
+        .split(',')
+        .map(|x| x.trim().parse().expect("tau_ero"))
+        .collect();
+    let trabajos: Vec<(u64, f64, f64)> = semillas
+        .iter()
+        .flat_map(|&s| {
+            let taus = &taus;
+            umbrales
+                .iter()
+                .flat_map(move |&h| taus.iter().map(move |&t| (s, h, t)))
+        })
+        .collect();
+    let informes: Vec<InformeDeriva> = std::thread::scope(|sc| {
+        let hilos: Vec<_> = trabajos
+            .iter()
+            .map(|&(s, h, t)| sc.spawn(move || diagnosticar_deriva(s, h, t)))
+            .collect();
+        hilos.into_iter().map(|h| h.join().expect("hilo")).collect()
+    });
+    let nombres = ["sin borde", "dorsal", "fosa", "choque", "transformante"];
+    for inf in &informes {
+        println!(
+            "\n=== semilla {} h_del,arco {} km tau_ero {} Myr ===",
+            inf.semilla, inf.h_del_arco, inf.tau_ero
+        );
+        let te: f64 = inf.erosion_por_exceso.iter().sum();
+        println!(
+            "erosión potencial por exceso sobre h0 (0–2, 2–5, 5–10, 10–20, >20 km): {:?} %",
+            inf.erosion_por_exceso
+                .map(|x| (1000.0 * x / te).round() / 10.0)
+        );
+        let tc: f64 = inf.consumo.iter().flatten().sum();
+        let ts: f64 = inf.solape.iter().flatten().sum();
+        println!("consumo y solape continental por borde (% del total; normal | en unión triple):");
+        for (i, nom) in nombres.iter().enumerate() {
+            println!(
+                "  {nom:<14} consumo {:6.2} | {:5.2}   solape {:6.2} | {:5.2}",
+                100.0 * inf.consumo[i][0] / tc,
+                100.0 * inf.consumo[i][1] / tc,
+                100.0 * inf.solape[i][0] / ts,
+                100.0 * inf.solape[i][1] / ts
+            );
+        }
+        let nc = |x: &[[f64; 2]; 5], t: usize| x[1][t] + x[4][t];
+        let tot = |x: &[[f64; 2]; 5]| x.iter().flatten().sum::<f64>();
+        println!(
+            "  no convergente: consumo {:.2} % (en uniones triples {:.2}), solape {:.2} % (en uniones triples {:.2}); borde en uniones triples {:.1} % de la longitud",
+            100.0 * (nc(&inf.consumo, 0) + nc(&inf.consumo, 1)) / tot(&inf.consumo),
+            100.0 * nc(&inf.consumo, 1) / tot(&inf.consumo),
+            100.0 * (nc(&inf.solape, 0) + nc(&inf.solape, 1)) / tot(&inf.solape),
+            100.0 * nc(&inf.solape, 1) / tot(&inf.solape),
+            100.0 * inf.borde_triple_km / inf.borde_total_km
+        );
+        println!(
+            "picos de más de 80 km: {} celdas·paso ({} en uniones triples), en {} pasos tras el rodaje y {} del rodaje; etapa que más sube el máximo en esos pasos: {:?}",
+            inf.picos,
+            inf.picos_triples,
+            inf.pasos_con_picos,
+            inf.pasos_con_picos_rodaje,
+            inf.etapa_de_los_picos
+        );
+        println!(
+            "espesor máximo de las muestras {:.1} km en el paso {} (sube sobre todo en {}); pasos con la más gruesa oculta: {}",
+            inf.h_max, inf.h_max_paso, inf.h_max_etapa, inf.pasos_maximo_oculto
+        );
+        println!(
+            "tras el rodaje: máximo de una muestra oculta {:.1} km, de una visible {:.1} km; picos según su muestra el paso anterior: visible {}, oculta de más de 60 km {}, otra {}",
+            inf.max_oculta,
+            inf.max_visible,
+            inf.picos_seguian,
+            inf.picos_reaparecen,
+            inf.picos_otros
+        );
+        let to: f64 = inf.oblicuidad_transf.iter().sum();
+        println!(
+            "consumo en celdas transformantes por oblicuidad (0–5, 5–10, 10–15, 15–20, >20°): {:?} %; a menos de L_borde de una fosa del mismo par: {:.1} %",
+            inf.oblicuidad_transf
+                .map(|x| (1000.0 * x / to).round() / 10.0),
+            100.0 * inf.transf_junto_a_fosa / inf.transf_total.max(1e-12)
+        );
+        println!(
+            "balance (AU): arcos {:.2} choques {:.2} delaminación {:.3} (arcos {:.3}) al mar {:.2}; V_cont {:+.1} %; f_cont {:.3}; placas {}; A_sub {:.2} km²/año; fosas {:.0} km a {:.2} cm/año",
+            inf.arcos,
+            inf.choques,
+            inf.delam,
+            inf.delam_arcos,
+            inf.al_mar,
+            100.0 * inf.v_cont,
+            inf.f_cont,
+            inf.placas,
+            inf.a_sub,
+            inf.fosas_km,
+            inf.conv_fosas
+        );
+        let total: f64 = inf.segundos.values().sum();
+        let mut etapas: Vec<_> = inf.segundos.iter().collect();
+        etapas.sort_by(|a, b| b.1.total_cmp(a.1));
+        println!(
+            "tiempo {total:.0} s: {}",
+            etapas
+                .iter()
+                .map(|(e, s)| format!("{e} {:.1} %", 100.0 * *s / total))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    // Resumen por umbral y τ_ero: media y extremos entre semillas.
+    for (h, t) in umbrales
+        .iter()
+        .flat_map(|&h| taus.iter().map(move |&t| (h, t)))
+    {
+        let g: Vec<_> = informes
+            .iter()
+            .filter(|i| i.h_del_arco == h && i.tau_ero == t)
+            .collect();
+        let r = |f: fn(&InformeDeriva) -> f64| {
+            let v: Vec<f64> = g.iter().map(|i| f(i)).collect();
+            let m = v.iter().sum::<f64>() / v.len() as f64;
+            let (lo, hi) = v
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &x| {
+                    (a.min(x), b.max(x))
+                });
+            format!("{m:.3} [{lo:.3}–{hi:.3}]")
+        };
+        println!(
+            "\n### h_del,arco {h} km, tau_ero {t} Myr, {} semillas: al mar {} AU; delaminación {} (arcos {}); choques {}; arcos {}; V_cont {}; f_cont {}; A_sub {}; fosas {} km; h_max {}",
+            g.len(),
+            r(|i| i.al_mar),
+            r(|i| i.delam),
+            r(|i| i.delam_arcos),
+            r(|i| i.choques),
+            r(|i| i.arcos),
+            r(|i| i.v_cont),
+            r(|i| i.f_cont),
+            r(|i| i.a_sub),
+            r(|i| i.fosas_km),
+            r(|i| i.h_max)
+        );
+    }
+}

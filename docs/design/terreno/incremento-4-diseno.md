@@ -384,7 +384,9 @@ Medido tras la nota de bordes (relajación: choque India–Asia de 50 Myr, malla
 - **Lo que sobra es lo que falta en la delaminación:** 0,05 AU frente a ≈1,1. El flujo lateral reparte la corteza engrosada antes de que llegue a `h_del` = 50 km (los dos umbrales son iguales, `h_flujo` = `h_del`). En la Tierra, las raíces de los arcos se desprenden: la eclogita de los arcos se forma desde ~35–45 km. En el modelo, ese material acaba erosionado y en el mar.
 - **Pregunta para el responsable:** ¿delaminación de las raíces de los arcos (y `τ_del`) antes que la erosión no lineal? `τ_del` y `f_acr` siguen sin calibrar.
 
-## 16. Pendientes (en orden)
+> **Corrección (2026-11-07, §19).** Cada fila de la tabla es una sola deriva, y el planeta es caótico: entre semillas, la exportación varía ±0,5 AU. Con 5 semillas, la exportación **sí depende de `τ_ero`**: 3,06 AU con 63 Myr y 2,38 con 110, y baja en todas las semillas. La caída de las raíces de los arcos no la baja (3,13 → 3,06). Los dos puntos de arriba quedan refutados.
+
+## 16. Pendientes (2026-11-06; sustituida por §22)
 
 1. **Fuerzas de las placas** (nota de bordes §11.2): las fosas siguen 2 veces las de la Tierra con cualquier `L_borde` razonable; mirar el reparto de convergencia por placa.
 2. **Exportación al mar** (3,1 AU, objetivo ≈1,8): no depende de `τ_ero` (§15); lo que falta es la delaminación (0,05 AU, ≈1,1). Decidir entre la delaminación de las raíces de los arcos y la erosión no lineal con la altura (adenda v3 §11.4), que cambiaría dónde se erosiona pero no el total.
@@ -393,3 +395,153 @@ Medido tras la nota de bordes (relajación: choque India–Asia de 50 Myr, malla
 5. Con la base arreglada, calibrar `τ_del` y `f_acr` (sedimento acrecionado 0,14 y subducido 0,38 AU, objetivos ≈0,3 y 1,0–1,65; llega poco sedimento a las fosas).
 6. Lluvia: reparto por latitudes (nota propia, tras cerrar la tectónica); `c_P` sin recalibrar.
 7. Acortamiento andino, ciclo de Wilson, flexión de la litosfera, microplacas; casquetes polares.
+
+## 17. Diagnóstico de la nota de fosas (§0, 2026-11-07)
+
+Se mide la convergencia perpendicular al borde a lo largo de las fosas, ponderada por longitud:
+- **En el modelo**, la componente normal de la velocidad relativa (con la normal del borde suavizado) en cada celda de fosa del lado que se hunde, tras el rodaje. Está en la salida (`convergencia_media_fosas_cm_anio`, `fosa_lenta_frac` y `fosas_por_convergencia_frac` del balance) y en la batería.
+- **En Bird (2003)**, la tasa de divergencia de cada tramo de las clases SUB (fosa) y OCB (convergencia oceánica sin fosa), y también en la malla con la regla de la nota (`bordes_bird.py`, `tierra_bordes.toml`).
+
+| | fosa (km) | convergencia media (cm/año) | por debajo de 2 cm/año | se hunden (km²/año) |
+|---|---|---|---|---|
+| Modelo, semilla 42 (entrega anterior) | 74 000 | 5,10 | 18,6 % | 3,64 |
+| Modelo, semilla 42, con la adenda v4 | 75 800 | 4,91 | 20,9 % | 3,60 |
+| Bird SUB, tramo a tramo | 51 309 | 5,32 | 21,4 % | 2,73 |
+| Bird OCB, tramo a tramo | 17 447 | 1,29 | 81,0 % | 0,23 |
+| Tierra en la malla, regla de la nota, 58 placas | 51 163 | 4,74 | 31,3 % | 2,42 |
+| Tierra en la malla, regla de la nota, 15 mayores | 37 347 | 3,97 | 36,2 % | 1,48 |
+
+Reparto por clases (% de la longitud; 0–1, 1–2, 2–3, 3–4, 4–5, 5–6, 6–8, 8–10, 10–15 y más de 15 cm/año):
+
+| | 0–1 | 1–2 | 2–3 | 3–4 | 4–5 | 5–6 | 6–8 | 8–10 | 10–15 | >15 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Modelo (semilla 42, entrega anterior) | 5,3 | 13,3 | 14,2 | 13,7 | 12,0 | 9,9 | 14,0 | 7,9 | 7,6 | 2,0 |
+| Bird SUB | 9,1 | 12,3 | 6,9 | 9,3 | 8,7 | 9,6 | 27,1 | 10,6 | 5,1 | 1,3 |
+| Bird OCB | 66,6 | 14,4 | 8,4 | 2,5 | 4,2 | 0,6 | 1,8 | 1,4 | 0,2 | 0,0 |
+| Tierra en la malla, 15 mayores | 22,8 | 13,3 | 7,7 | 6,7 | 8,8 | 8,4 | 27,9 | 2,5 | 1,7 | 0,0 |
+
+**El exceso de fosa es rápido.**
+- La fosa lenta (menos de 2 cm/año) del modelo mide 13 800 km. La de la Tierra mide 11 000 km (SUB tramo a tramo) y 13 500–16 000 en la malla.
+- Todo el exceso está por encima de 2 cm/año: el modelo tiene 60 200 km, frente a 40 300 (SUB), 35 100 (malla, 58 placas) y 23 800 (malla, 15 mayores).
+- La convergencia media del modelo es la de las fosas de Bird, no la mitad.
+- El nacimiento inducido de la nota quitaría como mucho la fosa lenta (~19 %), y el modelo seguiría con más de 1,6 veces la de las 15 mayores. Según el §0 de la nota, se trae al responsable antes de implementarla.
+
+**El dato de 7–9 cm/año del §0 y del §10 de la nota no es el de Bird.**
+- La convergencia media de las fosas de Bird es de 5,3 cm/año tramo a tramo, y 4,0–4,7 en la malla.
+- Los 7–9 salen de dividir el área que se hunde en toda la Tierra (2,7–3,4 km²/año) entre la longitud de fosa de las 15 placas mayores (37 300 km).
+- Pero esas fosas solo hunden 1,48 km²/año. Al fundir las placas pequeñas con la vecina de más borde se van sobre todo las fosas de las microplacas de arco (Tonga, Marianas, Nuevas Hébridas…), cuyo borde más largo es la propia fosa.
+- El modelo no tiene microplacas, así que sus fosas hacen el trabajo de todas las de la Tierra. La referencia coherente es la fosa total de la Tierra: ~51 000 km a 5,3 cm/año, con 2,7 km²/año.
+- Contra ella, el modelo tiene 1,45 veces la longitud. Casi todo es exceso de área: hunde 3,6 km²/año frente a 2,73 de las fosas de Bird (×1,33) o 2,96 con la convergencia sin fosa (×1,23).
+- En Bird, las dorsales oceánicas crean 3,01 km²/año en 67 335 km, a 4,47 cm/año de media. En total crea y destruye 3,51 km²/año, también en los rifts y en los choques entre continentes.
+- La pregunta para las fuerzas es por qué las placas del modelo crean y hunden un 20–30 % más de fondo que la Tierra con la misma velocidad media (4,4 cm/año).
+
+## 18. Respuestas a las preguntas de la nota de fosas (§11)
+
+1. **Tirón de la losa.**
+   - El documento principal (§6.2) lo calcula por km de fosa: `F_sp = f_sp·min(√(edad/t_sat), 1)·n̂`, con `t_sat` = 80 Myr. Depende de la edad del fondo que se hunde, no de la longitud de la losa (`velocidades()`).
+   - Una fosa tira entera desde el primer paso, así que hace falta el factor `min(1, L_j/L_losa)` del 6.5, con la memoria de la fosa.
+   - Es una de las causas posibles del exceso de fosas rápidas, sin medir: cualquier tramo que pasa a fosa empuja enseguida su placa hacia él.
+2. **División de placas.**
+   - Existe: `partir()` la usan los rifts (§6.5, `τ_rift` = 150 Myr) y los saltos de dorsal.
+   - Corta la placa por un círculo máximo deformado con ruido y crea dos hijas con el giro de la madre. En los rifts, adelgaza la corteza continental junto a la línea (`f_rift`) y da el empuje de apertura (`v_rift`).
+   - Para un margen pasivo hay que cortar por el tipo de corteza en lugar de por un círculo: el lado de cada muestra se decide aparte. El resto (hijas, dueños, eventos, conservación) se reutiliza.
+3. **Zonas de fractura.** No se guardan.
+   - Cada muestra lleva su edad, si es continental, si es de arco, sus espesores, su sedimento y la edad de su último engrosamiento.
+   - Los saltos de edad de una dorsal escalonada quedan en `edad_oc`, pero las dorsales del modelo no se escalonan a la escala real (celdas de 52 km).
+   - Para empezar, los candidatos son los márgenes pasivos y las transformantes actuales.
+4. **Diagnóstico del §0:** §17.
+
+## 19. Adenda v4: caída de la raíz de los arcos (2026-11-07)
+
+**Regla.**
+- En una columna que recibe corteza de un arco activo en el paso, o que es corteza de arco (`a_i` = 1), la base se desprende por encima de `h_del,arco` = 40 km (`h_del_arco_km`). En el resto, por encima de `h_del` = 50 km.
+- `τ_del` es el mismo para las dos (50 Myr, sin calibrar).
+- La marca de la franja de arco viaja con la muestra (`en_franja_arco`): la pone el arco al añadir su corteza y la quita la delaminación del mismo paso.
+- La salida separa la parte de los arcos (`delaminacion_arcos_au`).
+- Con `h_del_arco_km` = 50 el modelo es el de antes, igual salvo los campos nuevos del JSON.
+
+**Fuente.** Jagoutz, O. y Behn, M. D. (2013), *Foundering of lower island-arc crust as an explanation for the origin of the continental Moho*, Nature 504, 131–134. Según el resumen:
+- la corteza inferior del arco de Kohistán pesa más que el manto empobrecido de debajo a más de 40 km;
+- su caída deja una discontinuidad sísmica a ~38–42 km.
+
+El rango 35–45 km que propuse antes era una estimación mía (la aparición del granate en los cumulados máficos hacia 1,0–1,3 GPa), no de una fuente concreta. La fuente concreta sostiene 38–42 km.
+
+**Resultados.** 5 semillas (42, 1, 2, 3 y 4), 450 Myr sin el rodaje; media [extremos]:
+
+| | `h_del,arco` = 50 (como antes), `τ_ero` = 63 | 40, `τ_ero` = 63 | 40, `τ_ero` = 110 |
+|---|---|---|---|
+| Sedimento al mar (AU; ≈1,8) | 3,13 [2,81–3,76] | 3,06 [2,38–3,59] | 2,38 [1,99–2,69] |
+| Delaminación (AU) | 0,069 [0,05–0,09] | 0,305 [0,17–0,40] | 0,422 [0,26–0,57] |
+| – de ella, raíces de arco | 0,014 | 0,254 [0,15–0,33] | 0,348 [0,21–0,47] |
+| Cambio de V_cont (±10 %) | −8,4 % [−12,5; −5,3] | −9,5 % [−14,6; −1,7] | −9,5 % [−12,4; −5,6] |
+| `f_cont` final (0,40 ± 0,03) | 0,351 | 0,346 | 0,344 |
+| Arcos / choques (AU) | 3,76 / 3,09 | 3,80 / 3,10 | 3,76 / 3,04 |
+| Se hunden (km²/año) | 3,54 | 3,58 | 3,54 |
+| Espesor máximo de una muestra (km) | 162 [132–194] | 140 [121–160] | 142 [125–162] |
+
+La relajación (prueba India–Asia, determinista) tarda 135 Myr con `τ_ero` = 63 y 256 con 110, con la v4 (antes, 136 y 257).
+
+**Conclusiones.**
+- **La caída de las raíces de los arcos no baja la exportación al mar.** Multiplica por 4 la delaminación (0,07 → 0,31 AU) y lo que se lleva sale del volumen continental (−8,4 → −9,5 %), no del sedimento al mar. Ese material no acababa en el mar, sino en la propia corteza. La inferencia del §15, mía, era errónea.
+- **La exportación depende de `τ_ero`**, al contrario de lo que se dijo en el §15 con una sola deriva: con 110 Myr baja en todas las semillas (3,06 → 2,38) y sube la delaminación (la corteza está más gruesa).
+- **Un solo `τ_ero` no cumple a la vez** la relajación (100–200 Myr) y ~1,8 AU. Es el caso en que el responsable dijo pasar a una erosión no lineal con la altura; la adenda v4 lo había descartado por el dato erróneo.
+- **Erosión potencial por exceso sobre `h0` = 35 km** (5 semillas, `τ_ero` = 63): la mitad sale de columnas de más de 10 km de exceso, y el 27 % de las de menos de 5 km (llanuras y mesetas bajas). Por bandas: 12 % (0–2 km), 15 % (2–5), 24 % (5–10), 38 % (10–20) y 11 % (más de 20). Una ley lineal gasta las llanuras con el mismo tiempo característico que las cordilleras.
+- **Método.** Entre semillas, la exportación varía ±0,5 AU y el volumen continental ±5 puntos. Comparar una sola deriva, como en el §15, puede dar una conclusión falsa. Las calibraciones se miden con la media de varias semillas (prueba `deriva_en_varias_semillas`, ~4 min con 10 derivas en paralelo).
+
+## 20. Uniones triples, finales de fosa y picos de espesor (2026-11-07)
+
+Medido en las mismas 5 semillas con la prueba `deriva_en_varias_semillas`. Una celda está en una unión triple si hay tres placas o más a menos de `L_borde` (150 km). Las uniones triples son el 4,7 % de la longitud de borde.
+
+- **Consumo en bordes que no convergen** (3,2 % del consumo en la entrega anterior):
+  - Solo 0,36 puntos (11 %) están en uniones triples.
+  - El 86 % (medido con la adenda v4) está a menos de 150 km de una fosa del mismo par de placas: son **finales de fosa**. El solape se decide convergente en su celda, pero la cuenta lo asigna a la celda de borde más cercana (hasta 3 celdas), que ya es el tramo transformante donde la fosa gira.
+  - Por oblicuidad, ese consumo «transformante» está a 15–20° en un 56 %, a 10–15° en un 25 % y a menos de 10° en un 19 %.
+- **Solape continental en bordes que no convergen** (4,6 %): 0,21 puntos (4,5 %) en uniones triples.
+- **Picos de más de 80 km** (entrega anterior): 605 celdas·paso en las 5 semillas, en 81 de 2 250 pasos tras el rodaje.
+  - 209 están en uniones triples, pero 204 son un solo episodio de la semilla 2; sin él, el 1 %.
+  - Su muestra ya era visible el paso anterior en el 88 %; era una muestra oculta gruesa que reaparece en el 3,5 %. Con la adenda v4: 230 celdas·paso, 79 % y 7 %.
+  - En los pasos con picos, el máximo lo sube sobre todo la reconstrucción de los mapas (58 %), donde los dientes sin hueco y las muestras sueltas se suman a celdas de su placa o de la placa en la que están. Le siguen los choques (16 %).
+  - El espesor visible máximo tras el rodaje va de 89 a 113 km (de 91 a 135 con la v4).
+  - Las muestras ocultas llegan a 86–180 km: se erosionan y delaminan, pero no fluyen (el flujo lateral solo mueve las visibles).
+
+## 21. Coste por etapa y lo que añadiría la nota de fosas (2026-11-07)
+
+Traza de diagnóstico de `dar_paso`: cada etapa da su tiempo de pared y el espesor máximo al acabarla. Está apagada por defecto y entonces no cuesta nada.
+
+La deriva del planeta tarda ~100–110 s por semilla, con 10 a la vez. El escenario del planeta, solo, tarda 164 s de 200, porque la génesis incluye más cosas que la deriva.
+
+| Etapa | % del paso |
+|---|---|
+| Erosión, nivel del mar y sedimento (dos inundaciones por prioridad) | 31 |
+| Rasterizar | 11–12 |
+| Solapes (con la clasificación de reclamos) | 10 |
+| Suavizado de la pertenencia | 8 |
+| Métricas | 8 |
+| Clasificar bordes | 5 |
+| Procesos de fosa | 5 |
+| Islas | 4,5 |
+| Velocidades | 3,6 |
+| Choques | 3,2 |
+| Dientes / flujo lateral / eventos de placas / mapas | 2–3 cada una |
+| Delaminación y huecos | 0,6 |
+
+Lo que añadiría la nota de fosas:
+- **Estado de cada tramo convergente** (difuso o activo, `X_j`, `L_j`, `T_j`): lo que una parte de clasificar bordes, menos del 0,5 %.
+- **Convergencia difusa:** repartir el solape en discos de `W_dif` a cada lado, como los dientes (2,6 %), sobre menos celdas. De 1 a 2 %.
+- **Nacimientos y muertes:** casi nada.
+- **Placas nuevas en los márgenes pasivos:** cada corte cuesta lo que un rift, y cada placa de más añade ~1 % al paso (8 placas: 100 s; 15 placas: 107 s).
+
+En total, del 3 al 5 % de la deriva: de 4 a 6 s más en el escenario del planeta, que quedaría en ~170 de 200 s. Si hiciera falta sitio, la etapa mayor es la erosión con el sedimento: calcula dos inundaciones por prioridad por paso.
+
+## 22. Pendientes (2026-11-07, en orden)
+
+1. **Decisión del responsable sobre la nota de fosas.** El exceso de fosa es rápido (§17); la nota quitaría como mucho el 19 %.
+   - La referencia coherente para un modelo sin microplacas es la fosa total de la Tierra (51 000 km a 5,3 cm/año), no la de las 15 mayores. Contra ella, el exceso es ×1,45 y casi todo es área: el modelo crea y hunde un 20–30 % más de fondo que la Tierra con la misma velocidad media.
+   - Mirar las fuerzas, incluido el tirón pleno desde el primer paso (§18.1).
+2. **Erosión:** un solo `τ_ero` no cumple a la vez la relajación y la exportación (§19). ¿Ley no lineal con la altura? Las llanuras (menos de 5 km de exceso) dan el 27 % de la erosión potencial.
+3. **Volumen continental:** −9,5 % de media con la raíz de los arcos (una semilla, −14,6 %); el margen es ±10 %.
+4. **Picos de más de 80 km:** los dientes y muestras sueltas que se suman al rehacer los mapas, y los choques (§20). Las muestras ocultas no fluyen.
+5. **Finales de fosa** asignados a la transformante vecina (3 % del consumo): es una cuenta, no un consumo en un borde que no converge.
+6. Calibrar `τ_del`, `f_acr`, `X_ini` y `λ_esp` tras la nota de fosas, con la media de varias semillas.
+7. Lluvia: reparto por latitudes (nota propia, tras cerrar la tectónica); barlovento con objetivo ~1,2 (CHELSA); `c_P` sin recalibrar.
+8. Acortamiento andino, ciclo de Wilson, flexión de la litosfera, microplacas; casquetes polares.

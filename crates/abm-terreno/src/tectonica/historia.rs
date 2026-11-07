@@ -66,6 +66,8 @@ pub struct MetricaMyr {
     pub f_sed_au: f64,
     pub f_col_au: f64,
     pub f_del_au: f64,
+    /// La parte de `f_del_au` que cae de las raíces de los arcos (adenda v4).
+    pub f_del_arcos_au: f64,
     pub f_den_au: f64,
     /// Adelgazamiento de los rifts (AU): sumidero provisional, hasta la nota de rifts.
     pub f_rift_au: f64,
@@ -106,6 +108,11 @@ pub struct MetricaMyr {
     /// Material continental de los dientes (AU): solapes en tramos no convergentes que no se
     /// consumen.
     pub dientes_continentales_au: f64,
+    // --- Fosas (nota_ciclo_fosas.md §0 y §8) ---
+    /// Convergencia perpendicular media en las fosas, ponderada por longitud (cm/año), y fracción
+    /// de la longitud de fosa por debajo de 2 cm/año.
+    pub convergencia_media_fosas_cm_anio: f64,
+    pub fosa_lenta_frac: f64,
 }
 
 /// Cuentas del material continental (km³) a lo largo de la deriva (adenda de balance §6 y §8).
@@ -134,8 +141,9 @@ pub struct CuentasCorteza {
     pub choque_engrosamiento_km3: f64,
     pub choque_perdida_km3: f64,
     pub choque_sin_sitio_km3: f64,
-    /// Delaminación (`F_del`, §6.6).
+    /// Delaminación (`F_del`, §6.6), y la parte que cae de las raíces de los arcos (adenda v4).
     pub delaminacion_km3: f64,
+    pub delaminacion_arcos_km3: f64,
     /// Corteza que el flujo lateral pasa de una columna gruesa a sus vecinas (§6.6b; traslado).
     pub flujo_lateral_km3: f64,
     /// Adelgazamiento de los rifts (`H ← f_rift·H`): sumidero provisional. En la Tierra estirar
@@ -241,6 +249,8 @@ pub struct BalanceMedio {
     pub sedimento_acrecionado_au: f64,
     pub choques_au: f64,
     pub delaminacion_au: f64,
+    /// La parte de la delaminación que cae de las raíces de los arcos (adenda v4).
+    pub delaminacion_arcos_au: f64,
     pub sedimento_al_mar_au: f64,
     pub rift_au: f64,
     /// Fondo oceánico que se hunde y que se crea (km²/año).
@@ -272,4 +282,10 @@ pub struct BalanceMedio {
     pub creacion_residual_km2_anio: f64,
     pub area_reasignada_km2_anio: f64,
     pub dientes_continentales_au: f64,
+    /// Fosas (nota de fosas §0): convergencia media ponderada por longitud (cm/año), fracción de
+    /// longitud por debajo de 2 cm/año y reparto de la longitud por clases de convergencia (límites
+    /// en `CLASES_CONVERGENCIA_CM_ANIO`, cm/año), sin el rodaje.
+    pub convergencia_media_fosas_cm_anio: f64,
+    pub fosa_lenta_frac: f64,
+    pub fosas_por_convergencia_frac: Vec<f64>,
 }

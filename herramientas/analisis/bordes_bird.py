@@ -47,6 +47,8 @@ TIPOS = ('dorsal', 'fosa', 'choque', 'transformante')
 F_MODELO = 0.26                      # regla anterior del modelo (≈15°, sin suavizar)
 F_BIRD = math.sin(math.radians(20))  # umbral que separa las clases de Bird (ver `umbral_de_bird`)
 L_BORDE = 150.0                      # nota_bordes_placa.md: radio del borde suavizado (km)
+# Clases de convergencia perpendicular de las fosas (cm/año), como CLASES_CONVERGENCIA_CM_ANIO.
+LIM_CONV = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0]
 V_MIN = 0.5                          # mm/año: por debajo, transformante (0,05 cm/año en el modelo)
 
 
@@ -252,10 +254,25 @@ def main():
             (f'bordes.{nombre}.regla_modelo_15_km', dict(r['b']['modelo']) | {'total': sum(r['b']['modelo'].values())}),
             (f'bordes.{nombre}.regla_bird_20_km', dict(r['b']['bird']) | {'total': sum(r['b']['bird'].values())}),
             (f'bordes.{nombre}.regla_nota_km', dict(r['b']['nota']) | {'total': sum(r['b']['nota'].values())}),
+            (f'bordes.{nombre}.fosas_por_convergencia', {
+                'limites_cm_anio': LIM_CONV,
+                'frac': [x / max(sum(r['conv_fosa']), 1e-12) for x in r['conv_fosa']],
+                'lenta_frac': (r['conv_fosa'][0] + r['conv_fosa'][1]) / max(sum(r['conv_fosa']), 1e-12),
+                'largo_km': sum(r['conv_fosa']),
+                'media_cm_anio': r['conv_suma'] / max(sum(r['conv_fosa']), 1e-12),
+                'area_km2_anio': r['conv_suma'] * 1e-5}),
             (f'bordes.{nombre}.malla', {'placas': r['placas'], 'ambiguas_frac': r['ambiguas']}),
         ]
+    # Diagnóstico de nota_ciclo_fosas.md §0: convergencia de las fosas (SUB) y de los bordes
+    # convergentes sin fosa (OCB) de Bird, tramo a tramo.
+    vconv = {c: convergencia_vectorial(tramos, c) for c in ('SUB', 'OCB')}
+    for c, v in vconv.items():
+        print(f'Bird {c} (vectorial): {v["largo_km"]:.0f} km, convergencia media {v["media_cm_anio"]:.2f} '
+              f'cm/año, < 2 cm/año {100 * v["lenta_frac"]:.1f} %, se hunden {v["area_km2_anio"]:.2f} km²/año; '
+              f'por clase (%) {[round(100 * x, 1) for x in v["frac"]]}')
     secciones = [('bordes.vectorial_km', {c: vect[c] for c in CLASES} | {'total': sum(vect.values())}),
-                 ('bordes.oblicuidad_grados', {'p95_transformantes': u_tr, 'p5_resto': u_otras})] + secciones
+                 ('bordes.oblicuidad_grados', {'p95_transformantes': u_tr, 'p5_resto': u_otras})] + \
+        [(f'bordes.vectorial_convergencia.{c}', v) for c, v in vconv.items()] + secciones
     cab = ('# Bordes de placa de la Tierra medidos como los del modelo (adenda de balance v2 §10).\n'
            '# Generado por herramientas/analisis/bordes_bird.py a partir de Bird (2003, PB2002_steps) y\n'
            '# Seton et al. (2020) para el tipo de corteza. Malla tectónica de nivel 2 (~52 km).\n'
@@ -263,6 +280,8 @@ def main():
            '# que se hunde. "malla_clases": clase de Bird del tramo más cercano. "regla_modelo_15": tipo\n'
            '# con la regla anterior de clasificar_bordes (f_transformante 0,26); "regla_bird_20", con 20°;\n'
            '# "regla_nota": la de nota_bordes_placa.md (normal del borde suavizado a 150 km y 20°).\n'
+           '# "fosas_por_convergencia" y "vectorial_convergencia": convergencia perpendicular de las fosas\n'
+           '# (cm/año; diagnóstico de nota_ciclo_fosas.md §0), por clases de "limites_cm_anio".\n'
            f'# "mayores_{a.placas}": las placas pequeñas fundidas con su vecina hasta quedar {a.placas}.\n')
     rt.escribir_toml(a.salida, secciones, cab)
     rt.log(f'escrito {a.salida}')
@@ -356,6 +375,9 @@ def medir(etiqueta, ctx):
         g = math.hypot(ge, gn)
         return (ge / g, gn / g) if g > 0 else None
     cruce = {c: {t: 0.0 for t in TIPOS} for c in CLASES}   # clase de Bird → tipo con la regla del modelo
+    # Convergencia perpendicular (cm/año) de las fosas con la regla de la nota: longitud por clase.
+    conv_fosa = [0.0] * len(LIM_CONV)
+    conv_suma = 0.0                          # Σ v·L (cm/año·km) de las fosas con la regla de la nota
     ambiguas = total_b = 0.0
     for k in range(num):
         p = etiqueta[k]
@@ -432,8 +454,30 @@ def medir(etiqueta, ctx):
             largo_b[f][tipo] += cuenta
             if f == 'modelo':
                 cruce[clase][tipo] += 0.5 * largo
+            if f == 'nota' and tipo == 'fosa' and cuenta > 0:
+                v = max(0.0, -div) / 10.0
+                conv_fosa[max(i for i in range(len(LIM_CONV)) if v >= LIM_CONV[i])] += cuenta
+                conv_suma += v * cuenta
     return {'a': largo_a, 'b': largo_b, 'cruce': cruce, 'ambiguas': ambiguas / total_b,
-            'placas': len(set(etiqueta))}
+            'placas': len(set(etiqueta)), 'conv_fosa': conv_fosa, 'conv_suma': conv_suma}
+
+
+def convergencia_vectorial(tramos, clase):
+    """Convergencia perpendicular de Bird (cm/año, de su tasa de divergencia) en los tramos de una
+    clase, sin pasar por la malla: longitud por clase de LIM_CONV, media ponderada por longitud y
+    área que se hunde (km²/año)."""
+    por_clase = [0.0] * len(LIM_CONV)
+    largo = suma = 0.0
+    for _, _, c, L, _, _, _, div, _ in tramos:
+        if c != clase:
+            continue
+        v = max(0.0, -div) / 10.0
+        por_clase[max(i for i in range(len(LIM_CONV)) if v >= LIM_CONV[i])] += L
+        largo += L
+        suma += v * L
+    return {'limites_cm_anio': LIM_CONV, 'frac': [x / largo for x in por_clase],
+            'lenta_frac': (por_clase[0] + por_clase[1]) / largo, 'largo_km': largo,
+            'media_cm_anio': suma / largo, 'area_km2_anio': suma * 1e-5}
 
 
 def informe(r, vect, titulo):
@@ -458,6 +502,12 @@ def informe(r, vect, titulo):
         print(f'{c:<6}' + ''.join(f'{cruce[c][t]:>15.0f}' for t in TIPOS))
     print(f'Celdas de borde con la normal de la malla casi paralela al tramo (ambiguas): '
           f'{r["ambiguas"]:.1%} de la longitud')
+    cf = r['conv_fosa']
+    t = sum(cf)
+    if t > 0:
+        print(f'Fosas con la regla de la nota: {t:.0f} km, convergencia por clase (%) '
+              f'{[round(100 * x / t, 1) for x in cf]}; < 2 cm/año {100 * (cf[0] + cf[1]) / t:.1f} %; '
+              f'media {r["conv_suma"] / t:.2f} cm/año; se hunden {r["conv_suma"] * 1e-5:.2f} km²/año')
 
 
 if __name__ == '__main__':

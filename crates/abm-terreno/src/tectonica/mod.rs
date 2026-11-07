@@ -411,7 +411,7 @@ fn resumen(d: &Deriva, t: &Tectonica) -> ResumenTectonica {
         v_rms_media_cm_anio: media_de(d.v_rms_acum),
         forsyth_uyeda_fosa: media_de(d.fu_fosa),
         forsyth_uyeda_continente: media_de(d.fu_cont),
-        balance: balance_medio(&d.metricas),
+        balance: balance_medio(&d.metricas, &d.fosas_por_convergencia_km),
         placas_final,
         eventos: d.eventos.clone(),
         metricas: d.metricas.clone(),
@@ -419,7 +419,7 @@ fn resumen(d: &Deriva, t: &Tectonica) -> ResumenTectonica {
 }
 
 /// Medias del balance de la corteza sin el rodaje (adenda de balance §10).
-fn balance_medio(metricas: &[MetricaMyr]) -> BalanceMedio {
+fn balance_medio(metricas: &[MetricaMyr], fosas_km: &[f64; 10]) -> BalanceMedio {
     let val: Vec<&MetricaMyr> = metricas.iter().filter(|m| !m.rodaje).collect();
     let Some(ultima) = val.last() else {
         return BalanceMedio::default();
@@ -440,6 +440,7 @@ fn balance_medio(metricas: &[MetricaMyr]) -> BalanceMedio {
         sedimento_acrecionado_au: media(|m| m.f_acr_au),
         choques_au: media(|m| m.f_col_au),
         delaminacion_au: media(|m| m.f_del_au),
+        delaminacion_arcos_au: media(|m| m.f_del_arcos_au),
         sedimento_al_mar_au: media(|m| m.f_den_au),
         rift_au: media(|m| m.f_rift_au),
         area_subducida_km2_anio: media(|m| m.area_subducida_km2_anio),
@@ -469,5 +470,31 @@ fn balance_medio(metricas: &[MetricaMyr]) -> BalanceMedio {
         creacion_residual_km2_anio: media(|m| m.creacion_residual_km2_anio),
         area_reasignada_km2_anio: media(|m| m.area_reasignada_km2_anio),
         dientes_continentales_au: media(|m| m.dientes_continentales_au),
+        convergencia_media_fosas_cm_anio: {
+            let l: f64 = val.iter().map(|m| m.fosas_km).sum();
+            if l > 0.0 {
+                val.iter()
+                    .map(|m| m.convergencia_media_fosas_cm_anio * m.fosas_km)
+                    .sum::<f64>()
+                    / l
+            } else {
+                0.0
+            }
+        },
+        fosa_lenta_frac: {
+            let t: f64 = fosas_km.iter().sum();
+            if t > 0.0 {
+                (fosas_km[0] + fosas_km[1]) / t
+            } else {
+                0.0
+            }
+        },
+        fosas_por_convergencia_frac: {
+            let t: f64 = fosas_km.iter().sum();
+            fosas_km
+                .iter()
+                .map(|&x| if t > 0.0 { x / t } else { 0.0 })
+                .collect()
+        },
     }
 }

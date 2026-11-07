@@ -102,6 +102,9 @@ pub struct Corteza {
     pub edad_orog: f64,
     /// Ritmo de engrosamiento del paso (km/Myr): arcos y choques.
     pub dh_dt: f64,
+    /// La columna recibió corteza de un arco activo en este paso: su raíz se desprende desde
+    /// `h_del,arco` (adenda v4 §6.6). Se apaga al delaminar.
+    pub en_franja_arco: bool,
 }
 
 impl Corteza {
@@ -115,6 +118,7 @@ impl Corteza {
             edad_oc: 0.0,
             edad_orog: 0.0,
             dh_dt: 0.0,
+            en_franja_arco: false,
         }
     }
 
@@ -129,6 +133,7 @@ impl Corteza {
             edad_oc: 0.0,
             edad_orog: 1000.0,
             dh_dt: 0.0,
+            en_franja_arco: false,
         }
     }
 
@@ -457,6 +462,20 @@ struct Detalle {
 /// de L_borde da ~0,04; un borde real, 0,3–0,7).
 const PHI_SUELTA: f64 = 0.15;
 
+/// Límites (cm/año) de las clases de la convergencia perpendicular en las fosas (diagnóstico de la
+/// nota de fosas §0); la última clase no tiene tope.
+pub const CLASES_CONVERGENCIA_CM_ANIO: [f64; 10] =
+    [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0];
+
+/// Una etapa de la traza de diagnóstico de [`Deriva::dar_paso`]: espesor continental máximo de las
+/// muestras de las placas al acabarla (km) y su tiempo de pared (s; solo rendimiento, CLAUDE §6).
+#[derive(Debug, Clone, Copy)]
+pub struct EtapaTraza {
+    pub etapa: &'static str,
+    pub h_max_km: f64,
+    pub segundos: f64,
+}
+
 /// Una celda del mundo que una placa perdió en un solape.
 #[derive(Debug, Clone, Copy)]
 struct Perdida {
@@ -600,6 +619,17 @@ pub struct Deriva {
     /// Islas absorbidas por la placa que las rodea en el último paso (km²).
     pub area_islas_km2: f64,
     pub dientes_continentales_km3: f64,
+    /// Traza de diagnóstico (pruebas): con `Some`, cada paso añade sus etapas. `None` no cuesta nada.
+    pub traza: Option<Vec<EtapaTraza>>,
+    traza_reloj: Option<std::time::Instant>,
+    /// Consumo del último paso por la celda de borde a la que se asigna (celda, código del tipo de
+    /// borde, km²) y solape de los choques por la celda del frente (celda, código, km³): las mismas
+    /// cuentas que `area_subducida_por_borde_km2` y `choque_solapado_por_borde_km3`.
+    pub consumo_en_borde_paso: Vec<(u32, u8, f64)>,
+    pub solape_en_borde_paso: Vec<(u32, u8, f64)>,
+    /// Longitud de fosa (km, sumada por pasos tras el rodaje) por clase de convergencia
+    /// perpendicular ([`CLASES_CONVERGENCIA_CM_ANIO`]).
+    pub fosas_por_convergencia_km: [f64; 10],
     /// Dónde se consumió fondo oceánico en el último paso (celda del frente y km²) y dónde nació
     /// (celdas con corteza nueva): para las pruebas de los bordes.
     pub consumo_paso: Vec<(u32, f64)>,
@@ -794,6 +824,11 @@ impl Deriva {
             area_reasignada_km2: 0.0,
             area_islas_km2: 0.0,
             dientes_continentales_km3: 0.0,
+            fosas_por_convergencia_km: [0.0; 10],
+            traza: None,
+            traza_reloj: None,
+            consumo_en_borde_paso: Vec::new(),
+            solape_en_borde_paso: Vec::new(),
             consumo_paso: Vec::new(),
             creacion_paso: Vec::new(),
             ruido_def,
@@ -825,6 +860,9 @@ impl Deriva {
     /// delaminación, erosión con el destino de su sedimento, nivel del mar y balance.
     pub fn dar_paso(&mut self) {
         let dt = self.cfg.dt_myr;
+        if self.traza.is_some() {
+            self.traza_reloj = Some(std::time::Instant::now());
+        }
         let v0 = self.inventario_continental();
         let c0 = self.cuentas;
         self.velocidades();
@@ -835,28 +873,42 @@ impl Deriva {
             p.rot = p.q.matriz();
             p.empuje = [0.0; 3];
         }
+        self.trazar("velocidades");
         self.recalcular_mundo();
         self.rasterizar();
+        self.trazar("rasterizar");
         self.resolver_solapes();
+        self.trazar("resolver_solapes");
         self.recolocar_dientes();
+        self.trazar("recolocar_dientes");
         self.rellenar_huecos();
+        self.trazar("rellenar_huecos");
         let (choques, tramos) = self.reconstruir_mapas();
+        self.trazar("reconstruir_mapas");
         // Suavizado de la pertenencia de los bordes oceánicos y absorción de las islas (nota de
         // bordes §6.5).
         self.area_reasignada_km2 = self.suavizar_pertenencia();
+        self.trazar("suavizar_pertenencia");
         self.area_islas_km2 = self.absorber_islas();
+        self.trazar("absorber_islas");
         for p in self.placas.iter_mut().filter(|p| p.viva) {
             p.cort.iter_mut().for_each(|c| c.dh_dt = 0.0);
         }
         self.clasificar_bordes();
+        self.trazar("clasificar_bordes");
         self.procesos_de_fosa(&tramos);
+        self.trazar("procesos_de_fosa");
         self.engrosar_choques(&choques);
+        self.trazar("engrosar_choques");
         self.delaminar();
+        self.trazar("delaminar");
         self.flujo_lateral();
+        self.trazar("flujo_lateral");
 
         let erosion = self.erosion_y_envejecimiento();
         self.zeta_m = self.nivel_del_mar();
         self.sedimento_al_mar(&erosion);
+        self.trazar("erosion_y_sedimento");
         let mut cambio = self.suturas();
         cambio |= self.rifts();
         cambio |= self.absorciones();
@@ -868,9 +920,37 @@ impl Deriva {
             self.recalcular_mundo();
             self.clasificar_bordes();
         }
+        self.trazar("eventos_de_placas");
         self.paso += 1;
         self.t_myr = self.t0_myr + self.paso as f64 * dt;
         self.metricas_del_paso(v0, &c0);
+        self.trazar("metricas");
+    }
+
+    /// Cierra una etapa de la traza de diagnóstico: su tiempo (sin contar lo que cuesta medir el
+    /// espesor) y el espesor continental máximo al acabarla. A media etapa los mapas del mundo no
+    /// están al día: el máximo se toma de todas las muestras de las placas (también las ocultas).
+    fn trazar(&mut self, etapa: &'static str) {
+        let Some(t0) = self.traza_reloj else {
+            return;
+        };
+        let segundos = t0.elapsed().as_secs_f64();
+        let h_max_km = self
+            .placas
+            .iter()
+            .filter(|p| p.viva)
+            .flat_map(|p| p.cort.iter())
+            .filter(|c| c.cont)
+            .map(|c| c.h)
+            .fold(0.0, f64::max);
+        if let Some(t) = self.traza.as_mut() {
+            t.push(EtapaTraza {
+                etapa,
+                h_max_km,
+                segundos,
+            });
+        }
+        self.traza_reloj = Some(std::time::Instant::now());
     }
 
     /// Arranca con velocidades dadas en lugar del empujón al azar (pruebas de comportamiento): fija
@@ -2248,6 +2328,7 @@ impl Deriva {
     fn procesos_de_fosa(&mut self, frentes: &[Tramo]) {
         self.area_subducida_km2 = frentes.iter().map(|t| t.a_sub).sum();
         self.area_erosiva_km2 = 0.0;
+        self.consumo_en_borde_paso.clear();
         if frentes.is_empty() {
             return;
         }
@@ -2271,6 +2352,7 @@ impl Deriva {
                 self.bordes[i as usize].tipo.codigo() as usize
             };
             self.cuentas.area_subducida_por_borde_km2[tipo] += t.a_sub;
+            self.consumo_en_borde_paso.push((t.k, tipo as u8, t.a_sub));
         }
         // 6.2 Régimen de cada tramo, con la convergencia perpendicular al borde.
         let v_tramo: Vec<f64> = tramos
@@ -2423,6 +2505,7 @@ impl Deriva {
                 }
                 c.dh_dt += dh / cfg.dt_myr;
                 c.edad_orog = 0.0;
+                c.en_franja_arco = true;
             });
             self.cuentas.arcos_km3 += puesto;
             pasa_a_cont += a_cont;
@@ -2684,14 +2767,17 @@ impl Deriva {
         for b in &self.bordes {
             tipo_en[b.k as usize] = b.tipo.codigo();
         }
+        self.solape_en_borde_paso.clear();
         for c in choques {
             let eta = if c.arco {
                 self.cfg.eta_arco
             } else {
                 self.cfg.eta_col
             };
-            self.cuentas.choque_solapado_por_borde_km3[tipo_en[c.k as usize] as usize] +=
-                c.vol / eta.max(1e-12);
+            let v = c.vol / eta.max(1e-12);
+            self.cuentas.choque_solapado_por_borde_km3[tipo_en[c.k as usize] as usize] += v;
+            self.solape_en_borde_paso
+                .push((c.k, tipo_en[c.k as usize], v));
         }
         if !choques.is_empty() {
             self.engrosar_desde(choques, false);
@@ -2820,24 +2906,38 @@ impl Deriva {
         }
     }
 
-    /// Delaminación (adenda de balance §6.6): por encima de `h_del` la base de la corteza pasa a
-    /// eclogita, más densa que el manto, y se desprende. El exceso decae con la forma exponencial
+    /// Delaminación (adenda de balance v4 §6.6): por encima de `h_del` la base de la corteza pasa a
+    /// eclogita, más densa que el manto, y se desprende; en los arcos, la raíz de cumulados densos
+    /// cae desde `h_del,arco`. El exceso decae con la forma exponencial
     /// exacta, estable con cualquier `Δt`: `h_c ← h_del + (h_c − h_del)·e^(−Δt/τ_del)`.
     fn delaminar(&mut self) {
         let cfg = &self.cfg;
-        let mut total = 0.0;
+        let (mut total, mut arcos) = (0.0, 0.0);
         for p in self.placas.iter_mut().filter(|p| p.viva) {
             for s in 0..p.cort.len() {
                 let c = &mut p.cort[s];
-                if c.hc > cfg.h_del_km {
-                    let dh = c.hc - tras_delaminar(c.hc, cfg.h_del_km, cfg.dt_myr, cfg.tau_del_myr);
+                // Adenda v4 §6.6: en un arco (franja activa o corteza de arco) la raíz de
+                // cumulados densos se desprende desde h_del,arco; en el resto, desde h_del.
+                let en_arco = std::mem::take(&mut c.en_franja_arco) || c.arco;
+                let umbral = if en_arco {
+                    cfg.h_del_arco_km
+                } else {
+                    cfg.h_del_km
+                };
+                if c.hc > umbral {
+                    let dh = c.hc - tras_delaminar(c.hc, umbral, cfg.dt_myr, cfg.tau_del_myr);
                     c.hc -= dh;
                     c.h -= dh;
-                    total += dh * self.malla.area[p.celda[s] as usize];
+                    let v = dh * self.malla.area[p.celda[s] as usize];
+                    total += v;
+                    if en_arco {
+                        arcos += v;
+                    }
                 }
             }
         }
         self.cuentas.delaminacion_km3 += total;
+        self.cuentas.delaminacion_arcos_km3 += arcos;
     }
 
     /// Flujo lateral de la corteza engrosada (adenda de balance v3 §6.6b): la corteza inferior de
@@ -3670,7 +3770,19 @@ impl Deriva {
         let v_rms = self.v_rms_de(&omegas) / CM_ANIO;
         self.ultima_v_rms = v_rms;
         let (mut dors, mut fosas, mut col, mut trans, mut perimetro) = (0.0, 0.0, 0.0, 0.0, 0.0);
+        let (mut conv_fosa, mut fosa_lenta) = (0.0, 0.0);
         for b in &self.bordes {
+            if b.tipo == TipoBorde::Subduccion && b.p_subduce {
+                let v = b.v_n.max(0.0) / CM_ANIO;
+                conv_fosa += v * b.largo_km;
+                if v < 2.0 {
+                    fosa_lenta += b.largo_km;
+                }
+                if !rodaje {
+                    let i = CLASES_CONVERGENCIA_CM_ANIO.partition_point(|&x| x <= v) - 1;
+                    self.fosas_por_convergencia_km[i] += b.largo_km;
+                }
+            }
             match b.tipo {
                 TipoBorde::Divergente => dors += 0.5 * b.largo_km,
                 TipoBorde::Subduccion if b.p_subduce => fosas += b.largo_km,
@@ -3745,6 +3857,7 @@ impl Deriva {
                 - c0.choque_sin_sitio_km3)
                 * au,
             f_del_au: (c.delaminacion_km3 - c0.delaminacion_km3) * au,
+            f_del_arcos_au: (c.delaminacion_arcos_km3 - c0.delaminacion_arcos_km3) * au,
             f_den_au: (c.sedimento_al_mar_km3 - c0.sedimento_al_mar_km3) * au,
             f_rift_au: (c.rift_km3 - c0.rift_km3) * au,
             f_acr_au: (c.sedimento_acrecionado_km3 - c0.sedimento_acrecionado_km3) * au,
@@ -3770,6 +3883,8 @@ impl Deriva {
             area_reasignada_km2_anio: self.area_reasignada_km2 * au,
             area_islas_km2_anio: self.area_islas_km2 * au,
             dientes_continentales_au: self.dientes_continentales_km3 * au,
+            convergencia_media_fosas_cm_anio: if fosas > 0.0 { conv_fosa / fosas } else { 0.0 },
+            fosa_lenta_frac: if fosas > 0.0 { fosa_lenta / fosas } else { 0.0 },
         });
     }
 

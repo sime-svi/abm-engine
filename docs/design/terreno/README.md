@@ -318,3 +318,35 @@ Detalle técnico en `incremento-4-diseno.md` §9–§11; la adenda, en `adenda_b
 - **La erosión manda al mar 3,1 km³ al año, frente a ~1,8 en la Tierra.** No es cosa del ritmo de la erosión: con uno casi el doble de lento, al mar llega lo mismo, porque a la larga la erosión se lleva lo que los arcos y los choques añaden. Lo que falta es que la base de la corteza engrosada se desprenda hacia el manto (la delaminación): en la Tierra se lleva ~1,1 km³ al año, en el modelo casi nada.
 
 **La lluvia de las laderas, medida bien.** Con la regla del responsable (laderas del pie a la cresta, sin mesetas, comparadas con la llanura de su pie), la Tierra observada da ×0,9–1,2 y el planeta ×1,05. El modelo ya está en el rango real.
+
+### Antes de que las fosas nazcan y mueran: el diagnóstico, y la raíz de los arcos (07-11-2026)
+
+**Qué es una fosa.** Es el borde donde una placa oceánica se hunde bajo otra. La **convergencia** es lo rápido que se acercan las dos placas de frente, en centímetros al año. La nota del responsable sobre el ciclo de vida de las fosas propone que una fosa no aparezca en cuanto dos placas se empujan. Primero tendrían que juntarse unos 150 km; hasta entonces, el borde solo se engruesa. Antes de implementarla, el responsable pidió comprobar si el exceso de fosas del modelo está en los bordes que convergen despacio, que son los que esa regla quitaría.
+
+**Lo que salió: el exceso está en las fosas rápidas.**
+- El modelo tiene casi la misma longitud de fosa lenta (por debajo de 2 cm/año) que la Tierra, unos 14 000 km.
+- Lo que le sobra son fosas que convergen deprisa.
+- La convergencia media de sus fosas (5,1 cm/año) es la de las fosas reales (5,3 según Bird).
+- La regla de la nota quitaría como mucho una quinta parte de las fosas. Por eso se lleva el resultado al responsable antes de implementarla, como pedía la nota.
+
+**Un dato de la nota que no cuadra.**
+- La nota esperaba que las fosas reales convergieran a 7–9 cm/año. Salía de repartir todo lo que se hunde en la Tierra entre las fosas de una Tierra simplificada a 15 placas.
+- Al simplificar, desaparecen sobre todo las fosas de las placas pequeñas de los arcos de islas, como Tonga o las Marianas. Las fosas de esa Tierra simplificada solo hunden la mitad.
+- El modelo no tiene placas pequeñas, así que sus fosas deben hacer el trabajo de todas las de la Tierra.
+- Comparado con todas, el modelo tiene 1,45 veces más fosa. Casi todo se explica porque crea y hunde un 20–30 % más de fondo oceánico que la Tierra. Esa es la pregunta para las fuerzas que mueven las placas.
+
+**La raíz de los arcos.** Bajo un arco volcánico se acumulan rocas muy densas. Cuando la corteza pasa de unos 40 km de espesor, esa base pesa más que el manto de debajo y se hunde en él (la **delaminación**). Está medido en el arco fósil de Kohistán (Jagoutz y Behn, 2013).
+- Se implementó así, sin calibrar nada.
+- La delaminación se multiplica por 4, pero el sedimento que llega al mar no baja. Lo que se desprende sale de los continentes, que pierden un 9,5 % de su volumen en 450 millones de años.
+- La idea, que fue mía, era que el sedimento que sobraba en el mar era la delaminación que faltaba. Era errónea.
+
+**Una corrección importante.** Dije que el ritmo de la erosión no cambiaba el sedimento que llega al mar. Lo había medido con una sola historia del planeta para cada ritmo, y el planeta es **caótico**: un cambio pequeño cambia qué placas chocan y cuándo, y el resultado varía mucho de una historia a otra.
+- Con cinco historias distintas (semillas), una erosión más lenta sí manda menos sedimento al mar.
+- Ningún ritmo único cumple a la vez que las montañas viejas se gasten en 100–200 millones de años y que llegue al mar lo de la Tierra.
+- Desde ahora, las calibraciones se miden con varias semillas.
+
+**Las uniones de tres placas no son el problema.**
+- El poco consumo de placa que queda en bordes que no convergen está sobre todo en los extremos de las fosas, donde el borde gira y pasa a deslizarse.
+- Las columnas de más de 80 km suelen salir de los trozos de borde que se recolocan y de los choques.
+
+**El tiempo.** La regla de la nota añadiría del 3 al 5 % al cálculo, unos 5 segundos sobre 164 (el límite es 200).

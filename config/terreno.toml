@@ -146,6 +146,7 @@ f_acr        = 0.3         # fracción del sedimento de fosa que se pega al marg
 eta_col      = 0.5         # choque continente–continente: queda arriba (medido: India–Asia, ~50 %)
 eta_arco     = 0.9         # choque arco–continente: queda arriba (medido: Luzón en Taiwán, ~90 %)
 h_del_km     = 50.0        # la base de la corteza pasa a eclogita (físico: 1,2–1,5 GPa)
+h_del_arco_km = 40.0       # raíz densa de los arcos (adenda v4; Jagoutz y Behn 2013: más densa que el manto desde 40 km, discontinuidad a 38–42 km)
 tau_del_myr  = 50.0        # delaminación del exceso (calibrado: ≈1,1 AU y espesor máximo 70–80 km)
 h_flujo_km   = 50.0        # por encima, la corteza inferior caliente fluye hacia los lados (adenda v3 §6.6b; físico, 45–60)
 d_flujo_km2_myr = 3000.0   # difusividad del flujo lateral (calibrado con India–Asia: espesor máximo 72–77 km sin tope; ~viscosidad 1e20 Pa·s)

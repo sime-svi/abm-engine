@@ -1056,3 +1056,49 @@ Formato de entrada:
   - conservación a 10⁻¹⁴; batería del planeta con 53 métricas (márgenes movidos con nota); no regresión de los agentes idéntica byte a byte; `verificar.sh`.
   - La génesis tarda ~160 s (presupuesto del escenario: 200).
 - **Pendiente:** las fuerzas de las placas (fosas ×2); la exportación al mar (delaminación de los arcos o erosión no lineal: decide el responsable); la nota del inicio de subducción, el fondo oceánico y los rifts; los 3 pasos sobre 80 km; después, `τ_del` y `f_acr`; la nota de la lluvia por latitudes.
+
+## [2026-11-07] Diagnóstico de la nota de fosas, adenda v4 (raíz de los arcos), uniones triples y varias semillas
+
+- **Qué:** el responsable entregó `docs/design/terreno/nota_ciclo_fosas.md` y la adenda v4 (raíz de los arcos con `h_del,arco` = 40 km; delaminación como objetivo débil).
+  - Pidió:
+    - el diagnóstico del §0 antes de implementar la nota: si el exceso de fosa es lento, implementarla; si es rápido, traérselo;
+    - responder al §11;
+    - no calibrar nada (`τ_del`, `f_acr`, `X_ini`, `λ_esp`) hasta la nota de fosas;
+    - mirar si el consumo en bordes no convergentes y los picos de 113 km salen de las uniones triples;
+    - decir cuánto tiempo añade la nota.
+  - Aprobó todas las decisiones de la entrega anterior.
+- **Diagnóstico del §0: el exceso de fosa es rápido.** No se implementa la nota hasta que decida el responsable.
+  - El modelo tiene 74 000 km de fosa a 5,1 cm/año, con el 18,6 % por debajo de 2 cm/año.
+  - Bird: SUB, 51 309 km a 5,3 cm/año (21,4 %); OCB, 81 % lenta. En la malla con la regla de la nota: 51 163 km (31 %) con todas las placas y 37 347 (36 %) con las 15 mayores.
+  - La fosa lenta del modelo (13 800 km) es la de la Tierra; todo el exceso está por encima de 2 cm/año.
+- **El 7–9 cm/año de la nota no es el de Bird.**
+  - Mezcla el área que se hunde en toda la Tierra con la fosa de las 15 mayores, que solo hunde 1,48 km²/año: al fundir las placas pequeñas se van las fosas de las microplacas de arco.
+  - Referencia coherente para un modelo sin microplacas: la fosa total, ~51 000 km a 5,3 cm/año y 2,7 km²/año. Contra ella, el exceso es ×1,45, casi todo de área (el modelo hunde 3,6 km²/año).
+  - `bordes_bird.py` mide ahora esa convergencia tramo a tramo y en la malla (`tierra_bordes.toml`). En Bird, las dorsales crean 3,01 km²/año a 4,47 cm/año.
+- **§11:**
+  - el tirón de la losa no depende de su longitud (tira entero desde el primer paso);
+  - la división de placas existe (`partir`, rifts y saltos de dorsal), pero corta por un círculo, y un margen pasivo necesita cortar por el tipo de corteza;
+  - no se guardan zonas de fractura.
+- **Adenda v4, implementada sin calibrar.**
+  - Regla: `h_del_arco_km` = 40; la muestra que recibe arco lleva `en_franja_arco` hasta la delaminación del paso; `delaminacion_arcos_au` en la salida.
+  - Fuente: Jagoutz y Behn 2013 (Nature 504): más densa que el manto a más de 40 km, discontinuidad a 38–42 km. El 35–45 que di antes era una estimación mía.
+  - Con 5 semillas: la delaminación pasa de 0,07 a 0,31 AU; **la exportación al mar no baja** (3,13 → 3,06); el volumen continental cae más (−8,4 → −9,5 %).
+  - Con `h_del_arco_km` = 50, la tectónica es la de `main`.
+- **Corrección de la entrega anterior: la exportación sí depende de `τ_ero`.** Con 5 semillas: 3,06 AU con 63 y 2,38 con 110, y baja en todas. Lo de antes era una deriva por valor en un planeta caótico (±0,5 AU entre semillas).
+  - Un solo `τ_ero` no cumple a la vez la relajación (135 y 256 Myr con la v4) y ~1,8 AU: vuelve la erosión no lineal, que decide el responsable.
+  - La mitad de la erosión potencial sale de columnas de más de 10 km de exceso; el 27 %, de llanuras (menos de 5 km).
+- **Uniones triples: no son la causa.**
+  - Del 3,2 % de consumo en bordes no convergentes, solo el 11 % está en uniones triples. El 86 % está a menos de 150 km de una fosa del mismo par: son finales de fosa que la cuenta asigna a la transformante vecina.
+  - De los picos de más de 80 km, el 88 % ya era visible el paso anterior y el 3,5 % son muestras ocultas que reaparecen. Los sube sobre todo el reparto de dientes y muestras sueltas al rehacer los mapas (58 %), y después los choques.
+  - Las muestras ocultas llegan a 180 km porque no fluyen.
+- **Herramientas:**
+  - traza de diagnóstico en `dar_paso` (tiempo y espesor máximo por etapa; apagada no cuesta nada);
+  - `consumo_en_borde_paso` y `solape_en_borde_paso`;
+  - prueba exploratoria `deriva_en_varias_semillas` (SEMILLAS, H_DEL_ARCO, TAU_ERO; ~4 min con 10 derivas en paralelo).
+- **Tiempo:**
+  - por etapas, la erosión con el sedimento es el 31 %, rasterizar el 11 % y los solapes el 10 %;
+  - la nota de fosas añadiría del 3 al 5 % (~5 s; el planeta tarda 164 de 200 s).
+- **Verificación:**
+  - batería: el planeta de la semilla 42 es otra realización con la v4, así que 25 márgenes se mueven con nota; 3 métricas nuevas (delaminación de los arcos, convergencia media y fracción lenta de las fosas); 56 en total;
+  - no regresión de los agentes byte a byte; terreno igual a `main` con `h_del_arco_km` = 50, salvo los campos nuevos.
+- **Pendiente (`incremento-4-diseno.md` §22):** decisión sobre la nota de fosas y las fuerzas (área ×1,3); la ley de erosión; el volumen continental (−9,5 %); los picos; después, calibrar con varias semillas.

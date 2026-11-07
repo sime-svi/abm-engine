@@ -13,7 +13,7 @@ Programas fuera del motor para verificar, medir y consultar las corridas (CLAUDE
 | `analisis/h5mini.py` | Lector mínimo de HDF5 (sin librerías): lee filas sueltas de rejillas contiguas por peticiones parciales |
 | `analisis/lluvia_observada.py` | Mide la lluvia observada de la Tierra (WorldClim y CHELSA) a la escala y con las definiciones del planeta, y la compara con la del planeta (`config/referencias/tierra_lluvia.toml`) |
 | `analisis/tiffmini.py` | Lector mínimo de GeoTIFF (sin librerías): una banda en tiras, con Deflate y predictor; también fila a fila por peticiones parciales |
-| `analisis/bordes_bird.py` | Mide los bordes de placa de la Tierra (Bird 2003) en la malla tectónica, con el método y la regla de clasificación del modelo (`config/referencias/tierra_bordes.toml`) |
+| `analisis/bordes_bird.py` | Mide los bordes de placa de la Tierra (Bird 2003) en la malla tectónica, con el método y la regla de clasificación del modelo, y la convergencia de sus fosas (SUB y OCB tramo a tramo y en la malla; `config/referencias/tierra_bordes.toml`) |
 
 ## Ajustes desde la línea de comandos
 
@@ -107,6 +107,24 @@ Una malla de 52 km no puede dibujar una línea más fina que sus celdas, así qu
 - **con la regla del modelo:** la normal y la velocidad relativa del tramo de Bird. La regla vigente es la de `nota_bordes_placa.md` (`regla_nota`): la normal del borde suavizado a 150 km y transformante a menos de 20° (el umbral que separa las clases de Bird). Se miden también las reglas anteriores (normal sin suavizar, 15° y 20°). La corteza oceánica es la que tiene edad en Seton et al. (2020).
 
 Lo hace con las 52 placas de Bird y con una Tierra reducida a las 15 mayores (las pequeñas, fundidas con su vecina de más borde), como el modelo.
+
+También mide la **convergencia de las fosas** (diagnóstico de `nota_ciclo_fosas.md` §0): la componente perpendicular al borde (cm/año) por clases, su media ponderada por longitud y el área que se hunde. Lo hace tramo a tramo con la tasa de divergencia de Bird (clases SUB, fosas, y OCB, convergencia sin fosa) y en la malla con la regla de la nota. Fundir las placas pequeñas quita sobre todo fosas de microplacas de arco: las de las 15 mayores hunden 1,5 km²/año de los 2,7 de todas.
+
+## La deriva en varias semillas
+
+```bash
+SEMILLAS=42,1,2,3,4 H_DEL_ARCO=40 TAU_ERO=63,110 \
+  cargo test --release -p abm-terreno --test tectonica deriva_en_varias_semillas -- --ignored --nocapture
+```
+
+La deriva del planeta es caótica: un cambio pequeño cambia qué placas chocan y cuándo, y la semilla 42 de la batería da solo una realización. Entre semillas, la exportación de sedimento al mar varía ±0,5 AU y el cambio del volumen continental ±5 puntos. Para decidir una calibración se mira la media de varias semillas. Esta prueba exploratoria corre una deriva por cada semilla y valor, todas a la vez (~4 min con 10).
+
+Por cada una da:
+- el balance de la corteza;
+- el consumo y el solape por tipo de borde, en las uniones triples y en los finales de fosa;
+- los picos de más de 80 km y si su muestra estaba oculta el paso anterior;
+- la erosión potencial por exceso de espesor;
+- el tiempo de cada etapa del paso, con la traza de `Deriva::dar_paso`.
 
 ## La batería de escenarios
 

@@ -189,6 +189,10 @@ pub struct TectonicaCfg {
     /// Delaminación: por encima de `h_del` la base de la corteza pasa a eclogita y se desprende con
     /// tiempo característico `tau_del` (calibrado).
     pub h_del_km: f64,
+    /// Umbral de la delaminación en los arcos (adenda v4 §6.6): la raíz de cumulados densos de un
+    /// arco pesa más que el manto desde ~40 km (Jagoutz y Behn 2013: «negatively buoyant ... at
+    /// depths exceeding 40 kilometres»; discontinuidad a 38–42 km).
+    pub h_del_arco_km: f64,
     pub tau_del_myr: f64,
     /// Flujo lateral de la corteza engrosada (adenda v3 §6.6b): por encima de `h_flujo` la corteza
     /// inferior se desparrama hacia los lados con difusividad `d_flujo` (km²/Myr, calibrado).
@@ -284,6 +288,7 @@ impl Default for TectonicaCfg {
             eta_col: 0.5,
             eta_arco: 0.9,
             h_del_km: 50.0,
+            h_del_arco_km: 40.0,
             tau_del_myr: 50.0,
             h_flujo_km: 50.0,
             d_flujo_km2_myr: 3000.0,
@@ -741,6 +746,7 @@ impl TectonicaCfg {
             && self.p_se >= 0.0
             && self.tau_del_myr > 0.0
             && self.h_del_km > 0.0
+            && self.h_del_arco_km > 0.0
             && self.s_ero_km >= 0.0
             && self.v_ero_cm_anio >= 0.0
             && self.h_flujo_km > 0.0

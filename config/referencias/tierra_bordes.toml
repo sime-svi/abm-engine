@@ -5,6 +5,8 @@
 # que se hunde. "malla_clases": clase de Bird del tramo más cercano. "regla_modelo_15": tipo
 # con la regla anterior de clasificar_bordes (f_transformante 0,26); "regla_bird_20", con 20°;
 # "regla_nota": la de nota_bordes_placa.md (normal del borde suavizado a 150 km y 20°).
+# "fosas_por_convergencia" y "vectorial_convergencia": convergencia perpendicular de las fosas
+# (cm/año; diagnóstico de nota_ciclo_fosas.md §0), por clases de "limites_cm_anio".
 # "mayores_15": las placas pequeñas fundidas con su vecina hasta quedar 15.
 
 [bordes.vectorial_km]
@@ -20,6 +22,22 @@ total = 260483
 [bordes.oblicuidad_grados]
 p95_transformantes = 17.8402
 p5_resto = 24.444
+
+[bordes.vectorial_convergencia.SUB]
+limites_cm_anio = [0, 1, 2, 3, 4, 5, 6, 8, 10, 15]
+frac = [0.0907966, 0.123418, 0.0685842, 0.0934179, 0.0867447, 0.0960724, 0.271211, 0.105576, 0.0509577, 0.0132218]
+lenta_frac = 0.214215
+largo_km = 51309.2
+media_cm_anio = 5.32113
+area_km2_anio = 2.73023
+
+[bordes.vectorial_convergencia.OCB]
+limites_cm_anio = [0, 1, 2, 3, 4, 5, 6, 8, 10, 15]
+frac = [0.665524, 0.144286, 0.0837379, 0.0248176, 0.0416855, 0.00606971, 0.0183983, 0.0135035, 0.00197738, 0]
+lenta_frac = 0.80981
+largo_km = 17447.3
+media_cm_anio = 1.2914
+area_km2_anio = 0.225315
 
 [bordes.todas.malla_clases_km]
 OSR = 51443.2
@@ -57,6 +75,14 @@ fosa = 51163.1
 choque = 35391.1
 transformante = 47288.1
 total = 234730
+
+[bordes.todas.fosas_por_convergencia]
+limites_cm_anio = [0, 1, 2, 3, 4, 5, 6, 8, 10, 15]
+frac = [0.205038, 0.107745, 0.079767, 0.0570584, 0.0761221, 0.0799174, 0.245533, 0.0825766, 0.05257, 0.0136727]
+lenta_frac = 0.312783
+largo_km = 51163.1
+media_cm_anio = 4.73906
+area_km2_anio = 2.42465
 
 [bordes.todas.malla]
 placas = 58
@@ -98,6 +124,14 @@ fosa = 37346.9
 choque = 23568.7
 transformante = 34944.7
 total = 182578
+
+[bordes.mayores_15.fosas_por_convergencia]
+limites_cm_anio = [0, 1, 2, 3, 4, 5, 6, 8, 10, 15]
+frac = [0.22836, 0.133364, 0.0768105, 0.0672981, 0.0875104, 0.084496, 0.279459, 0.0253929, 0.017309, 0]
+lenta_frac = 0.361724
+largo_km = 37346.9
+media_cm_anio = 3.97456
+area_km2_anio = 1.48437
 
 [bordes.mayores_15.malla]
 placas = 15
