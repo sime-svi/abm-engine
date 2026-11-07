@@ -426,3 +426,21 @@ Detalle técnico en `incremento-4-diseno.md` §9–§11; la adenda, en `adenda_b
 
 **Lo que queda.** Decidir cómo se cierra un océano como el Atlántico, cuyos bordes no tienen fosa. En la Tierra lo hacen fosas que se alargan por el borde o que llegan desde el océano de al lado. Y revisar por qué los choques duran tanto.
 
+### Cómo se cierran los océanos viejos y qué pasa tras un choque (07-11-2026, cuarta parte)
+
+**Lo que cambió el responsable (nota de fosas v4).**
+- **Invasión.** Los bordes de los continentes ya no empiezan a hundirse por sí solos, porque en la Tierra no lo hacen. Los océanos viejos se cierran cuando una fosa que ya existe se alarga desde su extremo y se mete por una falla o por el borde de un continente. Así entraron en el Atlántico las Antillas Menores y el arco de Escocia, que venían del Pacífico.
+- **Rotura de la losa.** Cuando un continente llega a una fosa y choca, el trozo de placa ya hundido (la **losa**) sigue colgando y tirando un tiempo, de 10 a 25 millones de años según su edad, y después se rompe.
+
+**Cómo funcionaba antes el tirón en un choque.** La losa se rompía al instante: en cuanto llegaba el continente, la fosa dejaba de tirar.
+
+**Lo que salió.**
+- **La rotura de la losa funciona.** En el choque de la India con Asia, la losa sigue tirando unos 22 millones de años y se rompe; la India va a la mitad de su velocidad mientras cuelga y a un tercio después.
+- **Pero los choques destruyen más corteza.** Al seguir tirando la losa, los continentes se meten más unos en otros, y pierden hasta un 22 % de su volumen.
+- **La invasión al principio casi nunca separaba el océano.** El océano pegado a los continentes del modelo es una franja estrecha, de unos 270 km, y no llegaba al tamaño mínimo de una placa. Se permitió que esa franja fuera una **microplaca** que se hunde, como la de Juan de Fuca frente a Norteamérica. Con eso, los continentes pierden menos volumen (un 15 %) y los choques, menos corteza.
+- **Aun así, el fondo oceánico sigue siendo demasiado viejo, y también los bordes pasivos de los continentes.** Al final quedan bordes de 650 millones de años, los del principio, a los que nunca llega una fosa. En la Tierra el más viejo tiene unos 180, porque todos nacieron cuando se partió el supercontinente Pangea.
+- **Los choques, comparados con los de la Tierra.** Los del modelo convergen a la misma velocidad que los de la Tierra (1,9 cm/año) en menos longitud, pero pierden mucha más corteza. La regla de que se pierde la mitad de lo que se solapa, medida en el choque de la India, aplicada a todos los choques de la Tierra de hoy daría de 10 a 20 veces la pérdida medida a largo plazo.
+- **Las fosas y el fondo que se hunde ya pasan del objetivo** (×1,3). Como pidió el responsable, quedan para una ampliación futura.
+
+**Lo que queda por decidir.** Cómo se cierran los océanos a los que no llega ninguna fosa (en la Tierra, el ciclo de los supercontinentes) y si la regla de la pérdida en los choques debe ser otra.
+

@@ -14,7 +14,7 @@ Programas fuera del motor para verificar, medir y consultar las corridas (CLAUDE
 | `analisis/h5mini.py` | Lector mínimo de HDF5 (sin librerías): lee filas sueltas de rejillas contiguas por peticiones parciales |
 | `analisis/lluvia_observada.py` | Mide la lluvia observada de la Tierra (WorldClim y CHELSA) a la escala y con las definiciones del planeta, y la compara con la del planeta (`config/referencias/tierra_lluvia.toml`) |
 | `analisis/tiffmini.py` | Lector mínimo de GeoTIFF (sin librerías): una banda en tiras, con Deflate y predictor; también fila a fila por peticiones parciales |
-| `analisis/bordes_bird.py` | Mide los bordes de placa de la Tierra (Bird 2003) en la malla tectónica, con el método y la regla de clasificación del modelo, y la convergencia de sus fosas (SUB y OCB tramo a tramo y en la malla; `config/referencias/tierra_bordes.toml`) |
+| `analisis/bordes_bird.py` | Mide los bordes de placa de la Tierra (Bird 2003) en la malla tectónica, con el método y la regla de clasificación del modelo, y la convergencia de sus fosas y de sus choques (SUB, OCB y CCB tramo a tramo, y en la malla; `config/referencias/tierra_bordes.toml`) |
 
 ## Ajustes desde la línea de comandos
 
@@ -141,7 +141,8 @@ Por cada una da:
 - las fosas de la nota de fosas: longitud activa y difusa, edad, tirón, nacimientos y muertes;
 - la edad del fondo;
 - las cuatro medidas de fuerzas del §10 de la nota: oblicuidad, tamaños de las placas, potencia de cada fuerza y área creada y consumida;
-- el sedimento: el máximo de una muestra, el que no cupo en el mar de su desembocadura y el que queda en cuencas cerradas.
+- el sedimento: el máximo de una muestra, el que no cupo en el mar de su desembocadura y el que queda en cuencas cerradas;
+- la nota de fosas v4: los márgenes pasivos (vida de los que acaban, edad media y máxima al final), la invasión (km/Myr por transformantes y por márgenes, intentos de separar y fallos), las roturas de losa y los choques (convergencia, duración ponderada por la corteza solapada y pérdida con la losa colgando y sin ella).
 
 Las otras pruebas exploratorias:
 - `calibracion_relajacion`: cuánto tarda la corteza engrosada de India–Asia en volver a 38 km, con cada `E_1`, `n_ero` y `D_0`;
@@ -158,7 +159,8 @@ herramientas/planeta_semillas.py --semillas 7,8 --set tectonica.e1_km_myr=0.004
 
 Corre el planeta entero (génesis, relieve y un año de clima) con cada semilla y lo analiza como la batería (`analisis/terreno.py`). Da la media, la desviación y los extremos de cada fila:
 - **frente a ETOPO** (la roca sin hielo con su rebote, a 26 km): tierra emergida, altura media de la tierra, fracción por debajo de 200 m, pendiente media y anchura de la plataforma;
-- **frente a los objetivos de la adenda y de la nota de fosas:** corteza máxima, edad del fondo, `f_cont`, cambio de volumen, velocidad de las placas, sedimento al mar, longitud de fosa, área que se hunde y tiempo.
+- **frente a los objetivos de la adenda y de la nota de fosas:** corteza máxima, edad del fondo, `f_cont`, cambio de volumen, velocidad de las placas, sedimento al mar, longitud de fosa, área que se hunde, vida y edad de los márgenes pasivos (Bradley 2008) y tiempo;
+- **los choques, solo diagnóstico, frente a Bird CCB:** longitud, convergencia, duración y pérdida antes y después de la rotura de la losa.
 
 Escribe cada corrida en `output/semillas/` y el resumen en `output/semillas/cierre.json`. El tiempo de cada semilla está medido con las cinco a la vez: el de una sola es el de la batería.
 

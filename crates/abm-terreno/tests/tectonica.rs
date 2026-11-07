@@ -322,6 +322,9 @@ fn cfg_india_asia() -> TectonicaCfg {
     TectonicaCfg {
         a_min_frac: 0.0,
         tau_rift_myr: 1e12,
+        // Escenario del choque: sin invasión por los bordes artificiales (meridianos) de los
+        // extremos del Tetis, que cambiaría cómo se mueve la placa de la India.
+        v_inv_km_myr: 0.0,
         n_min: 2,
         recalibrar_myr: 1e9, // c_b se calibra una vez, al principio
         ..TectonicaCfg::default()
@@ -572,27 +575,34 @@ fn sin_cratones_solo_los_arcos_hacen_corteza_continental() {
 #[test]
 fn dos_continentes_chocan_frenan_y_levantan_una_cordillera() {
     // India–Asia en una malla de ~208 km (n0 = 24, nivel 1): el océano viejo subduce bajo Asia, la
-    // India llega, choca y la convergencia baja a ~1/3 (calibración de c_col).
-    let r = india_asia(TectonicaCfg::default().c_col, 1, 24, 30);
+    // India llega, choca y la convergencia baja a menos de la mitad (calibración de c_col). Con la
+    // losa que cuelga t_rot tras el choque (nota de fosas v4 §6.6), la velocidad norte de la India
+    // en un punto depende también del giro que le dan las fosas de los lados: el tirón de la losa
+    // se comprueba en `la_losa_sigue_tirando_tras_el_choque_y_se_rompe_a_los_t_rot`.
+    let cfg = TectonicaCfg::default();
+    let r = india_asia(cfg.c_col, 1, 24, 50);
     let antes = r
         .iter()
         .take(6)
         .map(|x| x.0)
         .fold(f64::NEG_INFINITY, f64::max);
     let i_choque = r.iter().position(|x| x.1 > 0.0).expect("hay choque");
-    let despues: Vec<f64> = r.iter().skip(i_choque + 4).map(|x| x.0).collect();
-    let media_despues = despues.iter().sum::<f64>() / despues.len() as f64;
+    let t_rot = cfg.t_rot_joven_myr + (cfg.t_rot_viejo_myr - cfg.t_rot_joven_myr) * 0.8;
+    let i_rotura = i_choque + t_rot.round() as usize;
+    let media = |v: &[(f64, f64, f64)]| v.iter().map(|x| x.0).sum::<f64>() / v.len() as f64;
+    let durante = media(&r[i_choque + 4..i_rotura]);
+    let despues = media(&r[i_rotura + 4..]);
     assert!(
         antes > 8.0,
         "antes del choque la India avanza deprisa ({antes:.1} cm/año)"
     );
     assert!(
-        media_despues < 0.5 * antes,
-        "el choque frena la convergencia: {antes:.1} → {media_despues:.1} cm/año"
+        durante < 0.5 * antes && despues < 0.5 * antes,
+        "el choque frena la convergencia: {antes:.1} → {durante:.1} con la losa colgando y {despues:.1} tras romperse (cm/año)"
     );
     assert!(
         r.last().is_some_and(|x| x.2.is_finite()),
-        "la corteza india no desaparece en 30 Myr"
+        "la corteza india no desaparece en 50 Myr"
     );
 }
 
@@ -1287,6 +1297,21 @@ struct InformeDeriva {
     sed_max: f64,
     desbordado: f64,
     en_cuencas: f64,
+    /// Nota de fosas v4: márgenes pasivos (vida media de los que terminan, edad media y máxima de
+    /// los que hay al final, Myr), invasión por transformantes y por márgenes (km/Myr), roturas de
+    /// losa por 100 Myr, choques (convergencia media, cm/año; pérdida con la losa colgando y sin
+    /// ella, AU; duración media de los continente–continente que acaban, Myr, y cuántos).
+    vida_margen: f64,
+    edad_margen_final: f64,
+    edad_max_margen_final: f64,
+    invadido: [f64; 2],
+    separar_100: [f64; 3],
+    roturas_100: f64,
+    conv_choques: f64,
+    choque_con_losa: f64,
+    choque_sin_losa: f64,
+    duracion_choques: f64,
+    choques_acabados: f64,
 }
 
 fn diagnosticar_deriva(semilla: u64, variante: &str) -> InformeDeriva {
@@ -1627,6 +1652,44 @@ fn diagnosticar_deriva(semilla: u64, variante: &str) -> InformeDeriva {
     inf.placas = ultima.n_placas;
     let anios = pasos as f64 * tc.dt_myr * 1e6;
     inf.desbordado = d.cuentas.sedimento_desbordado_km3 / anios;
+    let l_fin: f64 = val.iter().map(|m| m.margen_fin_km).sum();
+    inf.vida_margen = if l_fin > 0.0 {
+        val.iter().map(|m| m.margen_fin_vida_km_myr).sum::<f64>() / l_fin
+    } else {
+        f64::NAN
+    };
+    inf.edad_margen_final = ultima.edad_media_margen_myr;
+    inf.edad_max_margen_final = ultima.edad_max_margen_myr;
+    inf.invadido = [media(|m| m.invadido_km[0]), media(|m| m.invadido_km[1])];
+    inf.roturas_100 = val.iter().map(|m| m.roturas as f64).sum::<f64>() * 100.0 / n;
+    for i in 0..3 {
+        inf.separar_100[i] = val.iter().map(|m| m.separar[i] as f64).sum::<f64>() * 100.0 / n;
+    }
+    let l_col: f64 = val.iter().map(|m| m.colisiones_km).sum();
+    inf.conv_choques = if l_col > 0.0 {
+        val.iter()
+            .map(|m| m.convergencia_media_choques_cm_anio * m.colisiones_km)
+            .sum::<f64>()
+            / l_col
+    } else {
+        0.0
+    };
+    inf.choque_con_losa = media(|m| m.f_col_con_losa_au);
+    inf.choque_sin_losa = media(|m| m.f_col_sin_losa_au);
+    // Duración ponderada por la corteza solapada: cuentan los choques grandes.
+    let (mut dv, mut vs, mut nc) = (0.0, 0.0, 0.0);
+    for e in d
+        .eventos
+        .iter()
+        .filter(|e| e.tipo == "fin_choque" && e.clase.as_deref() == Some("continente_continente"))
+    {
+        let sol = e.solapado_km3.unwrap_or(0.0);
+        dv += e.tiempo_choque_myr.unwrap_or(0.0) * sol;
+        vs += sol;
+        nc += 1.0;
+    }
+    inf.choques_acabados = nc;
+    inf.duracion_choques = if vs > 0.0 { dv / vs } else { f64::NAN };
     inf.en_cuencas = d.cuentas.sedimento_en_cuencas_km3 / anios;
     inf
 }
@@ -1831,7 +1894,7 @@ fn deriva_en_varias_semillas() {
             r(|i| i.h_max)
         );
         println!(
-            "### fosas: edad {} Myr; tirón {}; difusas {} km a {} cm/año, {} km²/año; nacen/100 Myr inducidas {} margen {} transformante {}; mueren sin convergencia {} choque {}; fondo media {} mediana {} >180 {} >200 {}; v_rms {}; F–U fosa {}; picos (celdas·paso) {}; máx. visible {}",
+            "### fosas: edad {} Myr; tirón {}; difusas {} km a {} cm/año, {} km²/año; nacen/100 Myr inducidas {} por separación de un margen invadido {} espontáneas en transformante {}; mueren sin convergencia {} choque {}; fondo media {} mediana {} >180 {} >200 {}; v_rms {}; F–U fosa {}; picos (celdas·paso) {}; máx. visible {}",
             r(|i| i.edad_fosas),
             r(|i| i.losa),
             r(|i| i.difusas_km),
@@ -1852,6 +1915,23 @@ fn deriva_en_varias_semillas() {
             r(|i| i.max_visible)
         );
         let tiempo: Vec<f64> = g.iter().map(|i| i.segundos.values().sum::<f64>()).collect();
+        println!(
+            "### márgenes pasivos: vida media de los que terminan {} Myr; al final, edad media {} y máxima {} Myr; invasión por transformantes {} y por márgenes {} km/Myr (intentos de separar {}, fallidos {}, celdas de frente olvidadas {} por 100 Myr); roturas de losa {} por 100 Myr; choques: convergencia {} cm/año, pérdida con la losa colgando {} y sin ella {} AU, duración media de los que acaban {} Myr ({} choques)",
+            r(|i| i.vida_margen),
+            r(|i| i.edad_margen_final),
+            r(|i| i.edad_max_margen_final),
+            r(|i| i.invadido[0]),
+            r(|i| i.invadido[1]),
+            r(|i| i.separar_100[0]),
+            r(|i| i.separar_100[1]),
+            r(|i| i.separar_100[2]),
+            r(|i| i.roturas_100),
+            r(|i| i.conv_choques),
+            r(|i| i.choque_con_losa),
+            r(|i| i.choque_sin_losa),
+            r(|i| i.duracion_choques),
+            r(|i| i.choques_acabados)
+        );
         println!(
             "### sedimento: máximo de una muestra {} km; al mar siguiente {} AU; en cuencas cerradas {} AU",
             r(|i| i.sed_max),
@@ -2040,18 +2120,12 @@ fn una_fosa_cuyas_placas_se_separan_muere_tras_tau_muerte() {
     );
 }
 
-#[test]
-fn un_margen_pasivo_viejo_se_parte_con_su_fosa_y_conserva_la_corteza() {
-    // Prueba 5: con λ_esp alto, el margen pasivo de un continente rodeado de fondo viejo se separa
-    // como placa oceánica nueva con su fosa, y la corteza se conserva.
-    let cfg = TectonicaCfg {
-        lambda_esp: 1.0,
-        tau_rift_myr: 1e12,
-        ..TectonicaCfg::default()
-    };
+/// Un continente (casquete de 30° en 0°N 0°E) con fondo viejo alrededor en una placa, y otra placa
+/// al otro lado del planeta.
+fn margen_pasivo_aislado(cfg: &TectonicaCfg) -> Deriva {
     let malla = Malla::new(12, 2, 6371.0);
     let dirs = malla.dir.clone();
-    let mut d = Deriva::desde(&cfg, 3, malla, 0.0, &[10, 20], |k| {
+    Deriva::desde(cfg, 3, malla, 0.0, &[10, 20], |k| {
         let x = dirs[k];
         if x[0] > 0.0 {
             let cont = x[0] > 30f64.to_radians().cos();
@@ -2059,29 +2133,193 @@ fn un_margen_pasivo_viejo_se_parte_con_su_fosa_y_conserva_la_corteza() {
         } else {
             (1, corteza(false, 7.0, 150.0))
         }
+    })
+}
+
+#[test]
+fn una_fosa_invade_un_margen_pasivo_y_separa_su_oceano_conservando_la_corteza() {
+    // Nota de fosas v4 §10, prueba 5: una fosa cuyo extremo toca un margen pasivo con fondo viejo
+    // se alarga por él a v_inv (aquí rápida, para la prueba) sin mover nada; cuando lo invadido ya
+    // separa un océano del tamaño de una placa, ese océano pasa a ser una placa nueva con la fosa en
+    // el tramo invadido, y la corteza se conserva.
+    let cfg = TectonicaCfg {
+        v_inv_km_myr: 300.0,
+        tau_rift_myr: 1e12,
+        lambda_esp: 0.0,
+        ..TectonicaCfg::default()
+    };
+    let malla = Malla::new(12, 3, 6371.0);
+    let dirs = malla.dir.clone();
+    // Placa 0: una lengua oceánica de 150 Myr al sur del continente (20–60°S, 23,5°O–23,5°E). Placa
+    // 1: el resto, con el continente (casquete de 30° en 0°N 0°E, al norte de 20°S) y su fondo, de
+    // 170 Myr (más viejo que la lengua: no se invaden las transformantes de sus lados).
+    let mut d = Deriva::desde(&cfg, 3, malla, 0.0, &[10, 20], |k| {
+        let (la, lo) = lat_lon(dirs[k]);
+        let (la, lo) = (la.to_degrees(), lo.to_degrees());
+        if (-60.0..-20.0).contains(&la) && lo.abs() < 23.5 {
+            (0, corteza(false, 7.0, 150.0))
+        } else {
+            let cont = dirs[k][0] > 30f64.to_radians().cos() && la >= -20.0;
+            (1, corteza(cont, if cont { 35.0 } else { 7.0 }, 170.0))
+        }
     });
-    d.arrancar_con(&[[0.0; 3], [0.0; 3]]);
-    d.dar_paso();
-    let nace = nacimientos(&d);
+    // La lengua avanza hacia el norte a ~5 cm/año y se hunde bajo el continente.
+    let w = 50.0 / 6371.0;
+    d.arrancar_con(&[[0.0, -w, 0.0], [0.0; 3]]);
+    d.activar_fosas(d.cfg.l_losa_km);
+    let v0 = d.inventario_continental();
+    let (mut invadido, mut separa, mut tira) = (0.0, None, false);
+    for paso in 1..=15u32 {
+        d.paso_cinematico();
+        if separa.is_none() {
+            invadido += d.fosas_paso.invadido_km[1];
+            if let Some(ev) = d.eventos.iter().find(|e| e.tipo == "invasion_margen") {
+                separa = Some(paso);
+                // La fosa del tramo invadido tira de la placa nueva hacia el continente.
+                let nueva = d
+                    .placas
+                    .iter()
+                    .position(|p| p.viva && p.id == ev.placas[0])
+                    .expect("placa nueva") as u32;
+                tira = d
+                    .bordes
+                    .iter()
+                    .any(|b| b.p == nueva && b.p_subduce && b.losa > 0.0);
+            }
+        }
+    }
+    let paso = separa.expect("el océano de delante del margen invadido se separa");
+    // Dos frentes (uno por esquina) a v_inv, durante los pasos hasta separar.
+    let maximo = 2.0 * cfg.v_inv_km_myr * paso as f64 * 1.5;
     assert!(
-        nace.iter()
-            .any(|e| e.clase.as_deref() == Some("espontaneo_margen")),
-        "nace una fosa en el margen pasivo: {:?}",
-        d.eventos
+        invadido > 0.0 && invadido <= maximo,
+        "el frente avanza a v_inv: {invadido:.0} km en {paso} Myr (como mucho {maximo:.0})"
     );
     assert!(
         d.eventos.iter().any(|e| e.tipo == "placa_nueva"),
         "la parte oceánica es una placa nueva"
     );
     assert!(
-        d.cuentas.error_balance_max_rel < 1e-9,
-        "la corteza se conserva: error {:.2e}",
-        d.cuentas.error_balance_max_rel
+        tira,
+        "la fosa del tramo invadido tira de la placa nueva hacia el continente"
     );
-    // El borde nuevo es una fosa: tira de la placa oceánica hacia el continente.
+    let dv = (d.inventario_continental() - v0).abs() / v0;
     assert!(
-        d.bordes.iter().any(|b| b.p_subduce && b.losa > 0.0),
-        "la fosa nueva tira"
+        dv < 1e-9,
+        "la corteza se conserva: cambio relativo {dv:.2e}"
+    );
+}
+
+#[test]
+fn un_margen_pasivo_sin_fosa_cerca_no_se_hunde_nunca() {
+    // Nota de fosas v4 §10, prueba 5 (segunda parte): un continente rodeado de fondo viejo y sin
+    // ninguna fosa cerca no empieza a hundirse, ni con el nacimiento espontáneo muy alto (que ya
+    // solo es de transformantes con contraste de edad).
+    let cfg = TectonicaCfg {
+        lambda_esp: 1.0,
+        tau_rift_myr: 1e12,
+        ..TectonicaCfg::default()
+    };
+    let mut d = margen_pasivo_aislado(&cfg);
+    d.arrancar_con(&[[0.0; 3], [0.0; 3]]);
+    for _ in 0..20 {
+        d.paso_cinematico();
+    }
+    assert!(
+        !d.eventos.iter().any(|e| matches!(
+            e.tipo.as_str(),
+            "placa_nueva" | "invasion_margen" | "nacimiento_fosa"
+        )),
+        "ningún margen pasivo se hunde solo: {:?}",
+        d.eventos
+    );
+    assert!(
+        !d.bordes.iter().any(|b| b.p_subduce && b.losa > 0.0),
+        "ninguna fosa tira"
+    );
+}
+
+#[test]
+fn la_losa_sigue_tirando_tras_el_choque_y_se_rompe_a_los_t_rot() {
+    // Nota de fosas v4 §10, prueba 6: en el choque India–Asia, la losa del Tetis (fondo de 80 Myr)
+    // sigue colgando y tirando bajo la India durante t_rot = 10 + 15·0,8 = 22 Myr desde el inicio
+    // del choque, y después se rompe y deja de tirar.
+    let cfg = cfg_india_asia();
+    let t_rot = cfg.t_rot_joven_myr + (cfg.t_rot_viejo_myr - cfg.t_rot_joven_myr) * 0.8;
+    let mut d = choque_india_asia(&cfg, 1, 48);
+    // La India y Asia, por su posición (sus índices pueden cambiar si se parte otra placa).
+    let placa_en = |d: &Deriva, la: f64, lo: f64| {
+        let (la, lo) = (la.to_radians(), lo.to_radians());
+        d.dueno[d
+            .malla
+            .localizar([la.cos() * lo.cos(), la.cos() * lo.sin(), la.sin()])]
+    };
+    // Bordes de la India frente a Asia en el frente del choque.
+    let centro = |d: &Deriva, b: &abm_terreno::tectonica::deriva::Borde| {
+        b.p == placa_en(d, 7.5, 80.0) && b.q == placa_en(d, 40.0, 80.0)
+    };
+    let (mut inicio, mut rotura, mut colgando, mut pasos_choque) = (None, None, 0u32, 0u32);
+    let mut t_evento = None;
+    for paso in 1..=60u32 {
+        d.dar_paso();
+        // El choque empieza cuando choca el frente (al menos tres bordes), no con un contacto suelto.
+        let choca = d
+            .bordes
+            .iter()
+            .filter(|b| centro(&d, b) && b.tipo == TipoBorde::Colision)
+            .count()
+            >= 3;
+        if inicio.is_none() && choca {
+            inicio = Some(paso);
+        }
+        let frente = d
+            .bordes
+            .iter()
+            .filter(|b| centro(&d, b) && b.tipo == TipoBorde::Colision)
+            .count();
+        let tiran = d
+            .bordes
+            .iter()
+            .filter(|b| {
+                centro(&d, b) && b.tipo == TipoBorde::Colision && b.p_subduce && b.losa > 0.0
+            })
+            .count();
+        if inicio.is_some() && rotura.is_none() {
+            pasos_choque += 1;
+            colgando += u32::from(tiran > 0);
+            let (ii, ia) = (
+                d.placas[placa_en(&d, 7.5, 80.0) as usize].id,
+                d.placas[placa_en(&d, 40.0, 80.0) as usize].id,
+            );
+            if let Some(e) = d.eventos.iter().find(|e| {
+                e.tipo == "rotura_losa" && e.placas.contains(&ii) && e.placas.contains(&ia)
+            }) {
+                rotura = Some(paso);
+                t_evento = e.tiempo_choque_myr;
+            }
+        } else if rotura.is_some_and(|r| (r + 3..=r + 10).contains(&paso)) {
+            // Rota la losa del choque, solo puede colgar aún en los costados del frente, donde los
+            // contactos nuevos siguen unidos a la losa del Tetis (el desgarro avanza a lo largo).
+            assert!(
+                2 * tiran < frente,
+                "tras la rotura, la losa ya no tira en la mayor parte del frente (paso {paso}: {tiran} de {frente})"
+            );
+        }
+    }
+    let inicio = inicio.expect("la India choca con Asia");
+    let rotura = rotura.expect("la losa se rompe");
+    let t = t_evento.expect("tiempo de la rotura");
+    assert!(
+        (t - t_rot).abs() <= 2.0,
+        "la losa se rompe a los t_rot = {t_rot} Myr del choque: {t}"
+    );
+    assert!(
+        ((rotura - inicio) as f64 - t_rot).abs() <= 3.0,
+        "rotura {rotura} Myr tras el inicio del choque {inicio}"
+    );
+    assert!(
+        colgando * 10 >= pasos_choque * 8,
+        "mientras cuelga, la losa tira bajo la India: {colgando} de {pasos_choque} pasos"
     );
 }
 

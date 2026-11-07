@@ -7,7 +7,10 @@ la no regresión). Corre el planeta entero (génesis, relieve, un año de clima)
 vez, lo analiza como la batería (`analisis/terreno.py`) y lo compara con la Tierra:
 
 - relieve: ETOPO 2022 con la roca rebotada sin hielo, a 26 km (`config/referencias/tierra_relieve.toml`);
-- tectónica: los objetivos de la adenda de balance y de la nota de fosas.
+- tectónica: los objetivos de la adenda de balance y de la nota de fosas (v4: la vida de los márgenes
+  pasivos, Bradley 2008);
+- choques, solo diagnóstico: frente a los bordes CCB de Bird (2003), medidos como el modelo
+  (`config/referencias/tierra_bordes.toml`).
 
 Uso:
   herramientas/planeta_semillas.py                       # semillas 42,1,2,3,4 con la config por defecto
@@ -87,6 +90,17 @@ FILAS = [
     ('tect_bal_sedimento_al_mar_au', 'Sedimento al mar (AU)', '≈1,8', lambda x: abs(x - 1.8) <= 0.4),
     ('tect_bal_fosas_km', 'Longitud de fosa (km)', '51 000 ± 25 %', lambda x: abs(x / 51000.0 - 1.0) <= 0.25),
     ('tect_bal_area_subducida_km2_anio', 'Área que se hunde (km²/año)', '2,7–3,4', lambda x: 2.7 <= x <= 3.4),
+    ('tect_bal_vida_media_margen_myr', 'Vida media de los márgenes pasivos que terminan (Myr)', '130–180',
+     lambda x: 130.0 <= x <= 180.0),
+    ('tect_bal_edad_media_margen_final_myr', 'Edad media de los márgenes pasivos al final (Myr)', '~104',
+     lambda x: abs(x - 104.0) <= 26.0),
+    ('tect_bal_edad_max_margen_final_myr', 'Edad máxima de los márgenes pasivos al final (Myr)', '~180',
+     lambda x: x <= 225.0),
+    ('tect_bal_colisiones_km', 'Choques: longitud (km)', 'CCB 23 000', None),
+    ('tect_bal_convergencia_media_choques_cm_anio', 'Choques: convergencia media (cm/año)', 'CCB 1,87', None),
+    ('tect_bal_duracion_media_choques_myr', 'Choques: duración media de los que acaban (Myr)', None, None),
+    ('tect_bal_choques_con_losa_au', 'Choques: pérdida con la losa colgando (AU)', None, None),
+    ('tect_bal_choques_sin_losa_au', 'Choques: pérdida tras la rotura (AU)', None, None),
     ('tiempo_s', 'Tiempo de cálculo del planeta (s)', '≤ 200', lambda x: x <= 200.0),
 ]
 

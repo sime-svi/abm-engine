@@ -75,9 +75,9 @@ abm/
 │   │   │   └── tectonica/           # Relieve tectónico (incremento 4): deriva de placas → relieve de nacimiento
 │   │   │       ├── [x] mod.rs       # Génesis tectónica, estado final, interpolación a las celdas del terreno
 │   │   │       ├── [x] malla.rs     # Malla tectónica (nivel 2 del cubo) y cuaterniones
-│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques, delaminación, flujo lateral cúbico (adenda v6), erosión, sedimento (solo al mar abierto), eventos
+│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques, delaminación, flujo lateral cúbico (adenda v6), erosión, sedimento (solo al océano mundial), eventos, márgenes pasivos
 │   │   │       ├── [x] deriva/suavizado.rs # Borde suavizado (nota de bordes): pertenencia φ, normal, tipo de tramo, suavizado de la pertenencia, islas
-│   │   │       ├── [x] deriva/fosas.rs     # Ciclo de las fosas (nota de fosas v3): tramos difusos y activos, nacimientos (espontáneos solo en el tramo de fondo viejo), polaridad, losa, muertes, convergencia difusa
+│   │   │       ├── [x] deriva/fosas.rs     # Ciclo de las fosas (nota de fosas v4): tramos difusos y activos, nacimientos (espontáneos solo en transformantes), invasión de transformantes y márgenes pasivos, polaridad, losa, rotura de la losa tras un choque, convergencia difusa
 │   │   │       ├── [x] isostasia.rs # Altura isostática (con el agua), Parsons y Sclater, fosas, nivel del mar
 │   │   │       └── [x] historia.rs  # Eventos, métricas de cada Myr y cuentas de la corteza continental
 │   │   └── tests/
@@ -125,7 +125,7 @@ abm/
 │       ├── [x] terreno.py         # Resumen y comparación de planetas (biomas, diagnóstico, tectónica, sombra pluviométrica)
 │       ├── [x] referencia_tierra.py # Tablas de la Tierra para el relieve (config/referencias/tierra_relieve.toml)
 │       ├── [x] h5mini.py          # Lector mínimo de HDF5 por peticiones parciales (rejillas de Paxman et al.)
-│       ├── [x] bordes_bird.py     # Bordes de Bird (2003) en la malla tectónica, medidos y clasificados como el modelo
+│       ├── [x] bordes_bird.py     # Bordes de Bird (2003) en la malla tectónica, medidos y clasificados como el modelo; convergencia de SUB, OCB y CCB
 │       ├── [x] lluvia_observada.py # Lluvia observada de la Tierra a 26 km, frente a la del planeta
 │       └── [x] tiffmini.py        # Lector mínimo de GeoTIFF (tiras, Deflate) también por peticiones parciales
 │

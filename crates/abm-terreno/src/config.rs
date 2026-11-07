@@ -234,9 +234,21 @@ pub struct TectonicaCfg {
     pub lambda_esp: f64,
     /// Longitud de losa con la que el tirón es pleno (km; losa que llega a los 660 km con 45–60°).
     pub l_losa_km: f64,
-    /// Edad mínima del fondo para un nacimiento espontáneo (`a_min` de la nota de fosas v3, Myr;
-    /// supuesto físico: solo el fondo viejo y denso se hunde solo; se calibra en 100–180).
+    /// Edad mínima del fondo para un nacimiento espontáneo en una transformante (`a_min` de la nota
+    /// de fosas, Myr; supuesto físico: solo el fondo viejo y denso se hunde solo; rango 100–180).
     pub a_min_myr: f64,
+    /// Velocidad media con la que una fosa activa se alarga desde su extremo al invadir una
+    /// transformante o un margen pasivo (`v_inv` de la nota de fosas v4 §6.4, km/Myr). Resume
+    /// también la fase lenta inicial (Gibraltar, ~20 Myr). Calibrado con la vida de los márgenes
+    /// pasivos (Bradley 2008) y la edad del fondo.
+    pub v_inv_km_myr: f64,
+    /// Edad mínima del fondo que una fosa puede invadir (`a_inv`, Myr; supuesto: el fondo que se
+    /// hunde bajo las Antillas Menores es del Cretácico; rango 40–100).
+    pub a_inv_myr: f64,
+    /// Tiempo entre el inicio de un choque y la rotura de la losa, con losa joven y con losa de
+    /// 100 Myr o más (`t_rot`, nota de fosas v4 §6.6, Myr; modelos de van Hunen y Allen 2011).
+    pub t_rot_joven_myr: f64,
+    pub t_rot_viejo_myr: f64,
     // --- Eventos de placas (§5.6) ---
     pub n_p0: u32,
     pub n_cratones: u32,
@@ -252,12 +264,6 @@ pub struct TectonicaCfg {
     /// exportación al mar), y `n_ero` (rango 1,5–3: la erosión crece mucho más que proporcional con
     /// el relieve; Montgomery y Brandon 2002).
     pub e1_km_myr: f64,
-    /// Área mínima de un mar abierto (km²): el sedimento de los ríos solo sale al mar en un mar
-    /// conectado de al menos esta área. Un mar cerrado más pequeño (el resto de un océano que se
-    /// cierra entre dos continentes, un lago de rift bajo el nivel del mar) es una cuenca cerrada:
-    /// se rellena hasta su cota de desagüe y lo que sobra sigue hasta el mar abierto, como en el
-    /// Caspio. Criterio de la malla (a ~52 km un estrecho estrecho puede no verse), no físico.
-    pub area_mar_abierto_km2: f64,
     pub n_ero: f64,
     /// Deformación de los bordes de Voronoi, de los cratones y de las líneas de rift (fracción del
     /// radio): los bordes reales no son rectos.
@@ -336,6 +342,10 @@ impl Default for TectonicaCfg {
             lambda_esp: 4.0e-6,
             l_losa_km: 800.0,
             a_min_myr: 140.0,
+            v_inv_km_myr: 25.0,
+            a_inv_myr: 60.0,
+            t_rot_joven_myr: 10.0,
+            t_rot_viejo_myr: 25.0,
             n_p0: 12,
             n_cratones: 8,
             n_min: 8,
@@ -345,7 +355,6 @@ impl Default for TectonicaCfg {
             v_sutura_cm_anio: 0.5,
             t_sutura_myr: 10.0,
             e1_km_myr: 0.005,
-            area_mar_abierto_km2: 5.0e5,
             n_ero: 2.5,
             deformacion: 0.06,
             nivel_malla: 2,
@@ -791,10 +800,13 @@ impl TectonicaCfg {
             && self.lambda_esp >= 0.0
             && self.l_losa_km > 0.0
             && self.a_min_myr >= 0.0
-            && self.area_mar_abierto_km2 >= 0.0)
+            && self.v_inv_km_myr >= 0.0
+            && self.a_inv_myr >= 0.0
+            && self.t_rot_joven_myr >= 0.0
+            && self.t_rot_viejo_myr >= self.t_rot_joven_myr)
         {
             return Err(invalid(
-                "se requiere p_arc_oc, p_arc_cont, p_se, s_ero_km, v_ero_cm_anio, d0_flujo_km2_myr >= 0, c_ref_km, tau_del_myr, h_del_km, h_flujo_km, l_borde_km, x_ini_km, tau_muerte_myr, l_losa_km > 0, lambda_esp, area_mar_abierto_km2 >= 0 y 0 < theta_tr_grados < 90",
+                "se requiere p_arc_oc, p_arc_cont, p_se, s_ero_km, v_ero_cm_anio, d0_flujo_km2_myr >= 0, c_ref_km, tau_del_myr, h_del_km, h_flujo_km, l_borde_km, x_ini_km, tau_muerte_myr, l_losa_km > 0, lambda_esp, v_inv_km_myr, a_inv_myr >= 0, 0 <= t_rot_joven_myr <= t_rot_viejo_myr y 0 < theta_tr_grados < 90",
             ));
         }
         if !(self.rho_w < self.rho_s

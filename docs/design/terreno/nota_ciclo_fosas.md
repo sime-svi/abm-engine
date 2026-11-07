@@ -2,9 +2,14 @@
 
 Documento de diseño. Complementa a diseno_relieve_tectonico.md (incremento 4 del terreno), a nota_bordes_placa.md y a adenda_balance_corteza.md (versión 5).
 
-Estado: versión 3. Diseño cerrado.
+Estado: versión 4. Diseño cerrado.
 
-Cambios de la versión 3:
+Cambios de la versión 4:
+- Los océanos viejos se cierran por invasión: una fosa que ya existe se alarga desde su extremo hacia el océano vecino (6.4). Los márgenes pasivos ya no empiezan a hundirse por sí solos, porque en la Tierra no lo hacen.
+- Tras un choque, la losa se rompe entre 10 y 25 Myr después y deja de tirar (6.6).
+- Nuevo objetivo de validación: la vida de los márgenes pasivos (Bradley 2008).
+
+Cambios de la versión 3 (el nacimiento en márgenes pasivos se retira en la versión 4):
 - El nacimiento espontáneo ya no convierte en fosa todo un margen: solo nace donde el fondo es viejo (más de a_min), y la fosa ocupa solo el tramo de fondo viejo (6.4).
 - En la convergencia difusa, la corteza oceánica no pasa a corteza continental (6.2).
 - Se aceptan tres decisiones de implementación: la corteza que flota es la continental de más de 20 km; una fosa espontánea nace con L = X_ini; el tirón sigue mientras la fosa vive.
@@ -51,6 +56,10 @@ Lo que manda es esa convergencia acumulada, no la velocidad. Hasta entonces, la 
 
 **Nacimiento espontáneo.** La litosfera oceánica vieja y densa junto a una zona débil puede empezar a hundirse por sí sola; el ejemplo clásico es Izu-Bonin-Marianas. Es raro.
 
+**Invasión.** Los márgenes pasivos no empiezan a hundirse solos, aunque tengan al lado fondo viejo y denso: antes la placa tiene que romperse y doblarse, y solo puede romperla el tirón de otra losa que ya existe. Por eso los océanos de tipo Atlántico se cierran cuando una fosa de un océano vecino se alarga hasta ellos, normalmente por un margen transformante estrecho. Así entraron en el Atlántico las Antillas Menores y el arco de Escocia, que venían del Pacífico. Gibraltar puede ser el siguiente caso, tras una fase lenta de unos 20 Myr.
+
+**Vida de los márgenes pasivos.** Los márgenes pasivos antiguos duraron de media unos 181 Myr (130 Myr los del Pérmico al Neógeno), con un máximo de 590 Myr. Los actuales tienen de media 104 Myr y como mucho unos 180.
+
 **Dónde nacen.** En zonas de fractura antiguas, fallas transformantes, dorsales apagadas y detrás de fosas existentes (cambio de polaridad). Una placa homogénea, sin zonas débiles, no forma una subducción que se mantenga sola.
 
 **Con qué frecuencia.** Muchas zonas de subducción actuales son jóvenes, así que el nacimiento de fosas es un proceso continuo.
@@ -92,15 +101,16 @@ Sí se modela:
 - Convergencia acumulada en los tramos difusos y nacimiento inducido al superar X_ini.
 - Convergencia difusa: el área que converge sin fosa se absorbe engrosando la corteza a ambos lados.
 - Polaridad fijada al nacer. Sustituye a la decisión por par de placas que figura como provisional en TREE.md.
-- Nacimiento espontáneo en márgenes pasivos viejos y en fallas transformantes con fuerte contraste de edad, con una probabilidad que crece con la edad del fondo.
-- Muerte por falta de convergencia sostenida. La muerte por choque ya existe.
+- Invasión: una fosa existente se alarga desde su extremo hacia fondo oceánico viejo, por fallas transformantes y márgenes pasivos.
+- Nacimiento espontáneo, raro, solo en fallas transformantes con fuerte contraste de edad.
+- Muerte por falta de convergencia sostenida, y rotura de la losa tras un choque.
 - Tirón de la losa creciente desde el nacimiento. El documento principal no lo tiene.
 
 Se abstrae o se deja para más adelante:
 - **Retroceso de la fosa y apertura de cuencas tras el arco (back-arc).** Son reales e importantes; ampliación futura.
-- **Propagación lateral de fosas**, incluida la invasión de océanos viejos desde fosas existentes, como los arcos de Escocia y del Caribe, que avanzan hacia el Atlántico. Aquí la fosa nace de una vez en el tramo de fondo viejo. Ampliación futura.
+- **Fase lenta previa a la invasión** (en Gibraltar, unos 20 Myr). Se resume en la velocidad media de invasión v_inv.
 - **Inicio de subducción por plumas del manto.** Ampliación futura.
-- **Rotura de la losa y saltos de fosa tras un choque de arco.** Se reproducen solo en parte, porque un tramo que sigue convergiendo tras un choque vuelve a acumular convergencia y puede renacer.
+- **Saltos de fosa tras un choque de arco.** Se reproducen solo en parte, porque un tramo que sigue convergiendo tras un choque vuelve a acumular convergencia y puede renacer.
 
 ---
 
@@ -142,8 +152,11 @@ El estado viaja con la celda de margen de la placa de arriba, como el resto de c
 | X_ini | Convergencia acumulada para el nacimiento inducido | 150 | km | Modelos numéricos: 100–150 km en zona de fractura (Gurnis et al. 2004), ~200 km (Li y Gurnis 2023). Se puede mover dentro de 100–200 |
 | W_dif | Anchura de la franja donde se reparte el engrosamiento difuso a cada lado | igual a L_borde (150) | km | Del orden de la anchura de los bordes difusos reales |
 | τ_muerte | Tiempo con convergencia nula o negativa tras el que muere una fosa | 10 | Myr | Supuesto; ajustable |
-| λ_esp | Probabilidad de nacimiento espontáneo por km de tramo candidato y por Myr, por cada 100 Myr de edad por encima de a_min | calibrar | 1/(km·Myr) | Calibrado contra la distribución de edades del fondo (Seton et al. 2020) |
-| a_min | Edad mínima del fondo para un nacimiento espontáneo | 140 | Myr | Supuesto físico: solo el fondo viejo y denso se hunde por sí solo. Se puede mover dentro de 100–180 al calibrar |
+| λ_esp | Probabilidad de nacimiento espontáneo en una falla transformante con contraste de edad, por km y por Myr, por cada 100 Myr de edad por encima de a_min | calibrar (hoy 4·10⁻⁶) | 1/(km·Myr) | Calibrado: debe ser raro, con pocos casos en la Tierra actual |
+| a_min | Edad mínima del fondo para un nacimiento espontáneo | 140 | Myr | Supuesto físico; rango 100–180 |
+| v_inv | Velocidad media con la que una fosa se alarga al invadir, a lo largo del borde | calibrar | km/Myr | Calibrado contra la vida de los márgenes pasivos y la edad del fondo. No hay una medida directa; resume también la fase lenta inicial |
+| a_inv | Edad mínima del fondo para que una fosa pueda invadirlo | 60 | Myr | Supuesto: el fondo que se hunde bajo las Antillas Menores es del Cretácico; rango 40–100 |
+| t_rot,joven / t_rot,viejo | Tiempo entre el inicio de un choque y la rotura de la losa, para losa joven / vieja | 10 / 25 | Myr | Modelos numéricos (van Hunen y Allen 2011) |
 | L_losa | Longitud de losa con la que el tirón alcanza su valor pleno | 800 | km | Geométrico: losa que llega a la base del manto superior (660 km) con inclinaciones de 45–60°; rango 660–1 000 |
 
 ---
@@ -181,29 +194,27 @@ Cuando X_j ≥ X_ini, el tramo pasa a fosa activa. Se fija entonces su polaridad
 
 Además: t_j = 0, L_j = 0 y T_j = 0. Se registra el evento de nacimiento.
 
-### 6.4 Nacimiento espontáneo
+### 6.4 Invasión y nacimiento espontáneo
 
-Tramos candidatos:
-- **márgenes pasivos**, es decir, transiciones de océano a continente dentro de una misma placa;
-- **fallas transformantes entre placas** con contraste de edad entre lados mayor que la mitad de la edad del lado viejo.
+**Invasión (vía principal).** Cada extremo de una fosa activa puede alargarse. Lo hace si, siguiendo el borde más allá de ese extremo, hay fondo oceánico de más de a_inv junto a:
+- una falla transformante entre placas, o
+- un margen pasivo (la transición de océano a continente dentro de una placa).
 
-Solo cuentan los segmentos donde el fondo del lado que se hundiría es viejo: a > a_min. En la Tierra, el fondo joven no se hunde solo, y ni siquiera el fondo de ~180 Myr del Atlántico ha empezado a hundirse junto a sus márgenes pasivos: el nacimiento espontáneo es raro y exige litosfera vieja y densa.
+En cada paso, la fosa avanza por ese borde una longitud v_inv · Δt, celda a celda y en un orden fijo. El tramo nuevo forma parte de la misma fosa:
+- hereda su polaridad si es compatible (el océano se hunde bajo el continente o el arco; entre océanos, el lado viejo);
+- hereda su longitud de losa L, porque es la misma losa, que se rasga hacia un lado y sigue tirando.
 
-Se divide cada candidato en segmentos de longitud L_borde. Para cada segmento con a > a_min:
+El extremo que avanza se une a los bordes existentes con una falla transformante, como las fallas que en la Tierra rasgan la placa en el extremo de una fosa. Si la fosa, al avanzar por un margen pasivo, llega a separar la parte oceánica del continente, esa parte pasa a ser una placa nueva, cortada por el límite entre corteza oceánica y continental.
+
+La invasión se detiene cuando el fondo de al lado tiene menos de a_inv, cuando llega a otro borde o cuando la fosa muere.
+
+**Nacimiento espontáneo (raro).** Solo en fallas transformantes entre placas con un contraste de edad entre lados mayor que la mitad de la edad del lado viejo, como en Izu-Bonin-Marianas. Los márgenes pasivos ya no son candidatos.
+
+Se divide cada falla candidata en segmentos de longitud L_borde. Para cada segmento con fondo de más de a_min en el lado viejo:
 
 p = 1 − exp(−λ_esp · ((a − a_min) / 100 Myr) · L_borde · Δt)
 
-Con el generador sembrado se decide si nace una fosa en ese segmento.
-
-Si nace en un margen pasivo:
-- La fosa ocupa solo el tramo contiguo de margen donde el fondo de al lado sigue teniendo más de a_min, no todo el margen.
-- En sus extremos, la fosa se une a los bordes existentes con fallas transformantes, como los bordes que en la Tierra rasgan la placa en el extremo de una fosa.
-- La parte oceánica que queda entre la fosa y esos bordes se separa como placa nueva. Se reutiliza la maquinaria de división de los rifts, cortando por el límite entre corteza oceánica y continental, no por un círculo.
-- Su polaridad es la del océano bajo el continente.
-
-Si nace en una falla transformante: solo el tramo con fondo de más de a_min pasa a fosa activa, y se hunde el lado viejo.
-
-En ambos casos: t_j = 0, L_j = X_ini y T_j = 0, porque una losa que se hunde por su propio peso tira desde el principio. Se registra el evento.
+Con el generador sembrado se decide si nace una fosa en ese segmento. Si nace, se hunde el lado viejo, con t_j = 0, L_j = X_ini y T_j = 0, y desde sus extremos puede invadir como cualquier otra fosa. Se registra el evento.
 
 ### 6.5 Vida de la fosa
 
@@ -225,7 +236,11 @@ Una fosa recién nacida apenas tira y va ganando fuerza a medida que su losa se 
 
 - **Si v_n,j ≤ 0:** T_j ← T_j + Δt. Si v_n,j > 0, T_j vuelve a 0.
 - **Si T_j ≥ τ_muerte:** la fosa muere. El tramo se reclasifica según su movimiento (transformante o divergente) y se registra el evento.
-- **Si llega corteza continental o de arco:** el choque se resuelve como ya está modelado, y se registra la muerte por choque. Si después el tramo sigue convergiendo, vuelve al estado difuso desde X_j = 0, y puede renacer con otra polaridad, como en un cambio de polaridad real tras el choque de un arco.
+- **Si llega corteza continental (más de 20 km):** empieza el choque, que se resuelve como ya está modelado. La losa sigue colgando y tirando hasta que se rompe, un tiempo t_rot después del inicio del choque:
+
+  t_rot = t_rot,joven + (t_rot,viejo − t_rot,joven) · min(1, a / 100 Myr)
+
+  con a la edad del fondo que se hundía al empezar el choque. Al romperse la losa, su tirón pasa a cero y se registra la muerte por choque. Si después el tramo sigue convergiendo por otras fuerzas, vuelve al estado difuso desde X_j = 0 y puede renacer con otra polaridad, como en un cambio de polaridad real tras el choque de un arco.
 
 ---
 
@@ -233,7 +248,9 @@ Una fosa recién nacida apenas tira y va ganando fuerza a medida que su losa se 
 
 - **Nacimiento de fosa:** paso, tipo (inducido o espontáneo), placas, polaridad, longitud del tramo, edad del fondo que se hunde.
 - **Muerte de fosa:** paso, causa (sin convergencia o choque), edad de la fosa, longitud de losa acumulada.
-- **Placa nueva por nacimiento espontáneo:** paso, placa de origen, área de la placa nueva.
+- **Placa nueva por invasión o nacimiento:** paso, placa de origen, área de la placa nueva.
+- **Invasión:** paso, fosa, longitud añadida, edad del fondo invadido.
+- **Rotura de la losa:** paso, fosa, tiempo desde el inicio del choque.
 
 ---
 
@@ -246,6 +263,8 @@ Una fosa recién nacida apenas tira y va ganando fuerza a medida que su losa se 
 - Distribución de edades del fondo oceánico: media, mediana y fracción por encima de 180 y de 200 Myr.
 - Área absorbida por convergencia difusa (km²/año).
 - Número de placas.
+- Márgenes pasivos: edad media y máxima de los que existen, y vida media de los que terminan.
+- Choques: longitud, convergencia media y duración.
 
 ---
 
@@ -278,13 +297,15 @@ Las tolerancias son propuestas.
 | Convergencia media en las fosas | ≈5,3 cm/año (Bird SUB) | 5,1 |
 | Longitud de convergencia difusa | La de Bird OCB en la malla (≈17 400 km tramo a tramo), a ≈1,3 cm/año | 0 |
 | Fondo que se hunde en fosas | ≈2,7 km²/año (Bird SUB), más ≈0,2 absorbidos en convergencia difusa | 3,6 |
-| Edad media del fondo oceánico | 64,2 Myr (Seton et al. 2020) | — (mediana 59) |
-| Fondo con más de 180 Myr | menos del 1 % del área oceánica | 24 % con más de 200 |
+| Edad media del fondo oceánico | 64,2 Myr (Seton et al. 2020) | 99 |
+| Fondo con más de 180 Myr | menos del 1 % del área oceánica | 18,5 % |
+| Vida media de los márgenes pasivos que terminan | 130–180 Myr (Bradley 2008) | — |
+| Edad de los márgenes pasivos que existen | media ~104 Myr, máxima ~180 | — |
 | Velocidad media de las placas | 4,39 cm/año, sin reajustar fuerzas | 4,36 |
 | Placas rápidas = las de mucha fosa (Forsyth y Uyeda) | se mantiene | sí |
 | Ciclos de supercontinente | del orden de 1,5 en 630 Myr (criterio blando) | — |
 
-λ_esp se calibra con la distribución de edades del fondo: la media y la fracción por encima de 180 Myr. X_ini solo puede moverse dentro de 100–200 km, para acercar la longitud de fosa. Todo se mide con la media de al menos 5 semillas.
+v_inv se calibra con la vida de los márgenes pasivos y con la edad del fondo (media y fracción por encima de 180 Myr). λ_esp se mantiene bajo, porque el nacimiento espontáneo es raro. X_ini solo puede moverse dentro de 100–200 km, para acercar la longitud de fosa. Todo se mide con la media de al menos 5 semillas.
 
 ### Si la fosa sigue demasiado larga
 
@@ -300,8 +321,9 @@ Si tras implementar la nota la fosa sigue más de 1,25 veces por encima de la re
 2. **Convergencia suficiente.** Las mismas placas a 5 cm/año: la fosa nace a los 3 Myr (150 km), y se hunde el lado más viejo.
 3. **Polaridad fija.** Tras nacer, la polaridad no cambia aunque cambien las edades a ambos lados.
 4. **Muerte.** Una fosa cuyas placas pasan a separarse muere tras τ_muerte, y el tramo pasa a divergente.
-5. **Nacimiento espontáneo.** Con λ_esp alto (configuración de prueba), un margen pasivo viejo se separa como placa nueva con su fosa, conservando la corteza.
-6. **No regresión.** El escenario India–Asia sigue igual.
+5. **Invasión.** Una fosa cuyo extremo toca un margen pasivo con fondo viejo se alarga por él a v_inv; al separar la parte oceánica, esta pasa a ser placa nueva, conservando la corteza. Un margen pasivo sin fosa cerca no empieza a hundirse nunca.
+6. **Rotura de la losa.** En un choque, el tirón de la losa sigue durante t_rot y después cae a cero.
+7. **No regresión.** El escenario India–Asia sigue igual.
 
 ### Determinismo
 
@@ -321,8 +343,11 @@ Todas las reglas son funciones puras del estado. El nacimiento espontáneo usa e
 ## Referencias
 
 - Bird, P. (2003). An updated digital model of plate boundaries. Geochemistry, Geophysics, Geosystems 4.
+- Bradley, D. C. (2008). Passive margins through earth history. Earth-Science Reviews 91.
 - Coltice, N. et al. (2012). Dynamic causes of the relation between area and age of the ocean floor. Science 336.
+- Duarte, J. C. et al. (2024). Gibraltar subduction zone is invading the Atlantic. Geology.
 - Gurnis, M., Hall, C. y Lavier, L. (2004). Evolving force balance during incipient subduction. Geochemistry, Geophysics, Geosystems 5.
 - Li, Y. y Gurnis, M. (2023). A simple force balance model of subduction initiation. Geophysical Journal International 232.
 - Seton, M. et al. (2020). A global data set of present-day oceanic crustal age and seafloor spreading parameters. Geochemistry, Geophysics, Geosystems 21.
 - Stern, R. J. y Scholl, D. W. (2010). Yin and yang of continental crust creation and destruction by plate tectonic processes. International Geology Review 52.
+- van Hunen, J. y Allen, M. B. (2011). Continental collision and slab break-off: a comparison of 3-D numerical models with observations. Earth and Planetary Science Letters 302.

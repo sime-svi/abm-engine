@@ -270,9 +270,10 @@ def main():
                                                 'separa': r['oblicuidad']['separa']}),
             (f'bordes.{nombre}.areas_placas_frac', {'mayor_a_menor': r['tamanos']}),
         ]
-    # Diagnóstico de nota_ciclo_fosas.md §0: convergencia de las fosas (SUB) y de los bordes
-    # convergentes sin fosa (OCB) de Bird, tramo a tramo.
-    vconv = {c: convergencia_vectorial(tramos, c) for c in ('SUB', 'OCB')}
+    # Diagnóstico de nota_ciclo_fosas.md §0: convergencia de las fosas (SUB), de los bordes
+    # convergentes sin fosa (OCB) y de los choques entre continentes (CCB, v4 §8) de Bird, tramo a
+    # tramo.
+    vconv = {c: convergencia_vectorial(tramos, c) for c in ('SUB', 'OCB', 'CCB')}
     for c, v in vconv.items():
         print(f'Bird {c} (vectorial): {v["largo_km"]:.0f} km, convergencia media {v["media_cm_anio"]:.2f} '
               f'cm/año, < 2 cm/año {100 * v["lenta_frac"]:.1f} %, se hunden {v["area_km2_anio"]:.2f} km²/año; '
@@ -288,7 +289,8 @@ def main():
            '# con la regla anterior de clasificar_bordes (f_transformante 0,26); "regla_bird_20", con 20°;\n'
            '# "regla_nota": la de nota_bordes_placa.md (normal del borde suavizado a 150 km y 20°).\n'
            '# "fosas_por_convergencia" y "vectorial_convergencia": convergencia perpendicular de las fosas\n'
-           '# (cm/año; diagnóstico de nota_ciclo_fosas.md §0), por clases de "limites_cm_anio".\n'
+           '# (cm/año; diagnóstico de nota_ciclo_fosas.md §0), por clases de "limites_cm_anio"; la\n'
+           '# de CCB, la de los choques entre continentes (v4 §8).\n'
            f'# "mayores_{a.placas}": las placas pequeñas fundidas con su vecina hasta quedar {a.placas}.\n')
     rt.escribir_toml(a.salida, secciones, cab)
     rt.log(f'escrito {a.salida}')

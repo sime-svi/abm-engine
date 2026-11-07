@@ -226,6 +226,20 @@ pub struct Placa {
     /// Ids de las placas de las que viene (por rifts, saltos de dorsal o suturas): el estado de un
     /// tramo de otra placa que mire a una de ellas mira a esta.
     pub ancestros: Vec<u64>,
+    /// Frente de invasión de sus márgenes pasivos (nota de fosas v4 §6.4): celda local continental
+    /// del margen → lo que hereda de la fosa que la invade. La placa aún no se ha roto ahí.
+    pub invadidas: HashMap<u32, Invadida>,
+    /// Longitud invadida (km) en el último intento de separar el océano de delante.
+    pub inv_intento_km: f64,
+}
+
+/// Una celda de margen pasivo por la que ya ha pasado el frente de una fosa que invade (v4 §6.4):
+/// la losa y la edad de esa fosa, y el último paso en que el frente la tocó.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Invadida {
+    pub l_km: f64,
+    pub edad_myr: f64,
+    pub paso: u64,
 }
 
 impl Placa {
@@ -247,6 +261,8 @@ impl Placa {
             nacida_myr: t,
             fosas: HashMap::new(),
             ancestros: Vec::new(),
+            invadidas: HashMap::new(),
+            inv_intento_km: 0.0,
         }
     }
 
@@ -415,6 +431,9 @@ pub struct Borde {
     /// Fracción del tirón de la losa (`min(1, L_j/L_losa)`, nota de fosas §6.5) en el lado que se
     /// hunde de una fosa activa; 0 en el resto.
     pub losa: f64,
+    /// En una fosa que ya choca, la edad del fondo que se hundía (Myr), para el tirón de la losa
+    /// que aún cuelga; 0 en el resto (vale la del fondo de la celda).
+    pub edad_losa: f64,
 }
 
 /// Historia de un par de placas (ids `a < b`).
@@ -439,6 +458,8 @@ struct Par {
     choque_perdido: f64,
     choque_ultimo_myr: f64,
     choque_avisado: bool,
+    /// Myr del primer solape del choque en curso (su duración, nota de fosas v4 §8).
+    choque_inicio_myr: f64,
     /// Régimen del margen en el último paso con subducción: (id de la placa de arriba, ¿erosivo?).
     regimen: Option<(u64, bool)>,
 }
@@ -480,6 +501,7 @@ struct Detalle {
     edad_fondo_myr: Option<f64>,
     edad_fosa_myr: Option<f64>,
     losa_km: Option<f64>,
+    tiempo_choque_myr: Option<f64>,
 }
 
 /// Fracción suavizada por debajo de la cual una muestra que reclama una celda es una muestra suelta
@@ -502,6 +524,8 @@ pub struct EtapaTraza {
     pub max_en: (u32, u32),
     /// La muestra vigilada (`Deriva::vigilada`) al acabar la etapa, si sigue viva.
     pub vigilada: Option<Corteza>,
+    /// Celdas del mundo sin corteza (sin dueño o sin muestra) al acabar la etapa.
+    pub huecos: u32,
     pub segundos: f64,
 }
 
@@ -788,6 +812,9 @@ pub struct Deriva {
     traza_reloj: Option<std::time::Instant>,
     /// Muestra que la traza sigue etapa a etapa (índice de placa, celda local; diagnóstico).
     pub vigilada: Option<(u32, u32)>,
+    /// Márgenes pasivos del paso anterior, (id de placa, celda local) → edad (Myr), ordenados:
+    /// para saber cuáles terminan (nota de fosas v4 §8).
+    margenes_previos: Vec<((u64, u32), f64)>,
     /// Consumo del último paso por la celda de borde a la que se asigna (celda, código del tipo de
     /// borde, km²) y solape de los choques por la celda del frente (celda, código, km³): las mismas
     /// cuentas que `area_subducida_por_borde_km2` y `choque_solapado_por_borde_km3`.
@@ -998,6 +1025,7 @@ impl Deriva {
             traza: None,
             traza_reloj: None,
             vigilada: None,
+            margenes_previos: Vec::new(),
             consumo_en_borde_paso: Vec::new(),
             solape_en_borde_paso: Vec::new(),
             consumo_paso: Vec::new(),
@@ -1092,13 +1120,17 @@ impl Deriva {
                 p.actualizar_cap(&self.malla);
             }
             self.recalcular_mundo();
+            self.tapar_huecos_del_mundo();
             self.clasificar_bordes();
         }
         self.trazar("eventos_de_placas");
         // Nota de fosas §9: el estado de los tramos con los bordes del final del paso, y los
         // nacimientos espontáneos.
         self.avanzar_fosas();
-        // Los nacimientos espontáneos dejan puesto en los bordes el estado de los tramos.
+        // La invasión de transformantes y márgenes pasivos desde los extremos de las fosas (v4
+        // §6.4) y los nacimientos espontáneos, que dejan puesto en los bordes el estado de los
+        // tramos.
+        self.invadir();
         self.nacimientos_espontaneos();
         self.trazar("fosas");
         self.paso += 1;
@@ -1130,12 +1162,24 @@ impl Deriva {
                 .and_then(|pl| pl.get(l))
                 .copied()
         });
+        let huecos = (0..self.malla.num)
+            .filter(|&k| {
+                let (p, l) = (self.dueno[k], self.rep[k]);
+                p == NADA
+                    || l == NADA
+                    || self
+                        .placas
+                        .get(p as usize)
+                        .is_none_or(|pl| pl.mapa.get(l as usize).is_none_or(|&s| s == NADA))
+            })
+            .count() as u32;
         if let Some(t) = self.traza.as_mut() {
             t.push(EtapaTraza {
                 etapa,
                 h_max_km,
                 max_en,
                 vigilada,
+                huecos,
                 segundos,
             });
         }
@@ -1213,7 +1257,9 @@ impl Deriva {
         // Estado de los tramos convergentes (nota de fosas), sin fuerzas.
         self.clasificar_bordes();
         self.avanzar_fosas();
-        self.aplicar_estado_fosas();
+        self.invadir();
+        // Deja puesto en los bordes el estado de los tramos.
+        self.nacimientos_espontaneos();
         self.paso += 1;
         self.t_myr = self.t0_myr + self.paso as f64 * dt;
     }
@@ -1335,6 +1381,7 @@ impl Deriva {
                         choque_perdido: 0.0,
                         choque_ultimo_myr: f64::NEG_INFINITY,
                         choque_avisado: false,
+                        choque_inicio_myr: 0.0,
                         regimen: None,
                     },
                 );
@@ -1383,32 +1430,37 @@ impl Deriva {
         for b in &self.bordes {
             let x = self.malla.dir[b.k as usize];
             let p = b.p as usize;
-            let f = match b.tipo {
-                // Tirón de la losa (§6.2), que crece con su longitud (nota de fosas §6.5): mientras
-                // la fosa viva, aunque en un paso las placas se deslicen.
-                _ if b.p_subduce && b.losa > 0.0 => {
-                    let edad = self.corteza(b.k as usize).map_or(0.0, |c| c.edad_oc);
-                    esc(
-                        b.normal,
-                        self.cfg.f_sp * (edad / self.cfg.t_sat_myr).sqrt().min(1.0) * b.losa,
-                    )
-                }
-                TipoBorde::Divergente => esc(b.normal, -self.cfg.f_rp),
-                TipoBorde::Colision => {
-                    // −c_col·c_b·v_n·n̂ con v_n = R (ω_p − ω_q)·(x × n̂): término implícito.
-                    let g = cross(x, b.normal);
-                    let c = self.cfg.c_col * 0.5 * b.largo_km * r * r;
-                    let mut gg = [[0.0; 3]; 3];
-                    for i in 0..3 {
-                        for j in 0..3 {
-                            gg[i][j] = c * g[i] * g[j];
-                        }
-                    }
-                    acop.push((p, b.q as usize, gg));
-                    [0.0; 3]
-                }
-                _ => [0.0; 3],
+            // Tirón de la losa (§6.2), que crece con su longitud (nota de fosas §6.5): mientras la
+            // fosa viva, aunque en un paso las placas se deslicen, y en un choque hasta que la losa
+            // se rompe (v4 §6.6), con la edad del fondo que se hundía.
+            let tira = b.p_subduce && b.losa > 0.0;
+            let f = if tira {
+                let edad = if b.edad_losa > 0.0 {
+                    b.edad_losa
+                } else {
+                    self.corteza(b.k as usize).map_or(0.0, |c| c.edad_oc)
+                };
+                esc(
+                    b.normal,
+                    self.cfg.f_sp * (edad / self.cfg.t_sat_myr).sqrt().min(1.0) * b.losa,
+                )
+            } else if b.tipo == TipoBorde::Divergente {
+                esc(b.normal, -self.cfg.f_rp)
+            } else {
+                [0.0; 3]
             };
+            if b.tipo == TipoBorde::Colision {
+                // −c_col·c_b·v_n·n̂ con v_n = R (ω_p − ω_q)·(x × n̂): término implícito.
+                let g = cross(x, b.normal);
+                let c = self.cfg.c_col * 0.5 * b.largo_km * r * r;
+                let mut gg = [[0.0; 3]; 3];
+                for i in 0..3 {
+                    for j in 0..3 {
+                        gg[i][j] = c * g[i] * g[j];
+                    }
+                }
+                acop.push((p, b.q as usize, gg));
+            }
             let par = esc(cross(x, f), r * b.largo_km);
             t[p] = add(t[p], par);
             if b.p_subduce && b.losa > 0.0 {
@@ -1564,6 +1616,30 @@ impl Deriva {
             for s in 0..p.celda.len() {
                 let x = aplicar(&p.rot, self.malla.dir[p.celda[s] as usize]);
                 p.mundo[s] = self.malla.localizar(x) as u32;
+            }
+        }
+    }
+
+    /// Tras un evento de placas (fusión, rift, absorción, salto de dorsal), una celda del mundo puede
+    /// quedarse sin muestra hasta el paso siguiente, que lo rasteriza todo de nuevo. Mientras, ve la
+    /// muestra de su primera vecina con corteza (en el orden fijo de la malla): no se crea corteza.
+    fn tapar_huecos_del_mundo(&mut self) {
+        let num = self.malla.num;
+        let vacia = |d: &Deriva, k: usize| {
+            let (p, l) = (d.dueno[k], d.rep[k]);
+            p == NADA
+                || l == NADA
+                || !d.placas[p as usize].viva
+                || d.placas[p as usize].mapa[l as usize] == NADA
+        };
+        let huecos: Vec<usize> = (0..num).filter(|&k| vacia(self, k)).collect();
+        for k in huecos {
+            if let Some(&v) = self.malla.vec[k]
+                .iter()
+                .find(|&&v| v != NADA && !vacia(self, v as usize))
+            {
+                self.dueno[k] = self.dueno[v as usize];
+                self.rep[k] = self.rep[v as usize];
             }
         }
     }
@@ -2189,6 +2265,20 @@ impl Deriva {
                     });
                     self.cuentas.choque_solapado_km3 += v_sol;
                     self.cuentas.choque_perdida_km3 += (1.0 - eta) * v_sol;
+                    // ¿Cuelga aún la losa de una fosa entre las dos (v4 §6.6)?
+                    let arriba = self.dueno[k as usize];
+                    let con_losa = arriba != NADA
+                        && (self
+                            .estado_fosa(pi as u32, l, arriba)
+                            .is_some_and(|e| e.activa)
+                            || self
+                                .estado_fosa(arriba, self.rep[k as usize], pi as u32)
+                                .is_some_and(|e| e.activa));
+                    if con_losa {
+                        self.cuentas.choque_perdida_con_losa_km3 += (1.0 - eta) * v_sol;
+                    } else {
+                        self.cuentas.choque_perdida_sin_losa_km3 += (1.0 - eta) * v_sol;
+                    }
                     self.anotar_choque(pi, k, v_sol, (1.0 - eta) * v_sol, c.arco, eta);
                 }
                 // Fondo oceánico que se hunde (§6.0) con su sedimento (§6.4).
@@ -2365,6 +2455,7 @@ impl Deriva {
         par.choque_ultimo_myr = t;
         if !par.choque_avisado {
             par.choque_avisado = true;
+            par.choque_inicio_myr = t;
             let clase = if arco {
                 "arco_continente"
             } else {
@@ -2629,6 +2720,7 @@ impl Deriva {
                 tipo,
                 p_subduce,
                 losa: 0.0,
+                edad_losa: 0.0,
             });
         }
         self.aplicar_estado_fosas();
@@ -3572,9 +3664,9 @@ impl Deriva {
         hi
     }
 
-    /// Mar abierto: las celdas de mar (`z < zeta`) de las masas conectadas de al menos
-    /// `area_mar_abierto_km2` (y, si ninguna llega, la mayor). Los mares cerrados más pequeños son
-    /// cuencas cerradas para el sedimento ([`Deriva::inundacion`]).
+    /// Mar abierto: las celdas de mar (`z < zeta`) conectadas al océano mundial, la mayor masa de
+    /// mar conectada. Cualquier otro mar es cerrado y, para el sedimento, una cuenca
+    /// ([`Deriva::inundacion`]), como el Caspio.
     fn mar_abierto(&self, z: &[f64], zeta: f64) -> Vec<bool> {
         let num = self.malla.num;
         let mut comp = vec![NADA; num];
@@ -3599,18 +3691,15 @@ impl Deriva {
             }
             areas.push(a);
         }
-        let a_min = self.cfg.area_mar_abierto_km2;
-        let mayor = areas
+        let Some(mundial) = areas
             .iter()
             .enumerate()
             .max_by(|a, b| a.1.total_cmp(b.1))
-            .map(|(i, _)| i);
-        let abierta: Vec<bool> = (0..areas.len())
-            .map(|i| areas[i] >= a_min || Some(i) == mayor)
-            .collect();
-        (0..num)
-            .map(|k| comp[k] != NADA && abierta[comp[k] as usize])
-            .collect()
+            .map(|(i, _)| i as u32)
+        else {
+            return vec![false; num];
+        };
+        comp.iter().map(|&c| c == mundial).collect()
     }
 
     /// Inundación por prioridad desde la costa del mar abierto (Barnes et al. 2014) sobre las
@@ -3885,6 +3974,7 @@ impl Deriva {
             edad_fondo_myr: det.edad_fondo_myr,
             edad_fosa_myr: det.edad_fosa_myr,
             losa_km: det.losa_km,
+            tiempo_choque_myr: det.tiempo_choque_myr,
         });
     }
 
@@ -4130,6 +4220,9 @@ impl Deriva {
             if let Some(e) = madre.fosas.get(&l) {
                 h.fosas.insert(l, *e);
             }
+            if let Some(e) = madre.invadidas.get(&l) {
+                h.invadidas.insert(l, *e);
+            }
         }
         self.cuentas.rift_km3 += adelg;
         // Apertura: giro alrededor del eje del círculo a 90° del centro (en el centro, v_rift).
@@ -4221,8 +4314,16 @@ impl Deriva {
         let areas = self.area_placa();
         let a_min = self.cfg.a_min_frac * self.malla.area_total();
         let mut cambio = false;
+        // Una microplaca con una losa que tira (la que separa la invasión de un margen, v4 §6.4) no
+        // se funde: se va hundiendo.
+        let mut con_losa = vec![false; self.placas.len()];
+        for b in &self.bordes {
+            if b.p_subduce && b.losa > 0.0 {
+                con_losa[b.p as usize] = true;
+            }
+        }
         for (pi, &area_p) in areas.iter().enumerate() {
-            if !self.placas[pi].viva || area_p >= a_min {
+            if !self.placas[pi].viva || area_p >= a_min || con_losa[pi] {
                 continue;
             }
             // Vecina con más borde común.
@@ -4312,7 +4413,12 @@ impl Deriva {
         let (mut dors, mut fosas, mut col, mut trans, mut perimetro) = (0.0, 0.0, 0.0, 0.0, 0.0);
         let (mut difusas, mut edad_fosas, mut losa_fosas) = (0.0, 0.0, 0.0);
         let (mut conv_fosa, mut fosa_lenta) = (0.0, 0.0);
+        let (mut conv_col, mut largo_col) = (0.0, 0.0);
         for b in &self.bordes {
+            if b.tipo == TipoBorde::Colision {
+                conv_col += b.v_n.max(0.0) / CM_ANIO * b.largo_km;
+                largo_col += b.largo_km;
+            }
             if b.tipo == TipoBorde::Subduccion && b.p_subduce {
                 let v = b.v_n.max(0.0) / CM_ANIO;
                 conv_fosa += v * b.largo_km;
@@ -4364,6 +4470,7 @@ impl Deriva {
                 }
             }
         }
+        let margenes = self.margenes_pasivos();
         let sc = self.indice_supercontinente();
         if sc >= 0.7 && !self.super_formado {
             self.super_formado = true;
@@ -4440,7 +4547,105 @@ impl Deriva {
             losa_media_frac: if fosas > 0.0 { losa_fosas / fosas } else { 0.0 },
             nacimientos: self.fosas_paso.nacen,
             muertes: self.fosas_paso.mueren,
+            invadido_km: self.fosas_paso.invadido_km,
+            separar: self.fosas_paso.separar,
+            roturas: self.fosas_paso.roturas,
+            convergencia_media_choques_cm_anio: if largo_col > 0.0 {
+                conv_col / largo_col
+            } else {
+                0.0
+            },
+            f_col_con_losa_au: (c.choque_perdida_con_losa_km3 - c0.choque_perdida_con_losa_km3)
+                * au,
+            f_col_sin_losa_au: (c.choque_perdida_sin_losa_km3 - c0.choque_perdida_sin_losa_km3)
+                * au,
+            margen_pasivo_km: margenes.0,
+            edad_media_margen_myr: margenes.1,
+            edad_max_margen_myr: margenes.2,
+            margen_fin_km: margenes.3,
+            margen_fin_vida_km_myr: margenes.4,
         });
+    }
+
+    /// Márgenes pasivos (nota de fosas v4 §8): celdas continentales (no de arco) con fondo oceánico
+    /// de su placa al lado y sin otra placa a menos de `L_borde`. Su edad es la del fondo más viejo de al lado
+    /// (el tiempo desde que se abrió ese océano). Un margen termina cuando un borde convergente
+    /// (fosa, convergencia difusa o choque) llega a menos de `L_borde` de su celda: entonces cuenta
+    /// su vida, la edad que tenía el paso anterior. Devuelve la longitud (km), la edad media
+    /// ponderada por longitud y la máxima (Myr), y la longitud que termina y Σ longitud·vida.
+    fn margenes_pasivos(&mut self) -> (f64, f64, f64, f64, f64) {
+        let num = self.malla.num;
+        let lado = self.malla.lado_km;
+        let mut conv_cerca = vec![false; num];
+        for b in &self.bordes {
+            if matches!(
+                b.tipo,
+                TipoBorde::Subduccion | TipoBorde::Difusa | TipoBorde::Colision
+            ) {
+                for &j in self.vecindad.de(b.k as usize) {
+                    conv_cerca[j as usize] = true;
+                }
+            }
+        }
+        let mut ahora: Vec<((u64, u32), f64)> = Vec::new();
+        let (mut largo, mut edad_l, mut edad_max) = (0.0, 0.0, 0.0f64);
+        for k in 0..num {
+            let p = self.dueno[k];
+            if p == NADA
+                || self.rep[k] == NADA
+                || !self.corteza(k).is_some_and(|c| c.cont && !c.arco)
+            {
+                continue;
+            }
+            let edad = self.malla.vec[k]
+                .iter()
+                .filter(|&&w| w != NADA && self.dueno[w as usize] == p)
+                .filter_map(|&w| {
+                    self.corteza(w as usize)
+                        .filter(|c| !c.cont)
+                        .map(|c| c.edad_oc)
+                })
+                .fold(f64::NEG_INFINITY, f64::max);
+            if !edad.is_finite()
+                || self.vecindad.de(k).iter().any(|&j| {
+                    let d = self.dueno[j as usize];
+                    d != NADA && d != p
+                })
+            {
+                continue;
+            }
+            ahora.push(((self.placas[p as usize].id, self.rep[k]), edad));
+            largo += lado;
+            edad_l += edad * lado;
+            edad_max = edad_max.max(edad);
+        }
+        ahora.sort_unstable_by_key(|x| x.0);
+        // Los que estaban y ya no: ¿les llegó un borde convergente?
+        let (mut fin_km, mut fin_vida) = (0.0, 0.0);
+        let previos = std::mem::take(&mut self.margenes_previos);
+        for &((id, l), edad) in &previos {
+            if ahora.binary_search_by_key(&(id, l), |x| x.0).is_ok() {
+                continue;
+            }
+            // La placa que tiene ahora esa celda local: la misma o una hija.
+            let k = self.placas.iter().filter(|p| p.viva).find_map(|p| {
+                let s = p.mapa[l as usize];
+                (s != NADA && (p.id == id || p.ancestros.contains(&id)))
+                    .then(|| p.mundo[s as usize] as usize)
+            });
+            if k.is_some_and(|k| conv_cerca[k]) {
+                fin_km += lado;
+                fin_vida += lado * edad;
+            }
+        }
+        self.margenes_previos = ahora;
+        (
+            largo,
+            if largo > 0.0 { edad_l / largo } else { 0.0 },
+            edad_max,
+            fin_km,
+            fin_vida,
+        )
     }
 
     /// Eventos de inicio de subducción y de colisión entre pares de placas.
@@ -4525,6 +4730,7 @@ impl Deriva {
     fn fin_de_choque(&mut self, i: usize) {
         let par = &mut self.pares[i];
         let (sol, perd, arco) = (par.choque_solapado, par.choque_perdido, par.choque_arco);
+        let duracion = (par.choque_ultimo_myr - par.choque_inicio_myr).max(0.0);
         let placas = vec![par.a, par.b];
         par.choque_avisado = false;
         par.choque_solapado = 0.0;
@@ -4546,6 +4752,7 @@ impl Deriva {
                 eta: (sol > 0.0).then(|| 1.0 - perd / sol),
                 solapado_km3: Some(sol),
                 perdido_km3: Some(perd),
+                tiempo_choque_myr: Some(duracion),
                 ..Detalle::default()
             },
         );

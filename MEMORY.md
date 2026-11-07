@@ -1209,3 +1209,54 @@ Formato de entrada:
   - las agujas de sumar muestras;
   - recalibrar la erosión cuando cambie la base.
 
+## [2026-11-07] Nota de fosas v4: invasión, rotura de la losa, diagnóstico de los choques y tabla de cierre
+
+- **Qué pidió el responsable.**
+  - Nota de fosas v4: los márgenes pasivos no se hunden solos; los océanos viejos se cierran por invasión, una fosa activa que se alarga desde su extremo a `v_inv` por transformantes y márgenes con fondo de más de `a_inv`. El tramo nuevo hereda la polaridad y la losa; si separa el océano, este es una placa nueva. El nacimiento espontáneo solo queda en transformantes.
+  - Rotura de la losa tras un choque (`t_rot` 10–25 Myr según la edad). Antes, contar cómo funcionaba el tirón al morir una fosa por choque.
+  - Calibrar `v_inv` y `a_inv` (40–100) con la vida de los márgenes pasivos y la edad del fondo (5 semillas).
+  - Diagnóstico de los choques frente a Bird CCB, sin tocar `c_col` ni `η_col`.
+  - Sedimento al «océano mundial» si es sencillo. Repetir la tabla de cierre.
+- **El tirón antes:** desaparecía al instante al llegar el continente, borde a borde y por tramo (incremento-4-diseno.md §39).
+- **Rotura de la losa** (§40).
+  - La fosa que choca sigue activa y tira también en los bordes de choque, con la edad de la losa del inicio del choque, hasta `t_rot`.
+  - La zona comparte reloj y edad; la losa rota queda marcada.
+  - Fallos encontrados por el camino:
+    - el reloj de un choque vecino hacía chocar a tramos enteros (fosas de ~30 Myr y ~600 roturas por 100 Myr);
+    - la edad de la losa se tomaba de celdas de borde recién creadas (se usa el fondo de detrás).
+  - India–Asia: la losa tira 21–25 Myr y se rompe; la India va a la mitad de su velocidad mientras cuelga y a un tercio después; 68–77 km de espesor máximo y relajación en 140 Myr.
+- **Invasión** (§40).
+  - El extremo de una fosa es su último borde convergente vivo; no lo son las transformantes con el estado heredado ni el borde de un choque.
+  - Por transformantes: camino 0–1 a `v_inv`, heredando la losa.
+  - Por márgenes: un frente sin cinemática, en el borde de continentes de al menos (3·L_borde)², ni arcos ni trozos sueltos (separaban placas de 3,9 y 11 Mkm²).
+  - Cada 3·L_borde se intenta separar el océano de delante. Decisión mía: con microplacas desde (3·L_borde)² que no se absorben mientras tienen losa, porque esa franja mide ~270 km y nunca llegaba a A_min.
+  - Solo invade una fosa que converge.
+  - Nuevo `tapar_huecos_del_mundo` tras los eventos de placas (un fallo latente que destapó la prueba sin cratones).
+- **Calibración (§41).**
+  - `v_inv` = 25 km/Myr y `a_inv` = 60 apenas mueven la edad del fondo (89–101 Myr) y la de los márgenes (vida 91–124 Myr con 0–150 km/Myr).
+  - Las microplacas mejoran el balance: ΔV_cont de −22 a −15 % y pérdida en choques de 4,3 a 3,5 AU.
+- **Choques frente a Bird CCB (§42).**
+  - Modelo: 8 700 km a 1,89 cm/año. CCB: 23 000 km a 1,87.
+  - El modelo converge menos área que la Tierra de hoy, pero la regla de `η_col` = 0,5 aplicada a CCB daría 7–9 AU (la Tierra pierde 0,4–0,7 a largo plazo).
+  - Duración de 71 Myr; dos tercios de la pérdida ocurren con la losa colgando.
+- **Sedimento:** solo es mar abierto el océano mundial (se retira `area_mar_abierto_km2`).
+- **Tabla de cierre (§43).**
+  - Cumplen: corteza máxima final 75 km, velocidad 4,55 cm/año, convergencia de los choques y tiempo (170,9 s de 200).
+  - Fosa ×1,34 y área ×1,31: a la ampliación futura, como pidió el responsable.
+  - No cumplen: el relieve, la edad del fondo (112 Myr al final), los márgenes (vida 117 Myr; al final, edad media 212 y máxima 650), `f_cont` 0,31 y ΔV_cont −15 %.
+- **Pruebas nuevas:**
+  - invasión de un margen;
+  - margen aislado que no se hunde;
+  - rotura de la losa en India–Asia;
+  - India–Asia sin invasión (escenario del choque).
+- **Herramientas:**
+  - `bordes_bird.py`, también la convergencia de CCB;
+  - `planeta_semillas.py`, con márgenes y choques;
+  - en el informe de varias semillas: márgenes, invasión, intentos de separar, roturas y choques;
+  - traza con los huecos del mundo.
+- **Batería:** 27 márgenes movidos. Agentes idénticos a `main`.
+- **Pendiente (§45):**
+  - el ciclo de Wilson y el estado inicial (márgenes que ninguna fosa alcanza);
+  - la regla de la pérdida en los choques;
+  - fosa y área a la ampliación futura.
+

@@ -17,7 +17,9 @@ pub mod malla;
 use crate::config::{TectonicaCfg, TerrenoConfig};
 use crate::geometry::{V3, dot};
 use deriva::{Deriva, TipoBorde};
-use historia::{BalanceMedio, EdadesOceano, MetricaMyr, PlacaFinal, ResumenTectonica};
+use historia::{
+    BalanceMedio, EdadesOceano, EventoTectonico, MetricaMyr, PlacaFinal, ResumenTectonica,
+};
 use malla::{Malla, NADA};
 
 /// Distancia a una fosa cuando no hay ninguna cerca (km).
@@ -411,7 +413,7 @@ fn resumen(d: &Deriva, t: &Tectonica) -> ResumenTectonica {
         v_rms_media_cm_anio: media_de(d.v_rms_acum),
         forsyth_uyeda_fosa: media_de(d.fu_fosa),
         forsyth_uyeda_continente: media_de(d.fu_cont),
-        balance: balance_medio(&d.metricas, &d.fosas_por_convergencia_km),
+        balance: balance_medio(&d.metricas, &d.fosas_por_convergencia_km, &d.eventos),
         placas_final,
         eventos: d.eventos.clone(),
         metricas: d.metricas.clone(),
@@ -419,7 +421,11 @@ fn resumen(d: &Deriva, t: &Tectonica) -> ResumenTectonica {
 }
 
 /// Medias del balance de la corteza sin el rodaje (adenda de balance §10).
-fn balance_medio(metricas: &[MetricaMyr], fosas_km: &[f64; 10]) -> BalanceMedio {
+fn balance_medio(
+    metricas: &[MetricaMyr],
+    fosas_km: &[f64; 10],
+    eventos: &[EventoTectonico],
+) -> BalanceMedio {
     let val: Vec<&MetricaMyr> = metricas.iter().filter(|m| !m.rodaje).collect();
     let Some(ultima) = val.last() else {
         return BalanceMedio::default();
@@ -523,6 +529,64 @@ fn balance_medio(metricas: &[MetricaMyr], fosas_km: &[f64; 10]) -> BalanceMedio 
             }
             x
         },
+        invadido_transf_km_myr: media(|m| m.invadido_km[0]),
+        invadido_margen_km_myr: media(|m| m.invadido_km[1]),
+        roturas_100myr: val.iter().map(|m| m.roturas as f64).sum::<f64>() * 100.0 / n,
+        convergencia_media_choques_cm_anio: {
+            let l: f64 = val.iter().map(|m| m.colisiones_km).sum();
+            if l > 0.0 {
+                val.iter()
+                    .map(|m| m.convergencia_media_choques_cm_anio * m.colisiones_km)
+                    .sum::<f64>()
+                    / l
+            } else {
+                0.0
+            }
+        },
+        choques_con_losa_au: media(|m| m.f_col_con_losa_au),
+        choques_sin_losa_au: media(|m| m.f_col_sin_losa_au),
+        margen_pasivo_km: media(|m| m.margen_pasivo_km),
+        edad_media_margen_myr: {
+            let l: f64 = val.iter().map(|m| m.margen_pasivo_km).sum();
+            if l > 0.0 {
+                val.iter()
+                    .map(|m| m.edad_media_margen_myr * m.margen_pasivo_km)
+                    .sum::<f64>()
+                    / l
+            } else {
+                0.0
+            }
+        },
+        edad_max_margen_myr: media(|m| m.edad_max_margen_myr),
+        edad_media_margen_final_myr: ultima.edad_media_margen_myr,
+        edad_max_margen_final_myr: ultima.edad_max_margen_myr,
+        vida_media_margen_myr: {
+            let l: f64 = val.iter().map(|m| m.margen_fin_km).sum();
+            if l > 0.0 {
+                val.iter().map(|m| m.margen_fin_vida_km_myr).sum::<f64>() / l
+            } else {
+                0.0
+            }
+        },
+        margen_terminado_km_myr: media(|m| m.margen_fin_km),
+        // Ponderada por la corteza solapada: cuentan los choques grandes, no los roces de un trozo.
+        duracion_media_choques_myr: {
+            let (mut dv, mut v) = (0.0, 0.0);
+            for e in eventos.iter().filter(|e| {
+                e.tipo == "fin_choque" && e.clase.as_deref() == Some("continente_continente")
+            }) {
+                let sol = e.solapado_km3.unwrap_or(0.0);
+                dv += e.tiempo_choque_myr.unwrap_or(0.0) * sol;
+                v += sol;
+            }
+            if v > 0.0 { dv / v } else { 0.0 }
+        },
+        choques_terminados: eventos
+            .iter()
+            .filter(|e| {
+                e.tipo == "fin_choque" && e.clase.as_deref() == Some("continente_continente")
+            })
+            .count() as u32,
         fosas_por_convergencia_frac: {
             let t: f64 = fosas_km.iter().sum();
             fosas_km

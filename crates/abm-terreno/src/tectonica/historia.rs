@@ -41,6 +41,10 @@ pub struct EventoTectonico {
     pub edad_fosa_myr: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub losa_km: Option<f64>,
+    /// Nota de fosas v4: tiempo desde el inicio del choque al romperse la losa, y duración de un
+    /// choque al acabar (Myr).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tiempo_choque_myr: Option<f64>,
 }
 
 /// Métricas agregadas de un paso de la deriva (§8, «cada Myr»).
@@ -126,10 +130,39 @@ pub struct MetricaMyr {
     pub area_difusa_km2_anio: f64,
     pub edad_media_fosas_myr: f64,
     pub losa_media_frac: f64,
-    /// Nacimientos (inducidos, espontáneos en margen pasivo y en transformante) y muertes (sin
-    /// convergencia y por choque) del paso.
+    /// Nacimientos (inducidos, placas nuevas al separarse el océano de un margen invadido y
+    /// espontáneos en transformante) y muertes (sin convergencia y por choque, al romperse la losa)
+    /// del paso.
     pub nacimientos: [u32; 3],
     pub muertes: [u32; 2],
+    /// Nota de fosas v4 (§8): longitud invadida en el paso por transformantes y por márgenes
+    /// pasivos (km), roturas de losa, convergencia media de los bordes de choque (cm/año), pérdida
+    /// de los choques con la losa aún colgando y sin ella (AU), márgenes pasivos (longitud, edad
+    /// media y máxima) y los que terminan en el paso (longitud y Σ longitud·vida, km·Myr).
+    #[serde(default)]
+    pub invadido_km: [f64; 2],
+    /// Intentos de separar un océano de delante de un margen invadido, fallidos y celdas de frente
+    /// olvidadas (diagnóstico).
+    #[serde(default)]
+    pub separar: [u32; 3],
+    #[serde(default)]
+    pub roturas: u32,
+    #[serde(default)]
+    pub convergencia_media_choques_cm_anio: f64,
+    #[serde(default)]
+    pub f_col_con_losa_au: f64,
+    #[serde(default)]
+    pub f_col_sin_losa_au: f64,
+    #[serde(default)]
+    pub margen_pasivo_km: f64,
+    #[serde(default)]
+    pub edad_media_margen_myr: f64,
+    #[serde(default)]
+    pub edad_max_margen_myr: f64,
+    #[serde(default)]
+    pub margen_fin_km: f64,
+    #[serde(default)]
+    pub margen_fin_vida_km_myr: f64,
 }
 
 /// Cuentas del material continental (km³) a lo largo de la deriva (adenda de balance §6 y §8).
@@ -157,6 +190,12 @@ pub struct CuentasCorteza {
     pub choque_solapado_km3: f64,
     pub choque_engrosamiento_km3: f64,
     pub choque_perdida_km3: f64,
+    /// La pérdida de los choques según si la losa de la fosa aún colgaba (nota de fosas v4 §6.6) o
+    /// ya se había roto (o no la hubo): diagnóstico, sus sumas son `choque_perdida_km3`.
+    #[serde(default)]
+    pub choque_perdida_con_losa_km3: f64,
+    #[serde(default)]
+    pub choque_perdida_sin_losa_km3: f64,
     pub choque_sin_sitio_km3: f64,
     /// Delaminación (`F_del`, §6.6).
     pub delaminacion_km3: f64,
@@ -315,4 +354,41 @@ pub struct BalanceMedio {
     pub losa_media_frac: f64,
     pub nacimientos_100myr: [f64; 3],
     pub muertes_100myr: [f64; 2],
+    /// Nota de fosas v4 (medias tras el rodaje): invasión por transformantes y por márgenes
+    /// (km/Myr), roturas de losa por 100 Myr, convergencia media de los bordes de choque (cm/año) y
+    /// pérdida de los choques con la losa colgando y sin ella (AU).
+    #[serde(default)]
+    pub invadido_transf_km_myr: f64,
+    #[serde(default)]
+    pub invadido_margen_km_myr: f64,
+    #[serde(default)]
+    pub roturas_100myr: f64,
+    #[serde(default)]
+    pub convergencia_media_choques_cm_anio: f64,
+    #[serde(default)]
+    pub choques_con_losa_au: f64,
+    #[serde(default)]
+    pub choques_sin_losa_au: f64,
+    /// Márgenes pasivos (v4 §8): longitud media (km); edad media ponderada por longitud y máxima
+    /// (Myr), media de los pasos y al final; vida media de los que terminan (Myr) y su ritmo
+    /// (km/Myr). Choques continente–continente que acaban: duración media ponderada por la corteza
+    /// solapada (Myr) y cuántos.
+    #[serde(default)]
+    pub margen_pasivo_km: f64,
+    #[serde(default)]
+    pub edad_media_margen_myr: f64,
+    #[serde(default)]
+    pub edad_max_margen_myr: f64,
+    #[serde(default)]
+    pub edad_media_margen_final_myr: f64,
+    #[serde(default)]
+    pub edad_max_margen_final_myr: f64,
+    #[serde(default)]
+    pub vida_media_margen_myr: f64,
+    #[serde(default)]
+    pub margen_terminado_km_myr: f64,
+    #[serde(default)]
+    pub duracion_media_choques_myr: f64,
+    #[serde(default)]
+    pub choques_terminados: u32,
 }

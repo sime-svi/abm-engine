@@ -889,7 +889,7 @@ La longitud de fosa y el área que se hunde cumplen, así que no van a la amplia
 - Con cinco planetas a la vez, cada uno tarda 180–204 s (comparten la máquina).
 - La red compacta del flujo ahorra un 22 % de su coste (§32). Al quitar las pilas de sedimento desaparecen las agujas que forzaban subpasos diminutos.
 
-## 38. Pendientes (2026-11-07 c, en orden)
+## 38. Pendientes (2026-11-07 c, en orden; sustituida por §45)
 
 1. **Decisión del responsable: cómo se cierra un océano de tipo Atlántico.** El fondo viejo pegado a márgenes pasivos no se consume con la v3 (§36.1), y de eso salen el nivel del mar y el relieve frente a ETOPO. Con la v2 la edad cuadraba, pero la fosa y el área no. Faltan los mecanismos de la Tierra: la propagación de una fosa a lo largo del margen o la invasión de la subducción desde el océano vecino (Antillas Menores, Scotia, Gibraltar).
 2. **Los choques destruyen de 4 a 7 veces la media terrestre** (§36.2): cuánto duran y a qué velocidad convergen (`c_col`, suturas).
@@ -897,4 +897,145 @@ La longitud de fosa y el área que se hunde cumplen, así que no van a la amplia
 4. Volver a calibrar la erosión con la exportación cuando cambie la base (1 y 2).
 5. Lluvia: reparto por latitudes (nota propia); barlovento con objetivo ~1,2 (CHELSA).
 6. Acortamiento andino, ciclo de Wilson, flexión de la litosfera, microplacas; casquetes polares.
+
+## 39. Cómo funcionaba el tirón al morir una fosa por choque (antes de la v4)
+
+El responsable lo pidió antes de la rotura de la losa. No había losa colgando: el tirón desaparecía en el mismo paso en que llegaba el continente.
+- **Celda a celda:** un borde con corteza continental a los dos lados es un choque (`clasificar_bordes`). El tirón solo se aplicaba en bordes de fosa activa, así que ese borde dejaba de tirar y en su lugar actuaba el acoplamiento del choque (`c_col`).
+- **El tramo entero:** cuando la mitad de la orilla que se hunde flotaba, la fosa del tramo moría por choque al final del paso, aunque le quedara fondo oceánico. Volvía a difusa con X = 0 y podía renacer a los X_ini.
+- **Calibración:** `c_col` estaba calibrado con esa rotura instantánea (un choque frena a la India a un tercio).
+
+## 40. Nota de fosas v4: implementación (2026-11-07 d)
+
+**Rotura de la losa (6.6).**
+- El estado de cada borde de fosa guarda el tiempo desde el inicio del choque (`choque_myr`) y la edad de la losa (`edad_fondo_myr`).
+- Un tramo choca cuando la mitad de su orilla que se hunde flota. Un borde que ya es continente contra continente también choca.
+- Mientras la losa cuelga, la fosa sigue activa: consume el fondo que le queda y su losa tira también en los bordes de choque, junto al acoplamiento de `c_col`, con la edad de la losa del inicio del choque.
+- A los `t_rot = 10 + 15·min(1, a/100)` Myr la losa se rompe. Se apunta `rotura_losa` (con el tiempo desde el inicio del choque) y la muerte por choque. El tramo vuelve a difuso desde X = 0 y puede renacer.
+- **Decisiones de quien implementa:**
+  - Toda la zona de choque comparte reloj y edad de losa (los más avanzados de sus bordes vecinos), para que se rompa a la vez.
+  - La losa rota queda marcada en sus bordes. Un borde de choque nuevo junto a ella ya no cuelga, pero uno que nace junto a la fosa viva de los lados sí: la rotura avanza a lo largo del frente, como un desgarro.
+  - La edad de la losa es la del fondo más viejo junto a cada celda de la orilla. La de las celdas del borde mismo engaña, porque suelen ser corteza recién puesta al rellenar huecos.
+  - El reloj de un choque vecino que hereda alguna celda no hace chocar a todo el tramo. Así la parte oceánica de la fosa sigue hundiéndose, como el Tetis a los lados de la India. Al principio esto fallaba: las fosas vivían ~30 Myr y salían ~600 roturas por 100 Myr.
+- **India–Asia:** la losa del Tetis (88 Myr) tira 21–25 Myr tras el choque. Mientras cuelga, la India avanza a ~6,5 cm/año (la mitad de antes del choque); tras romperse, a ~4 cm/año (un tercio, como en la calibración de `c_col`). El espesor máximo sigue en 69–72 km (con `D_0` = 50) y la meseta se ensancha de ~280 a ~380 km.
+
+**Invasión (6.4).** Cada paso, después de avanzar los tramos (`invadir`).
+- **Extremo de una fosa:** un borde convergente de fosa activa, sin choque y que converge en el paso, con algún borde vecino de su placa fuera de la fosa.
+  - Las transformantes que heredan el estado de la fosa de al lado (la herencia es a dos anillos) no cuentan como fosa.
+  - El borde de un choque no es un extremo: la losa sigue a los lados.
+- **Por una transformante de la placa que se hunde:**
+  - Avanza si su lado es oceánico y de más de `a_inv` (60 Myr) y se hunde bajo un continente, un arco o un fondo más joven.
+  - El frente avanza celda a celda desde el extremo (camino de coste 0–1: lo que ya tiene el estado de la fosa no cuesta).
+  - Avanza `n_paso` celdas por paso, las que pasa `v_inv·t` de un múltiplo de la celda al siguiente. Así la media es exacta sin guardar nada por frente.
+  - El tramo nuevo hereda la losa y la edad de la fosa.
+- **Por un margen pasivo:**
+  - Un margen pasivo es el borde de un continente o un microcontinente de su placa, de al menos `(3·L_borde)²` (~0,2 Mkm²; Madagascar, 0,59), con fondo oceánico suyo de más de `a_inv` al lado.
+  - No lo son ni una celda continental suelta ni un arco de islas: el primero hizo saltar una placa de 3,9 Mkm² en una unión triple; el segundo, una de 11 Mkm².
+  - El frente avanza desde las celdas de margen más cercanas a un extremo (a menos de dos anillos), como mucho `n_paso` celdas nuevas por paso y frente. Se guarda en la placa (`invadidas`) y no mueve nada: la placa aún no se ha roto ahí.
+  - Cada `√A_min` (~1 600 km) de margen invadido, o cuando el margen viejo se acaba, se intenta separar el océano de delante como placa nueva (`partir_por_fosa`). La fosa ocupa el tramo invadido, con el océano bajo el continente y la losa de la fosa que invade.
+  - Un frente que ninguna fosa toca en `τ_muerte` se olvida.
+- **Solo invade una fosa que se hunde de verdad** (que converge en el paso): si no, una fosa moribunda seguía viva rasgando las transformantes de sus extremos.
+
+**Nacimiento espontáneo:** solo en transformantes con contraste de edad (la parte de los márgenes se retira). Lo que se separa por invasión se cuenta en `nacimientos[1]`.
+
+**De paso:**
+- **Huecos del mundo tras un evento de placas.** `recalcular_mundo` solo mueve las muestras, así que una celda podía quedarse sin muestra hasta el paso siguiente. Era un fallo latente, que la v4 destapó en la prueba sin cratones. Ahora la celda ve la muestra de su primera vecina con corteza (`tapar_huecos_del_mundo`), sin crear corteza.
+- **Salida del sedimento:** solo es mar abierto el océano mundial, la mayor masa de mar conectada (se retira `area_mar_abierto_km2`).
+
+**Pruebas** (nota v4 §10), en verde:
+- 5: una fosa invade un margen pasivo, avanza a `v_inv` y separa su océano conservando la corteza.
+- 5b: un margen sin fosa cerca no se hunde nunca, ni con `λ_esp` = 1.
+- 6: en India–Asia, la losa tira tras el choque y se rompe a los `t_rot`.
+- India–Asia adaptada: el frenazo a menos de la mitad se mide tras la rotura.
+- El paso cinemático de las pruebas lleva ya la invasión y los nacimientos espontáneos.
+
+## 41. Calibración de `v_inv` y `a_inv` (5 semillas, 2026-11-07 d)
+
+**Primera versión** (el océano de delante de un margen invadido solo se separa si llega a `A_min` = 2,55 Mkm²):
+
+| `v_inv` / `a_inv` | edad del fondo; > 180 Myr | márgenes: vida de los que acaban / edad media al final / máxima | separaciones por 100 Myr | pérdida en choques, con losa + sin ella (AU) | ΔV_cont |
+|---|---|---|---|---|---|
+| 0 | 89; 24 % | 119 / 220 / 640 | 0 | 2,71 + 1,65 | −22 % |
+| 50 / 60 | 96; 27 % | 122 / 230 / 648 | 0,4 | 2,57 + 1,49 | −21 % |
+| 150 / 60 | 86; 17 % | 119 / 218 / 642 | 1,8 | 2,70 + 1,62 | −22 % |
+| 50 / 40 | 90; 21 % | 124 / 223 / 647 | 0,6 | 2,79 + 1,81 | −24 % |
+
+- Los frentes avanzan (1 000–2 200 km/Myr de margen en todo el planeta), pero el 95 % de los intentos de separar fallan y casi todo el frente acaba olvidado.
+- La causa: el océano que queda delante de un tramo invadido es una franja de ~270 km (0,02–1,4 Mkm² para tramos de 300–5 800 km).
+- Además, al repartir el océano entre márgenes contaban también los trozos continentales sueltos y los arcos del océano. Ahora solo cuentan los continentes.
+
+**Versión con microplacas** (decisión de quien implementa). El océano separado puede ser una microplaca desde `(3·L_borde)²` (~0,2 Mkm², como Juan de Fuca), que no se funde con su vecina mientras tiene una losa que tira; se intenta separar cada `3·L_borde` de margen invadido. Una franja unida a la placa que se hunde se movería con su giro y se deslizaría a lo largo de la costa en vez de hundirse.
+
+| `v_inv` / `a_inv` | edad del fondo; > 180 Myr | márgenes: vida / edad media al final | separaciones por 100 Myr | pérdida en choques (AU) | ΔV_cont | fosa (km) |
+|---|---|---|---|---|---|---|
+| 25 / 60 | 89; 19 % | 117 / 212 | 18 | 2,40 + 1,14 | −15 % | 68 400 |
+| 50 / 60 | 101; 27 % | 112 / 238 | 40 | 1,88 + 1,13 | −13 % | 62 800 |
+| 150 / 60 | 93; 22 % | 91 / 239 | 71 | 1,97 + 0,82 | −8 % | 68 400 |
+| 50 / 100 | 89; 22 % | 111 / 213 | 27 | 2,42 + 1,21 | −16 % | 67 800 |
+
+- **Las microplacas mejoran el balance:** la pérdida en choques baja de ~4,3 a 2,8–3,6 AU y ΔV_cont de −22 % a −8/−16 %.
+- **`v_inv` y `a_inv` apenas mueven lo que debían calibrar.** Ni la edad del fondo (89–101 Myr) ni la de los márgenes que quedan (~210–240 Myr de media y 630–650 de máxima, frente a 104 y ~180). La vida de los que acaban es de 91–124 Myr con cualquier valor, también sin invasión (119): la mayoría no los acaba una invasión.
+- **Valores:**
+  - `v_inv` = 25 km/Myr: la vida de los márgenes que acaban más cercana al objetivo (117 Myr). Es físico: las Antillas Menores y Escocia avanzaron ~1 000–1 500 km en 40–50 Myr.
+  - `a_inv` = 60 Myr (el supuesto de la nota).
+  - `λ_esp` = 4·10⁻⁶ (solo transformantes: 0,2–0,6 nacimientos por 100 Myr, raros).
+
+## 42. Choques frente a Bird CCB (solo diagnóstico, sin tocar `c_col` ni `η_col`)
+
+Bird CCB (`bordes_bird.py`, ahora también para esta clase): 23 000 km a 1,87 cm/año de media (el 64 % por debajo de 2 cm/año), es decir, 0,43 km²/año de convergencia.
+
+| | modelo (5 semillas) | Bird CCB |
+|---|---|---|
+| Longitud | 8 700 km | 23 000 km |
+| Convergencia media | 1,89 cm/año | 1,87 cm/año |
+| Área que converge | ~0,16 km²/año | 0,43 km²/año |
+| Duración, ponderada por la corteza solapada | 71 Myr | choques activos de decenas de Myr (India–Asia ~50–55, Arabia–Eurasia ~25–35) |
+| Pérdida de corteza | 3,5 AU: 2,4 con la losa colgando (68 %) y 1,1 tras la rotura (32 %) | 0,4–0,7 de media; ~3 en un gran choque |
+
+- **El modelo no choca de más.** Converge a la velocidad de la Tierra en un borde más corto: menos área que la Tierra de hoy.
+- **Lo que sobra es la pérdida.** La regla del modelo (se pierde la mitad de la corteza que se solapa, `η_col` = 0,5) aplicada a la convergencia de Bird CCB daría 7–9 AU para la Tierra de hoy, de 10 a 20 veces la media de largo plazo.
+- **Lectura:** el 50 % de India–Asia (la corteza que «falta») no se puede aplicar a toda la convergencia continental. Parte se acorta y se extruye, no se pierde.
+- **La rotura de la losa** reparte la pérdida: dos tercios ocurren mientras la losa cuelga. Con la rotura instantánea de antes, las fosas morían al instante y la pérdida era de ~2,9 AU.
+
+## 43. Tabla de cierre con la v4 (5 semillas, planeta entero)
+
+| | Modelo | Tierra u objetivo | |
+|---|---|---|---|
+| Tierra emergida | 0,321 ± 0,032 | 0,284 | ✗ |
+| Altura media de la tierra | 1 207 ± 151 m | 671 m | ✗ |
+| Tierra por debajo de 200 m | 0,037 ± 0,004 | 0,283 | ✗ |
+| Pendiente media (±25 km) | 0,0120 ± 0,0014 | 0,0052 | ✗ |
+| Anchura de la plataforma | 4,7 ± 0,4 km | 42,8 km | ✗ |
+| Corteza máxima al final / en toda la deriva | 75 ± 4 / 99 ± 11 km | 70–80 km | ✓ / ✗ |
+| Edad media del fondo al final; > 180 Myr | 112 ± 23 Myr; 18,9 % | 64,2; < 1 % | ✗ |
+| `f_cont`; cambio de volumen | 0,313; −14,9 ± 5,4 % | 0,40; ±10 % | ✗ |
+| Velocidad de las placas | 4,55 ± 0,36 cm/año | 4,39 | ✓ |
+| Sedimento al mar | 2,56 ± 0,47 AU | ≈1,8 | ✗ |
+| Longitud de fosa | 68 400 ± 7 100 km | ~51 000 ± 25 % | ✗ (×1,34) → ampliación futura |
+| Área que se hunde | 3,55 ± 0,52 km²/año | ≈2,7 | ✗ (×1,31) → ampliación futura |
+| Vida media de los márgenes pasivos que acaban | 117 ± 10 Myr | 130–180 | ✗ |
+| Edad de los márgenes pasivos al final: media / máxima | 212 / 650 Myr | ~104 / ~180 | ✗ |
+| Choques: longitud, convergencia, duración | 8 700 km; 1,89 cm/año; 71 Myr | CCB 23 000 km; 1,87 | — |
+| Choques: pérdida con la losa colgando / tras la rotura | 2,40 / 1,14 AU | — | — |
+| Tiempo de cálculo del planeta | 170,9 s solo; 191–203 s con cinco a la vez | 200 s | ✓ |
+
+## 44. Lo que no cuadra, y su causa (v4)
+
+1. **El fondo y los márgenes viejos no se consumen.**
+   - Al final quedan márgenes pasivos de 650 Myr: los del principio de la deriva, a los que no llega ningún extremo de fosa.
+   - La invasión solo avanza desde los extremos de las fosas, y por un margen solo hasta que se acaba su fondo viejo.
+   - En la Tierra los márgenes actuales tienen como mucho ~180 Myr porque todos nacieron al romperse Pangea; los anteriores se cerraron al formarse.
+   - El planeta del modelo no ha pasado por un ciclo así (no forma un supercontinente y lo rompe). Con el fondo viejo, el mar queda bajo y el relieve igual que en la v3.
+2. **La pérdida de los choques** (§42): la regla de `η_col` aplicada a toda la convergencia continental pierde de más.
+3. **Fosa y área que se hunde** (×1,34 y ×1,31): suben con la losa que cuelga tras el choque y con las microplacas que separa la invasión. Van a la ampliación futura, como pidió el responsable.
+
+## 45. Pendientes (2026-11-07 d, en orden)
+
+1. **Decisión del responsable: el ciclo de Wilson.** Cómo se cierran los océanos con márgenes de cientos de Myr que ninguna fosa alcanza, o si el estado inicial (márgenes y fondo de partida) debe ser otro. De eso dependen el nivel del mar y el relieve.
+2. **Decisión del responsable: la regla de la pérdida en los choques** (`η_col` sobre toda la convergencia continental frente a 0,4–0,7 AU), con el diagnóstico de §42.
+3. **Ampliación futura:** longitud de fosa y área que se hunde.
+4. Agujas de sumar muestras (islas y fusiones) y sedimento máximo de 35–65 km.
+5. Volver a calibrar la erosión con la exportación cuando cambie la base.
+6. Lluvia: reparto por latitudes (nota propia); barlovento con objetivo ~1,2 (CHELSA).
+7. Acortamiento andino, flexión de la litosfera, retroceso de fosas y cuencas tras el arco; casquetes polares.
 

@@ -169,9 +169,13 @@ l_borde_km   = 150.0       # radio del borde suavizado (calibrado contra los bor
 # Ciclo de vida de las fosas (nota_ciclo_fosas.md v2). W_dif, la franja de la convergencia difusa, es L_borde.
 x_ini_km     = 150.0       # convergencia acumulada para que nazca una fosa (Gurnis et al. 2004: 100–150 km; Li y Gurnis 2023: ~200)
 tau_muerte_myr = 10.0      # sin convergencia durante este tiempo, la fosa muere (supuesto)
-lambda_esp   = 4.0e-6      # nacimiento espontáneo por km de tramo y Myr, por 100 Myr de edad sobre a_min (nota v3). ~8 por 100 Myr: la edad del fondo apenas cambia entre 1·10⁻⁶ y 1,6·10⁻⁵ (5 semillas), así que no se sube más
+lambda_esp   = 4.0e-6      # nacimiento espontáneo, ya solo en transformantes con contraste de edad (nota v4), por km y Myr y por 100 Myr de edad sobre a_min: raro (~0,2–0,6 por 100 Myr)
 l_losa_km    = 800.0       # losa con la que el tirón es pleno (llega a 660 km con 45–60°; 660–1000)
-a_min_myr    = 140.0       # edad mínima del fondo para un nacimiento espontáneo (nota de fosas v3; supuesto físico; 100–180)
+a_min_myr    = 140.0       # edad mínima del fondo para un nacimiento espontáneo en una transformante (supuesto físico; 100–180)
+v_inv_km_myr = 25.0        # una fosa se alarga desde su extremo por transformantes y márgenes pasivos (nota v4 §6.4). Calibrado, 5 semillas: la vida de los márgenes que acaban apenas cambia (91–124 Myr con 0–150) y es la más cercana a 130–180 con 25; Antillas Menores y Escocia, ~1 000–1 500 km en 40–50 Myr
+a_inv_myr    = 60.0        # edad mínima del fondo que una fosa puede invadir (supuesto: Antillas Menores, fondo cretácico; 40–100)
+t_rot_joven_myr = 10.0     # la losa se rompe tras un choque: a los 10 Myr si es joven... (van Hunen y Allen 2011)
+t_rot_viejo_myr = 25.0     # ...y a los 25 si tiene 100 Myr o más
 # Eventos de placas (§5.6)
 n_p0         = 12
 n_cratones   = 8
@@ -183,7 +187,6 @@ v_sutura_cm_anio = 0.5
 t_sutura_myr = 10.0
 e1_km_myr    = 0.005       # erosión a 1 km sobre el mar (km/Myr; adenda v5 §6.7: E = E_1·(z/1 km)^n_ero). Calibrado con n_ero: relajación 135 Myr (100–200); exporta ~2,4 AU (5 semillas; objetivo ~1,8)
 n_ero        = 2.5         # exponente de la erosión con la altura (rango 1,5–3; Montgomery y Brandon 2002). Con 3 exporta casi igual y las llanuras bajan de 1 m/Myr
-area_mar_abierto_km2 = 5.0e5 # mar abierto: el sedimento solo sale a un mar conectado de esta área; uno cerrado más pequeño es una cuenca (criterio de la malla)
 deformacion  = 0.06        # deformación de bordes de Voronoi, cratones y líneas de rift (fracción del radio)
 # Malla, tiempo y detalle (§5.7)
 nivel_malla  = 2           # nivel del cubo del terreno (~52 km con n0 = 48; decisión del responsable)
