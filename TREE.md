@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-08 — relieve tectónico (incremento 4 del terreno, rama `terreno-cierre-tectonica`): última ronda (adenda v9 y nota de rifts); la capa tectónica queda congelada
+Última actualización: 2026-11-08 — relieve tectónico (incremento 4 del terreno): adenda v9 y nota de rifts en `main`; sigue la nota de demografía de placas (exceso de fosas)
 
 ---
 
@@ -248,8 +248,8 @@ Estado:
 nacimientos y muertes continuos, gracias a la relación `g < m < apetito` (regeneración por celda <
 metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
 
-- **Relieve tectónico (incremento 4, `docs/design/terreno/incremento-4-diseno.md`; capa congelada el 2026-11-08):**
-  - deriva de placas de 500 Myr en la malla de nivel 2 (~52 km), en la caché de la génesis; el planeta entero tarda 243 s sin caché, y 250,4 en la batería (presupuesto 250: pendiente de decidir);
+- **Relieve tectónico (incremento 4, `docs/design/terreno/incremento-4-diseno.md`; en medida: antes de congelarla se arregla el exceso de fosas, nota de demografía de placas):**
+  - deriva de placas de 500 Myr en la malla de nivel 2 (~52 km), en la caché de la génesis; el planeta entero tarda 243 s sin caché, y 250 en la batería (presupuesto 275);
   - placas a 4,65 cm/año (la Tierra 4,39), con las correlaciones de Forsyth y Uyeda; India–Asia frena a 1/3 (`c_col` calibrado);
   - balance de la corteza continental (adenda de balance v9): arcos, erosión por subducción, prisma, choques con `η` según el grosor y el origen de arco por fracción, delaminación, flujo lateral cúbico, erosión con la altura y sedimento al mar, con balance exacto por paso;
   - bordes de placa (nota de bordes) y ciclo de las fosas (nota de fosas v6): nacimiento, invasión de márgenes pasivos, rotura de la losa;

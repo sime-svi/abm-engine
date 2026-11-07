@@ -1707,6 +1707,9 @@ La capa tectónica queda congelada: no se le añaden más reglas. Lo que sigue q
 7. **El mar del escenario de relajación** (−1 255 m; Asia a 1,7 km sobre el mar): con un mar realista, el orógeno sobresaldría menos y haría falta más erosión.
 8. **Ampliaciones de la nota de rifts:** plumas del manto, rifts fallidos, aislamiento térmico de los supercontinentes y cuencas de trasarco.
 9. **Lo que sigue de §58:** mesetas oceánicas, montes submarinos y puntos calientes (~150 m de nivel del mar); el acortamiento andino, la flexión, el retroceso de las fosas y los casquetes; la lluvia por latitudes.
-10. **El tiempo: 243 s solo y 250,4 s en la batería, frente a un presupuesto de 250.** Decide el responsable entre:
-    - subir el presupuesto a ~275 s (lo medido en la batería, con un 10 % de margen);
-    - o abaratar el reparto del sedimento al mar (dos inundaciones por prioridad en cada paso), la rasterización o la génesis geológica, que en esta máquina no se pueden perfilar con herramienta (no hay `perf`).
+10. ~~El tiempo~~ decidido: el presupuesto del planeta sube a 275 s (243 s solo, 250,4 en la batería). Lo siguiente que se podría abaratar es el reparto del sedimento al mar (dos inundaciones por prioridad en cada paso), la rasterización y la génesis geológica.
+
+**Decisiones del responsable (2026-11-08).**
+- Acepta la fracción de arco de lo que deja un choque fuera de un continente, `E_1` = 0,0075, la India como pendiente y `λ_A` = 4·10⁻⁴.
+- Sube el presupuesto del planeta a 275 s y actualiza `main` con esta ronda.
+- **La capa no se congela todavía:** antes se arregla el exceso de fosas (nota de demografía de placas, §66 en adelante).

@@ -524,7 +524,7 @@ Con esa ficha el planeta da exactamente los mismos números: solo se lleva la cu
 
 ### Continentes que se parten por sus cicatrices, y arcos que siguen siendo arcos (07-11-2026, séptima y última parte de la tectónica)
 
-Es la última ronda del relieve tectónico. Después, la capa se congela: no se le añaden más reglas.
+Iba a ser la última ronda del relieve tectónico. Antes de congelar la capa, el responsable decidió arreglar el exceso de fosas (nota de demografía de placas).
 
 **Los continentes se parten a un ritmo terrestre.**
 - Antes, el planeta entero tenía de media un rift cada 150 millones de años, se repartiera como se repartiera el continente. Un rift es la grieta por la que se abre un continente hasta que nace un océano entre los dos trozos. Salían uno a cuatro en toda la historia.
@@ -552,7 +552,7 @@ Es la última ronda del relieve tectónico. Después, la capa se congela: no se 
 **El tiempo de cálculo.**
 - El planeta se pasaba del presupuesto porque la corteza que se desparrama por debajo de las cordilleras (el flujo lateral) rehacía su red de cálculo unas 50 veces en cada paso. Ahora la amplía en lugar de rehacerla, con exactamente los mismos resultados, y ese cálculo es cinco veces más rápido.
 - Pero las placas y bordes de más que traen los rifts cuestan casi lo mismo. El planeta tarda 243 s, y en la batería, junto a los demás escenarios, 250,4: se pasa por muy poco del nuevo presupuesto de 250 s.
-- Subirlo más le toca decidirlo al responsable.
+- El responsable lo subió a 275 s.
 
 **Lo que queda para más adelante.** Los escalones de edad imposibles del fondo oceánico, que fabrica la manera de representar las placas, quedan apuntados como artefactos de representación. También quedan:
 - la longitud de las fosas;

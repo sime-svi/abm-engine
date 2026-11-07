@@ -1418,5 +1418,10 @@ Formato de entrada:
 - **Herramientas:**
   - en `deriva_en_varias_semillas`: rifts, márgenes de rift, ciclos de supercontinente, coste del flujo y de la erosión y las métricas, y el arco que dejan los choques;
   - en `planeta_semillas.py`, las filas de la nota de rifts.
-- **`main` no se actualiza** (sigue en a5b6583): `verificar.sh` pasa fmt, clippy, las 109 pruebas y todas las métricas de la batería, pero el planeta se pasa del presupuesto por 0,4 s. Por la regla del responsable, no se sube sin preguntar. Decide él: ~275 s o abaratar más.
+- **`main` no se actualizó en el primer commit de la ronda** (1c54153): el planeta se pasaba del presupuesto de 250 s por 0,4 s.
+- **Después decidió el responsable** (2026-11-08):
+  - acepta la fracción de arco fuera de los continentes, `E_1` = 0,0075, la India como pendiente y `λ_A` = 4·10⁻⁴;
+  - sube el presupuesto del planeta a 275 s;
+  - pide actualizar `main` y subir cada commit a GitHub en cuanto se haga (CLAUDE.md §9);
+  - la capa no se congela todavía: antes se arregla el exceso de fosas (nota de demografía de placas).
 - **Pendiente** (§65, en orden): la fosa y el área que se hunde; el relieve alto; los márgenes del estado inicial; la pérdida en choques; los artefactos de representación; la India que se acelera; el mar del escenario de relajación; las ampliaciones de la nota de rifts; lo que sigue de §58; el tiempo (243 s solo, 250,4 en la batería).

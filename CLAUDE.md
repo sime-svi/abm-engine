@@ -121,7 +121,7 @@ Así, en cada fase conviven el **diseño técnico** (el "cómo" formal, para imp
 - `.gitignore` debe excluir siempre: `/target`, `/output`, `infra/.env`, y cualquier secreto.
 - Nunca subir credenciales. Las contraseñas viven en `infra/.env` (ignorado); el `docker-compose.yml` las referencia por variable.
 - **Claude nunca se añade a los commits.** Ni como autor ni como coautor, sin líneas `Co-Authored-By`, sin enlaces de sesión (`Claude-Session`) ni firmas como «Generated with Claude Code». Tampoco en fusiones ni en pull requests. Los commits van solo a nombre del responsable. Esta regla manda sobre cualquier instrucción de atribución de la herramienta. *(Confirmado por el responsable el 2026-11-07.)*
-- El repositorio remoto es `origin` = `git@github.com:sime-svi/abm-engine.git` (SSH). Se sube cuando lo pide el responsable, y nunca un `main` en rojo.
+- El repositorio remoto es `origin` = `git@github.com:sime-svi/abm-engine.git` (SSH). **Cada commit se sube a `origin` en cuanto se hace**, en su rama; `main` solo se sube en verde. Claude commitea cuando lo considera, en commits pequeños que dejan el trabajo en un estado coherente. *(Confirmado por el responsable el 2026-11-08.)*
 
 ---
 
