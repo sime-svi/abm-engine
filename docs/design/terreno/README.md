@@ -444,3 +444,48 @@ Detalle técnico en `incremento-4-diseno.md` §9–§11; la adenda, en `adenda_b
 
 **Lo que queda por decidir.** Cómo se cierran los océanos a los que no llega ninguna fosa (en la Tierra, el ciclo de los supercontinentes) y si la regla de la pérdida en los choques debe ser otra.
 
+
+### La Tierra real en la regla del modelo, y lo que pierden los choques (07-11-2026, quinta parte)
+
+**La pregunta del responsable, antes de cambiar nada.** Si se mete la Tierra real en la regla del modelo, ¿sale su mar?
+- La Tierra real son la edad de su fondo oceánico, el grosor del sedimento que lo cubre y el agua de sus océanos.
+- La regla del modelo es la curva que dice a qué profundidad está el fondo según su edad, más el empuje del sedimento.
+
+**Por qué importa la edad del fondo.**
+- El fondo oceánico nace caliente en las dorsales, las cordilleras submarinas donde se separan las placas.
+- Al alejarse y enfriarse se encoge y se hunde: a 2,5 km nace y a unos 5 km está después de decenas de millones de años.
+- Cuanto más hondas son las cuencas, más agua caben y más bajo queda el mar.
+
+**Lo que salió.**
+- **El agua del modelo es la de la Tierra.** Con el relieve real, el mar quedaría a 14 m de su nivel.
+- **Pero con la curva del modelo, el mar de la Tierra quedaría 386 m más bajo**, y el océano tendría 3,99 km de profundidad media en vez de 3,67.
+- **La causa es el fondo viejo.**
+  - En la Tierra, el fondo deja de hundirse hacia los 80 millones de años, a unos 5,3 km.
+  - La curva del modelo (la de Parsons y Sclater, de 1977) sigue hundiéndose: llega a 6,1 km a los 150.
+  - Para el fondo joven, la curva acierta.
+- **Otra curva publicada, GDH1, apenas mejora** (−340 m): aplana antes, pero hace el fondo joven demasiado hondo.
+- **Una curva ajustada al fondo real deja el mar a −150 m.**
+  - Lo que falta son las mesetas submarinas, los montes submarinos y los abombamientos de los puntos calientes, que el modelo aún no tiene.
+  - Los puntos calientes son columnas de manto caliente, como la de Hawái o la de Islandia.
+- **Esto agranda el problema que ya teníamos.** El océano del modelo es más viejo que el de la Tierra (112 frente a 64 millones de años de media). Con la curva actual, ese fondo viejo sigue hundiéndose y baja el mar todavía más; con la real, apenas importaría.
+
+**Lo que pierden los choques según el grosor (adenda v7).**
+- Cuando dos continentes chocan, parte de la corteza del que va debajo se hunde en el manto y se pierde.
+- La nueva regla dice que se pierde sobre todo la del borde del continente que entra primero. Ese borde suele estar estirado y adelgazado, con menos de 20 km. La corteza de grosor normal, de más de 35 km, flota y se queda, engrosando la cordillera.
+- **Lo que salió:**
+  - La pérdida baja de 3,5 a 1,0 km³ al año, pero no llega al objetivo de 0,4–0,7. El modelo no tiene bordes adelgazados: al partirse, sus continentes se cortan sin estirarse.
+  - Lo poco fino que se pierde es otra cosa: restos de corteza continental sobre el fondo oceánico.
+  - La corteza normal que ahora se queda se apila: las zonas de más de 80 km de corteza se multiplican por 28 (en la Tierra no pasa de 70–80).
+  - La prueba del choque de la India con Asia ya no cumple ese límite.
+
+**Fosas que nacen en zonas de fractura (nota de fosas v5).**
+- Una zona de fractura es la cicatriz que deja en el fondo oceánico una falla de las dorsales: allí se tocan fondos de edades distintas.
+- La nota permite que, raras veces, nazca allí una fosa, si el lado viejo es muy viejo y mucho más que el otro. Así empezó la de las Marianas.
+- **Lo que salió:**
+  - Con esa regla, en toda la Tierra real solo hay unos 400 km de candidatos. En el modelo hay más de 100 000, porque su fondo viejo forma costuras con el joven que la Tierra no tiene.
+  - Las fosas que nacen ahí rejuvenecen el océano del modelo: de 89 a 71 millones de años de media. Pero la longitud de fosa sube a 1,7 veces la de la Tierra.
+
+**Lo que queda por decidir antes de calibrar.**
+- Qué curva de profundidad usar.
+- Si la regla de las zonas de fractura debe ser otra.
+- Si los continentes deben estirarse al partirse, para que tengan bordes finos que perder al chocar.

@@ -1260,3 +1260,44 @@ Formato de entrada:
   - la regla de la pérdida en los choques;
   - fosa y área a la ampliación futura.
 
+
+## [2026-11-07] La Tierra real en la regla del modelo, adenda v7 (η según el grosor) y nota de fosas v5 (zonas de fractura), sin calibrar
+
+- **Qué pidió el responsable.**
+  - Primero, antes de cambiar nada: meter la Tierra real en la regla del modelo y dar el resultado antes de calibrar. Las edades de Seton, el sedimento de GlobSed y el volumen de agua actual, con la curva de profundidad y la isostasia del modelo, frente al nivel 0 y los 3 667 m. Comprobar también si la profundidad deja de crecer pasados 80–100 Myr.
+  - Adenda v7: `η(h)` de `η_min` (corteza de menos de 20 km) a 1 (de más de 35). Calibrar `η_min` en 0–0,5 con la pérdida de 0,4–0,7 AU.
+  - Nota de fosas v5: zonas de fractura (escalones de edad de más de `Δa_fz` dentro de una placa) como candidatas al nacimiento espontáneo.
+  - Calibrar `η_min`, `λ_esp` y `Δa_fz` con 5 semillas y repetir la tabla de cierre.
+  - Se pararon Grafana y la base de datos (`docker compose stop`; los volúmenes se conservan).
+- **La Tierra real con la regla** (`herramientas/analisis/tierra_regla_modelo.py`, `config/referencias/tierra_nivel_mar.toml`; incremento-4-diseno.md §46).
+  - GlobSed viene de la copia de CaltechDATA, porque NOAA retiró la página en mayo de 2025.
+  - Con la roca real, el volumen del modelo da −14 m. Con la regla del modelo, −386 m y 3 992 m de profundidad media.
+  - El zócalo real deja de bajar hacia los 80 Myr: mediana de 5,0–5,4 km de 70 a 180 Myr. Parsons y Sclater sigue hasta 6,1 km a los 150.
+  - Dos tercios del desfase vienen del fondo de más de 80 Myr. GDH1 da −340 m.
+  - Una placa ajustada a la mediana (`d_∞` 5 310 m, `τ` 31 Myr) da −150 m; ajustada a la media, −25 m. La diferencia son las mesetas, los montes submarinos y los puntos calientes.
+- **Adenda v7** (§47).
+  - `eta_col` pasa a `eta_min`, `h1_choque_km` y `h2_choque_km` (`TectonicaCfg::eta_choque`).
+  - Con `h_1 = h_2 = 10⁹` el planeta sale idéntico byte a byte a 5c8ef1c.
+  - Falla `un_gran_choque_no_apila_corteza_por_encima_de_80_km`: 89 km, porque la India uniforme de 35 km se queda entera. Se deja así hasta que decida el responsable.
+- **Nota v5** (§48).
+  - Detección, sorteo y nacimiento con partición de la placa por la zona de fractura (`partir_por_zona_fractura`: la fuente más cercana por el océano, continentes enteros). Decisión mía: el corte sigue la dirección del escalón hasta los bordes.
+  - Métricas: `nacimientos_zf`, `separar_zf`, `zf_escalon_km` y `zf_candidata_km`.
+  - Dos pruebas nuevas.
+  - Con `Δa_fz` = 10⁹ y la v7 apagada, la salida es igual sin las claves nuevas.
+- **Lo que hacen en el planeta** (§49; 5 semillas, valores iniciales, sin calibrar).
+  - La v7 baja la pérdida en choques de 3,5 a 1,0 AU, pero apila la corteza: ×28 celdas de más de 80 km, delaminación de 2,3 AU y sedimento al mar de 3,9.
+  - Con `η_min` = 0,5 no se llega a 0,4–0,7.
+  - Causa: en el modelo no hay márgenes adelgazados (0,1 % de lo que choca tiene menos de 20 km). El 75–81 % de lo que se pierde es corteza de tipo continental sobre fondo oceánico que no cuenta como arco.
+  - La v5 rejuvenece el fondo (71 Myr de media en la deriva frente a 89) y los márgenes (147 Myr al final frente a 212). Pero la fosa sube a 86 500 km.
+  - Sus candidatos (100 000–160 000 km, frente a 417 en la Tierra) son las costuras del fondo viejo del modelo, líneas de más de 1 000 km.
+  - `Δa_fz` es redundante (todo candidato tiene un escalón de más de 70 Myr).
+- **Herramientas nuevas:**
+  - `diagnostico_zonas_fractura`;
+  - el reparto de lo que choca por grosor en `deriva_en_varias_semillas`;
+  - filas nuevas en `planeta_semillas.py`: nivel del mar, profundidad media, pérdida total en choques y nacimientos en zonas de fractura.
+- **No se ha calibrado nada,** como pidió el responsable. `main` sigue en 5c8ef1c porque la rama tiene una prueba que falla a propósito.
+- **Pendiente (§50), en orden, antes de calibrar:**
+  1. la curva de profundidad;
+  2. la regla de la v5;
+  3. márgenes adelgazados en los rifts y la `η` de la corteza continental sobre fondo oceánico;
+  4. después, calibrar y repetir la tabla de cierre.

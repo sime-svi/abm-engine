@@ -80,6 +80,9 @@ FILAS = [
     ('tierra_bajo_200_frac', 'Tierra por debajo de 200 m (fracción)', None, None),
     ('rel_pendiente_media_tierra', 'Pendiente media de la tierra (a ±25 km)', None, None),
     ('rel_plataforma_km', 'Anchura media de la plataforma (km)', None, None),
+    ('tect_nivel_mar_m', 'Nivel del mar al final de la deriva, respecto al dato (m)',
+     '0 (la Tierra real con la regla del modelo: −386)', None),
+    ('profundidad_media_oceano_m', 'Profundidad media del océano (m)', '3 667', lambda x: abs(x - 3667.0) <= 150.0),
     ('tect_bal_espesor_max_final_km', 'Corteza máxima al final (km)', '70–80', lambda x: x <= 80.0),
     ('tect_bal_espesor_max_todo_km', 'Corteza máxima de toda la deriva (km)', '70–80', lambda x: x <= 80.0),
     ('tect_edad_media_myr', 'Edad media del fondo (Myr)', '64,2', lambda x: abs(x - 64.2) <= 10.0),
@@ -101,6 +104,8 @@ FILAS = [
     ('tect_bal_duracion_media_choques_myr', 'Choques: duración media de los que acaban (Myr)', None, None),
     ('tect_bal_choques_con_losa_au', 'Choques: pérdida con la losa colgando (AU)', None, None),
     ('tect_bal_choques_sin_losa_au', 'Choques: pérdida tras la rotura (AU)', None, None),
+    ('tect_bal_choques_au', 'Choques: pérdida total (AU)', '0,4–0,7', lambda x: 0.4 <= x <= 0.7),
+    ('tect_bal_nacimientos_zf_100myr', 'Nacimientos en zonas de fractura (por 100 Myr)', 'raros', None),
     ('tiempo_s', 'Tiempo de cálculo del planeta (s)', '≤ 200', lambda x: x <= 200.0),
 ]
 

@@ -163,6 +163,17 @@ pub struct MetricaMyr {
     pub margen_fin_km: f64,
     #[serde(default)]
     pub margen_fin_vida_km_myr: f64,
+    /// Nota de fosas v5 (§6.4): nacimientos espontáneos en zonas de fractura del paso, intentos de
+    /// partir la placa por ellas y fallidos, y longitud (km) de los escalones de edad de más de
+    /// `Δa_fz` dentro de las placas oceánicas y de los que cumplen la regla del nacimiento.
+    #[serde(default)]
+    pub nacimientos_zf: u32,
+    #[serde(default)]
+    pub separar_zf: [u32; 2],
+    #[serde(default)]
+    pub zf_escalon_km: f64,
+    #[serde(default)]
+    pub zf_candidata_km: f64,
 }
 
 /// Cuentas del material continental (km³) a lo largo de la deriva (adenda de balance §6 y §8).
@@ -196,6 +207,13 @@ pub struct CuentasCorteza {
     pub choque_perdida_con_losa_km3: f64,
     #[serde(default)]
     pub choque_perdida_sin_losa_km3: f64,
+    /// Diagnóstico de la adenda v7 (§6.5): corteza solapada en los choques (sin la de arco) y la
+    /// que se pierde, por la muestra que entra: continental de menos de `h_1`, de `h_1` a `h_2` y de
+    /// más de `h_2`, y la que un arco o la acreción pusieron sobre fondo oceánico.
+    #[serde(default)]
+    pub choque_solapado_por_grosor_km3: [f64; 4],
+    #[serde(default)]
+    pub choque_perdida_por_grosor_km3: [f64; 4],
     pub choque_sin_sitio_km3: f64,
     /// Delaminación (`F_del`, §6.6).
     pub delaminacion_km3: f64,
@@ -391,4 +409,15 @@ pub struct BalanceMedio {
     pub duracion_media_choques_myr: f64,
     #[serde(default)]
     pub choques_terminados: u32,
+    /// Nota de fosas v5 (medias tras el rodaje): nacimientos en zonas de fractura por 100 Myr,
+    /// fracción de los intentos de partir la placa que fallan, y longitud media de los escalones
+    /// de edad de más de `Δa_fz` y de los candidatos (km).
+    #[serde(default)]
+    pub nacimientos_zf_100myr: f64,
+    #[serde(default)]
+    pub separar_zf_fallidos_frac: f64,
+    #[serde(default)]
+    pub zf_escalon_km: f64,
+    #[serde(default)]
+    pub zf_candidata_km: f64,
 }

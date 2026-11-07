@@ -29,6 +29,7 @@ abm/
 │   ├── referencias/
 │   │   ├── [x] tierra_relieve.toml # Tablas de la Tierra (ETOPO 2022, Paxman 2022, Seton 2020, Bird 2003) a las resoluciones del planeta
 │   │   ├── [x] tierra_bordes.toml  # Bordes de placa de Bird (2003) medidos en la malla tectónica como los del modelo (+ convergencia de las fosas)
+│   │   ├── [x] tierra_nivel_mar.toml # La Tierra real con la regla del modelo: nivel del mar, zócalo por edad y curvas de placa ajustadas; escalones de edad (zonas de fractura)
 │   │   └── [x] tierra_lluvia.toml  # Lluvia observada (WorldClim, CHELSA) a 26 km con las definiciones del planeta
 │   └── experiments/
 │       └── [x] terreno_relieve_ruido.toml # Relieve de ruido: referencia de la no regresión mientras se mide (se borra con el interruptor)
@@ -126,6 +127,7 @@ abm/
 │       ├── [x] referencia_tierra.py # Tablas de la Tierra para el relieve (config/referencias/tierra_relieve.toml)
 │       ├── [x] h5mini.py          # Lector mínimo de HDF5 por peticiones parciales (rejillas de Paxman et al.)
 │       ├── [x] bordes_bird.py     # Bordes de Bird (2003) en la malla tectónica, medidos y clasificados como el modelo; convergencia de SUB, OCB y CCB
+│       ├── [x] tierra_regla_modelo.py # La Tierra real (Seton, GlobSed) con la curva de profundidad y la isostasia del modelo: nivel del mar y zonas de fractura
 │       ├── [x] lluvia_observada.py # Lluvia observada de la Tierra a 26 km, frente a la del planeta
 │       └── [x] tiffmini.py        # Lector mínimo de GeoTIFF (tiras, Deflate) también por peticiones parciales
 │
@@ -257,7 +259,7 @@ metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
   - **relieve tectónico, lo que falta para que sea el de la Tierra** (hallazgos de `incremento-4-diseno.md` §6–§7):
     1. ~~adenda de balance~~ y ~~nota de bordes~~ hechas. **Siguen:** las fuerzas de las placas (las fosas miden 2 veces las de la Tierra con cualquier `L_borde` de 100–300 km; nota de bordes §11.2); la exportación al mar (3,1 AU, ≈1,8): no depende de `τ_ero`; falta la delaminación (0,05 AU, ≈1,1): ¿raíces de los arcos o erosión no lineal? (decide el responsable); rifts que estiren conservando (`F_rift` provisional); los 3 pasos de 500 que pasan la alarma de 80 km; después, calibrar `τ_del` y revisar `f_acr`;
     2. inicio de subducción en márgenes pasivos viejos (hoy sobrevive un 15 % de fondo de más de 200 Myr);
-    3. fondo oceánico real (sedimento abisal, mesetas y montes submarinos, puntos calientes) y márgenes continentales sumergidos: con 1–3, el nivel del mar debería volver al dato sin forzar `H_nivel`;
+    3. fondo oceánico real (sedimento abisal, mesetas y montes submarinos, puntos calientes) y márgenes continentales sumergidos: con 1–3, el nivel del mar debería volver al dato sin forzar `H_nivel`. **Medido (2026-11-07, `tierra_regla_modelo.py`):** con las edades y el sedimento reales, la curva del modelo deja el mar a −386 m: el zócalo real deja de bajar hacia los 80 Myr y la curva de Parsons y Sclater no. Una curva de placa ajustada a la mediana real lo deja a −150 m. Los 125 m que faltan hasta la media son las mesetas, los montes submarinos y los puntos calientes;
     4. acortamiento andino, ciclo de Wilson (rifts por suturas viejas), flexión de la litosfera (cuencas de antepaís), microplacas;
     5. ~~reducir el remuestreo de la deriva~~ hecho: conservación exacta (2·10⁻¹⁵); la polaridad de la subducción y los papeles de un choque se deciden **por par de placas**, provisional: en la Tierra quién se hunde puede cambiar a lo largo de un mismo borde;
     5b. ~~umbral de transformantes a 20°~~ hecho (`theta_tr_grados`, nota de bordes);

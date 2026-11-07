@@ -1312,6 +1312,14 @@ struct InformeDeriva {
     choque_sin_losa: f64,
     duracion_choques: f64,
     choques_acabados: f64,
+    /// Nota de fosas v5: nacimientos en zonas de fractura por 100 Myr, intentos de partir la placa
+    /// por ellas que fallan por 100 Myr, y longitud media de los escalones de edad de más de
+    /// `Δa_fz` dentro de las placas y de los candidatos (km).
+    zf: [f64; 4],
+    /// Adenda v7: reparto de la corteza solapada en los choques (sin la de arco) y de la que se
+    /// pierde por la muestra que entra (continental < h_1, h_1–h_2, > h_2, sobre fondo oceánico),
+    /// en fracción de toda la deriva.
+    por_grosor: [[f64; 4]; 2],
 }
 
 fn diagnosticar_deriva(semilla: u64, variante: &str) -> InformeDeriva {
@@ -1662,6 +1670,21 @@ fn diagnosticar_deriva(semilla: u64, variante: &str) -> InformeDeriva {
     inf.edad_max_margen_final = ultima.edad_max_margen_myr;
     inf.invadido = [media(|m| m.invadido_km[0]), media(|m| m.invadido_km[1])];
     inf.roturas_100 = val.iter().map(|m| m.roturas as f64).sum::<f64>() * 100.0 / n;
+    for (fila, x) in inf.por_grosor.iter_mut().zip([
+        d.cuentas.choque_solapado_por_grosor_km3,
+        d.cuentas.choque_perdida_por_grosor_km3,
+    ]) {
+        let t: f64 = x.iter().sum();
+        for (f, v) in fila.iter_mut().zip(x) {
+            *f = if t > 0.0 { v / t } else { 0.0 };
+        }
+    }
+    inf.zf = [
+        val.iter().map(|m| m.nacimientos_zf as f64).sum::<f64>() * 100.0 / n,
+        val.iter().map(|m| m.separar_zf[1] as f64).sum::<f64>() * 100.0 / n,
+        media(|m| m.zf_escalon_km),
+        media(|m| m.zf_candidata_km),
+    ];
     for i in 0..3 {
         inf.separar_100[i] = val.iter().map(|m| m.separar[i] as f64).sum::<f64>() * 100.0 / n;
     }
@@ -1931,6 +1954,24 @@ fn deriva_en_varias_semillas() {
             r(|i| i.choque_sin_losa),
             r(|i| i.duracion_choques),
             r(|i| i.choques_acabados)
+        );
+        println!(
+            "### choques por la corteza que entra (continental <h_1 / h_1–h_2 / >h_2 / sobre fondo oceánico): solapado {} / {} / {} / {}; pérdida {} / {} / {} / {} (fracción de toda la deriva)",
+            r(|i| i.por_grosor[0][0]),
+            r(|i| i.por_grosor[0][1]),
+            r(|i| i.por_grosor[0][2]),
+            r(|i| i.por_grosor[0][3]),
+            r(|i| i.por_grosor[1][0]),
+            r(|i| i.por_grosor[1][1]),
+            r(|i| i.por_grosor[1][2]),
+            r(|i| i.por_grosor[1][3])
+        );
+        println!(
+            "### zonas de fractura: nacen {} por 100 Myr (fallan al partir la placa {}); escalones de más de Δa_fz {} km, candidatos {} km",
+            r(|i| i.zf[0]),
+            r(|i| i.zf[1]),
+            r(|i| i.zf[2]),
+            r(|i| i.zf[3])
         );
         println!(
             "### sedimento: máximo de una muestra {} km; al mar siguiente {} AU; en cuencas cerradas {} AU",
@@ -2237,6 +2278,141 @@ fn un_margen_pasivo_sin_fosa_cerca_no_se_hunde_nunca() {
         !d.bordes.iter().any(|b| b.p_subduce && b.losa > 0.0),
         "ninguna fosa tira"
     );
+}
+
+/// Una placa oceánica (el hemisferio x > 0) con una zona de fractura en el ecuador: fondo de
+/// 200 Myr al norte y de `joven` Myr al sur, con un continente al sur (45°S 0°E, 12° × 15°); la otra
+/// placa (x < 0), de 100 Myr. Las dos, quietas.
+fn zona_de_fractura(cfg: &TectonicaCfg, joven: f64) -> Deriva {
+    let malla = Malla::new(12, 2, 6371.0);
+    let dirs = malla.dir.clone();
+    let mut d = Deriva::desde(cfg, 3, malla, 0.0, &[10, 20], |k| {
+        let (la, lo) = lat_lon(dirs[k]);
+        let (la, lo) = (la.to_degrees(), lo.to_degrees());
+        if dirs[k][0] > 0.0 {
+            let cont = (la + 45.0).abs() < 12.0 && lo.abs() < 15.0;
+            let edad = if la > 0.0 { 200.0 } else { joven };
+            (0, corteza(cont, if cont { 35.0 } else { 7.0 }, edad))
+        } else {
+            (1, corteza(false, 7.0, 100.0))
+        }
+    });
+    d.arrancar_con(&[[0.0; 3], [0.0; 3]]);
+    d
+}
+
+#[test]
+fn una_zona_de_fractura_con_fondo_viejo_hace_nacer_una_fosa_y_parte_la_placa() {
+    // Nota de fosas v5 §6.4: un escalón de edad dentro de una placa, de más de Δa_fz y de más de la
+    // mitad de la edad vieja, con fondo de más de a_min, es candidato al nacimiento espontáneo (aquí
+    // casi seguro). La fosa sigue el escalón, la placa se parte por él con el continente entero en
+    // su lado, el lado viejo se hunde bajo el joven y tira, y la corteza se conserva.
+    let cfg = TectonicaCfg {
+        lambda_esp: 1.0,
+        tau_rift_myr: 1e12,
+        v_inv_km_myr: 0.0,
+        ..TectonicaCfg::default()
+    };
+    let mut d = zona_de_fractura(&cfg, 50.0);
+    let v0 = d.inventario_continental();
+    d.paso_cinematico();
+    assert!(
+        d.fosas_paso.zf_candidata_km > 0.0,
+        "el escalón del ecuador es candidato: {:?}",
+        d.fosas_paso
+    );
+    let ev = d
+        .eventos
+        .iter()
+        .find(|e| {
+            e.tipo == "nacimiento_fosa" && e.clase.as_deref() == Some("espontaneo_zona_fractura")
+        })
+        .expect("nace una fosa en la zona de fractura");
+    assert!(
+        d.eventos.iter().any(|e| e.tipo == "placa_nueva"),
+        "la placa se parte"
+    );
+    let hunde = d
+        .placas
+        .iter()
+        .position(|p| p.viva && p.id == ev.placas[0])
+        .expect("placa que se hunde") as u32;
+    let arriba = d
+        .placas
+        .iter()
+        .position(|p| p.viva && p.id == ev.placas[1])
+        .expect("placa de arriba") as u32;
+    let malla = d.malla.clone();
+    for k in 0..malla.num {
+        let (la, _) = lat_lon(malla.dir[k]);
+        if d.dueno[k] == hunde {
+            assert!(
+                la > 0.0,
+                "la placa que se hunde es el fondo viejo del norte"
+            );
+        }
+        if d.corteza(k).is_some_and(|c| c.cont) {
+            assert_eq!(
+                d.dueno[k], arriba,
+                "el continente va entero con el lado joven"
+            );
+        }
+    }
+    assert!(
+        d.bordes
+            .iter()
+            .any(|b| b.p == hunde && b.q == arriba && b.p_subduce && b.losa > 0.0),
+        "el lado viejo se hunde bajo el joven y tira"
+    );
+    assert!(
+        d.dueno.iter().all(|&p| p != u32::MAX),
+        "todo el planeta tiene dueño"
+    );
+    let dv = (d.inventario_continental() - v0).abs() / v0;
+    assert!(
+        dv < 1e-9,
+        "la corteza se conserva: cambio relativo {dv:.2e}"
+    );
+}
+
+#[test]
+fn un_escalon_pequeno_en_fondo_viejo_no_hace_nacer_ninguna_fosa() {
+    // Nota de fosas v5 §6.4: 200 frente a 160 Myr es zona de fractura (escalón de más de Δa_fz)
+    // pero sin el contraste de la regla (menos de la mitad de 200): no es candidata.
+    let cfg = TectonicaCfg {
+        lambda_esp: 1.0,
+        tau_rift_myr: 1e12,
+        v_inv_km_myr: 0.0,
+        ..TectonicaCfg::default()
+    };
+    let mut d = zona_de_fractura(&cfg, 160.0);
+    for _ in 0..5 {
+        d.paso_cinematico();
+        assert!(
+            d.fosas_paso.zf_escalon_km > 0.0 && d.fosas_paso.zf_candidata_km == 0.0,
+            "zona de fractura sin candidatos: {:?}",
+            d.fosas_paso
+        );
+    }
+    assert!(
+        !d.eventos.iter().any(|e| e.tipo == "nacimiento_fosa"),
+        "no nace ninguna fosa"
+    );
+}
+
+#[test]
+fn en_un_choque_se_pierde_la_corteza_fina_y_se_queda_la_gruesa() {
+    // Adenda v7 §6.5: η(h) = η_min por debajo de h_1 = 20 km, 1 por encima de h_2 = 35 km y lineal
+    // entre los dos.
+    let cfg = TectonicaCfg {
+        eta_min: 0.2,
+        ..TectonicaCfg::default()
+    };
+    assert_eq!(cfg.eta_choque(10.0), 0.2);
+    assert_eq!(cfg.eta_choque(20.0), 0.2);
+    assert!((cfg.eta_choque(27.5) - 0.6).abs() < 1e-12);
+    assert_eq!(cfg.eta_choque(35.0), 1.0);
+    assert_eq!(cfg.eta_choque(45.0), 1.0);
 }
 
 #[test]
@@ -2757,6 +2933,173 @@ fn diagnostico_fondo_viejo() {
                         pc(cont_lejos),
                         pc(sin_cont),
                     )
+                })
+            })
+            .collect();
+        hilos.into_iter().map(|h| h.join().expect("hilo")).collect()
+    });
+    for i in informes {
+        println!("{i}");
+    }
+}
+
+/// Qué son los candidatos a zona de fractura de la nota v5 en el planeta (SEMILLAS, VARIANTE como
+/// en `diagnostico_fondo_viejo`): cada 100 Myr, longitud de los pares candidatos, edades de sus dos
+/// lados, cuántas celdas jóvenes son «agujeros» (todas sus vecinas oceánicas de la placa son más
+/// viejas que ella en más de `Δa_fz`), cuántas están junto a otra placa y el tamaño de los grupos
+/// conexos de pares.
+#[test]
+#[ignore = "diagnóstico: los candidatos a zona de fractura de la nota v5 en el planeta (~3 min)"]
+fn diagnostico_zonas_fractura() {
+    use abm_terreno::tectonica::malla::LADOS;
+    let semillas: Vec<u64> = std::env::var("SEMILLAS")
+        .unwrap_or_else(|_| "42".into())
+        .split(',')
+        .map(|x| x.trim().parse().expect("semilla"))
+        .collect();
+    let variante = std::env::var("VARIANTE").unwrap_or_default();
+    let informes: Vec<String> = std::thread::scope(|sc| {
+        let hilos: Vec<_> = semillas
+            .iter()
+            .map(|&semilla| {
+                let variante = variante.clone();
+                sc.spawn(move || {
+                    let ajustes: Vec<String> = variante
+                        .split(',')
+                        .map(|x| x.trim().to_string())
+                        .filter(|x| !x.is_empty())
+                        .collect();
+                    let cfg = abm_terreno::config::TerrenoConfig::load_con(
+                        "../../config/terreno.toml",
+                        &ajustes,
+                    )
+                    .expect("config");
+                    let tc = cfg.tectonica.clone();
+                    let malla = Malla::new(cfg.planet.n0, tc.nivel_malla, cfg.planet.r_km);
+                    let mut d = Deriva::nueva(&tc, semilla, malla);
+                    let pasos = (tc.t_deriva_myr / tc.dt_myr).round() as u64;
+                    let mut out = format!("semilla {semilla} [{variante}]\n");
+                    for paso in 1..=pasos {
+                        d.dar_paso();
+                        if paso % 100 != 0 && paso != pasos {
+                            continue;
+                        }
+                        let num = d.malla.num;
+                        let (da, a_min) = (tc.da_fz_myr, tc.a_min_myr);
+                        let mut pares: Vec<(usize, usize, f64)> = Vec::new();
+                        let (mut largo, mut joven, mut viejo) = (0.0, [0.0f64; 5], [0.0f64; 4]);
+                        for k in 0..num {
+                            let p = d.dueno[k];
+                            let Some(ck) = (if p == NADA { None } else { d.corteza(k) }) else {
+                                continue;
+                            };
+                            if ck.cont {
+                                continue;
+                            }
+                            for (i, &j) in LADOS.iter().enumerate() {
+                                let v = d.malla.vec[k][j];
+                                if v == NADA || (v as usize) <= k || d.dueno[v as usize] != p {
+                                    continue;
+                                }
+                                let Some(cv) = d.corteza(v as usize) else {
+                                    continue;
+                                };
+                                if cv.cont {
+                                    continue;
+                                }
+                                let dif = (ck.edad_oc - cv.edad_oc).abs();
+                                let vieja = ck.edad_oc.max(cv.edad_oc);
+                                if dif <= da || vieja <= a_min || dif <= 0.5 * vieja {
+                                    continue;
+                                }
+                                let l = d.malla.lado_comun[k][i];
+                                largo += l;
+                                let jv = ck.edad_oc.min(cv.edad_oc);
+                                let bj = [5.0, 20.0, 50.0, 100.0].iter().filter(|&&x| jv >= x).count();
+                                joven[bj] += l;
+                                let bv = [200.0, 300.0, 500.0].iter().filter(|&&x| vieja >= x).count();
+                                viejo[bv] += l;
+                                let (o, y) = if ck.edad_oc > cv.edad_oc { (k, v as usize) } else { (v as usize, k) };
+                                pares.push((o, y, l));
+                            }
+                        }
+                        // Celdas jóvenes: agujeros y junto a otra placa.
+                        let mut jovenes: Vec<usize> = pares.iter().map(|x| x.1).collect();
+                        jovenes.sort_unstable();
+                        jovenes.dedup();
+                        let (mut agujero, mut junto_borde) = (0usize, 0usize);
+                        for &y in &jovenes {
+                            let ey = d.corteza(y).map_or(0.0, |c| c.edad_oc);
+                            let p = d.dueno[y];
+                            let (mut todas_viejas, mut otra) = (true, false);
+                            for &v in &d.malla.vec[y] {
+                                if v == NADA {
+                                    continue;
+                                }
+                                if d.dueno[v as usize] != p {
+                                    otra = true;
+                                    continue;
+                                }
+                                if let Some(cv) = d.corteza(v as usize)
+                                    && !cv.cont
+                                    && cv.edad_oc <= ey + da
+                                {
+                                    todas_viejas = false;
+                                }
+                            }
+                            agujero += usize::from(todas_viejas);
+                            junto_borde += usize::from(otra);
+                        }
+                        // Grupos conexos (8 vecinas) de las celdas de los pares, y su longitud.
+                        let mut en: std::collections::HashMap<usize, usize> = Default::default();
+                        for (i, &(o, y, _)) in pares.iter().enumerate() {
+                            en.insert(o, i);
+                            en.insert(y, i);
+                        }
+                        let mut grupo = vec![usize::MAX; pares.len()];
+                        let mut largos: Vec<f64> = Vec::new();
+                        for s in 0..pares.len() {
+                            if grupo[s] != usize::MAX {
+                                continue;
+                            }
+                            let g = largos.len();
+                            largos.push(0.0);
+                            grupo[s] = g;
+                            let mut pila = vec![s];
+                            while let Some(i) = pila.pop() {
+                                largos[g] += pares[i].2;
+                                for c in [pares[i].0, pares[i].1] {
+                                    for &w in d.malla.vec[c].iter() {
+                                        if w == NADA {
+                                            continue;
+                                        }
+                                        if let Some(&j) = en.get(&(w as usize))
+                                            && grupo[j] == usize::MAX
+                                        {
+                                            grupo[j] = g;
+                                            pila.push(j);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        let mut por_tam = [0.0f64; 4];
+                        for &l in &largos {
+                            por_tam[[200.0, 1000.0, 3000.0].iter().filter(|&&x| l >= x).count()] += l;
+                        }
+                        let f = |x: f64| if largo > 0.0 { 100.0 * x / largo } else { 0.0 };
+                        out += &format!(
+                            "  {paso:>3} Myr: candidatos {largo:>7.0} km en {} grupos (de <200 / 200–1000 / 1000–3000 / >3000 km: {:.0} / {:.0} / {:.0} / {:.0} % de la longitud); lado joven <5 / 5–20 / 20–50 / 50–100 / >100 Myr: {:.0} / {:.0} / {:.0} / {:.0} / {:.0} %; lado viejo 140–200 / 200–300 / 300–500 / >500: {:.0} / {:.0} / {:.0} / {:.0} %; celdas jóvenes {}: agujeros {:.0} %, junto a otra placa {:.0} %\n",
+                            largos.len(),
+                            f(por_tam[0]), f(por_tam[1]), f(por_tam[2]), f(por_tam[3]),
+                            f(joven[0]), f(joven[1]), f(joven[2]), f(joven[3]), f(joven[4]),
+                            f(viejo[0]), f(viejo[1]), f(viejo[2]), f(viejo[3]),
+                            jovenes.len(),
+                            100.0 * agujero as f64 / jovenes.len().max(1) as f64,
+                            100.0 * junto_borde as f64 / jovenes.len().max(1) as f64,
+                        );
+                    }
+                    out
                 })
             })
             .collect();

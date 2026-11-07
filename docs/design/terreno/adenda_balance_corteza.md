@@ -2,7 +2,10 @@
 
 Documento de diseño. Complementa a diseno_relieve_tectonico.md (incremento 4 del terreno).
 
-Estado: versión 6. Diseño cerrado.
+Estado: versión 7. Diseño cerrado.
+
+Cambios de la versión 7:
+- La pérdida en los choques depende del grosor de la corteza que entra (6.5). Se pierde sobre todo el margen adelgazado; la corteza de grosor normal se queda y engruesa la cordillera. Con un η_col fijo de 0,5, los choques de la Tierra actual perderían 7–9 AU, frente a los 0,4–0,7 medidos.
 
 Cambios de la versión 6:
 - El flujo lateral de la corteza engrosada crece con el cubo del espesor del canal débil (6.6b), como el flujo real en un canal. Así frena los picos de los choques sin tope artificial.
@@ -144,7 +147,8 @@ Todo el sedimento cuenta como material continental, porque en este modelo su ún
 | v_ero | Convergencia por encima de la cual el margen tiende a ser erosivo | 6 | cm/año | Medido (Clift y Vannucchi 2004) |
 | S_ero | Sedimento en la fosa por debajo del cual el margen tiende a ser erosivo | 1 | km | Medido (Clift y Vannucchi 2004) |
 | f_acr | Fracción del sedimento que se pega a un margen acrecionario | 0,3 (inicial) | adimensional | Calibrado: acreción global ≈0,3 AU frente a 1,0–1,65 AU subducidos |
-| η_col | Fracción de la corteza solapada que se conserva en un choque continente–continente | 0,5 | adimensional | Medido: en India–Asia falta en torno al 50 % (40–50 % según otro estudio; dato discutido) |
+| η_min | Fracción que se conserva de la corteza más fina (margen adelgazado) en un choque continente–continente | 0,5 (inicial) | adimensional | Calibrado dentro de 0–0,5 con la pérdida media a largo plazo en los choques, 0,4–0,7 AU. El 0,5 de India–Asia es su techo |
+| h_1 / h_2 | Grosor por debajo del cual la corteza que entra se comporta como margen adelgazado / por encima del cual es corteza normal que se conserva entera | 20 / 35 | km | Físico: los márgenes estirados tienen 10–30 km; la corteza continental normal, 35–40 |
 | η_arco | Fracción conservada en un choque arco–continente | 0,9 | adimensional | Medido: el arco de Luzón se acreciona casi un 90 % en Taiwán |
 | h_del | Espesor a partir del cual la base de la corteza se vuelve eclogita y se desprende | 50 | km | Físico (presiones de 1,2–1,5 GPa); rango 45–55 |
 | τ_del | Tiempo característico de la delaminación del exceso | 50 (inicial) | Myr | Calibrado: delaminación global ≈1,1 AU y espesor máximo de 70–80 km |
@@ -211,7 +215,11 @@ F_sed es la suma de lo que pasa al manto.
 Cuando la corteza de tipo continental de la placa de abajo se solapa con la de arriba, sea V_sol el volumen solapado en el paso. Se elige la eficacia según el origen de esa corteza:
 
 - η = η_arco si la corteza solapada es de arco (a_i = 1);
-- η = η_col si es continental.
+- si es continental, η depende del grosor h de la corteza que entra:
+
+  η(h) = η_min + (1 − η_min) · min(1, max(0, (h − h_1) / (h_2 − h_1)))
+
+Motivo: en un choque se hunde sobre todo el margen estirado y adelgazado que entra primero. La pérdida medida a largo plazo en los choques, unos 0,4 AU, corresponde justamente a esa corteza adelgazada (Clift et al. 2009). Cuando llega la corteza de grosor normal, flota, frena el choque y engruesa la cordillera; su raíz se pierde después por delaminación (6.6), que ya está modelada.
 
 η · V_sol se suma a la placa de arriba con la regla de engrosamiento del documento principal. (1 − η) · V_sol pasa al manto y forma F_col.
 
@@ -364,7 +372,7 @@ Esta adenda no usa azar. Todas las reglas son funciones puras del estado. Los re
 
 ### Si un objetivo no se cumple
 
-Primero se revisa la base: un mecanismo que falte o un valor medido mal aplicado. Solo los parámetros calibrados (f_acr, τ_del, D_0, E_1, n_ero) se ajustan, siempre con la media de varias semillas y no antes de implementar nota_ciclo_fosas.md.
+Primero se revisa la base: un mecanismo que falte o un valor medido mal aplicado. Solo los parámetros calibrados (f_acr, τ_del, D_0, E_1, n_ero, η_min) se ajustan, siempre con la media de varias semillas y no antes de implementar nota_ciclo_fosas.md.
 
 Los parámetros medidos pueden moverse dentro de su rango publicado, porque estas tasas tienen incertidumbres de hasta el doble. Fuera de ese rango, no.
 

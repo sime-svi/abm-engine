@@ -587,6 +587,15 @@ fn balance_medio(
                 e.tipo == "fin_choque" && e.clase.as_deref() == Some("continente_continente")
             })
             .count() as u32,
+        nacimientos_zf_100myr: val.iter().map(|m| m.nacimientos_zf as f64).sum::<f64>() * 100.0 / n,
+        separar_zf_fallidos_frac: {
+            let (i, f) = val.iter().fold((0u32, 0u32), |(i, f), m| {
+                (i + m.separar_zf[0], f + m.separar_zf[1])
+            });
+            if i > 0 { f as f64 / i as f64 } else { 0.0 }
+        },
+        zf_escalon_km: media(|m| m.zf_escalon_km),
+        zf_candidata_km: media(|m| m.zf_candidata_km),
         fosas_por_convergencia_frac: {
             let t: f64 = fosas_km.iter().sum();
             fosas_km

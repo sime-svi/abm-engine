@@ -111,6 +111,18 @@ Lo hace con las 52 placas de Bird y con una Tierra reducida a las 15 mayores (la
 
 Para la nota de fosas da también lo que su regla llama fosa en cada clase de Bird (la referencia de la longitud de fosa es la fila SUB), la oblicuidad de los bordes y los tamaños de las placas.
 
+## La Tierra real con la regla del modelo (nivel del mar)
+
+```bash
+python3 -I herramientas/analisis/tierra_regla_modelo.py   # ~2 min con los datos de referencia_tierra.py
+```
+
+Responde a una pregunta: si se pone la Tierra real en la regla del modelo, ¿sale el nivel del mar de la Tierra? Toma las edades reales del fondo (Seton et al. 2020), el grosor real del sedimento oceánico (GlobSed, Straume et al. 2019) y el volumen de agua del modelo (`gel_m`). Con la curva de profundidad por edad del modelo y la isostasia de su sedimento calcula el nivel del mar y la profundidad media del océano, y los compara con la Tierra (nivel 0, 3 667 m). El resto del planeta (continentes, plataformas y mares sin edad) conserva su roca real. También prueba GDH1, la raíz de la edad sin límite, un sedimento menos denso y la regla aplicada solo al fondo de menos de 80 Myr.
+
+Da además la profundidad del zócalo (el fondo descargado de su sedimento) por clases de edad de 10 Myr, en mediana y en media, frente a las curvas. Así se ve dónde deja de bajar el fondo real. Por último, mide los escalones de edad entre celdas vecinas a la escala de la deriva (nivel 2), con las condiciones del nacimiento espontáneo en zonas de fractura de la nota de fosas v5. Escribe `config/referencias/tierra_nivel_mar.toml`.
+
+GlobSed se lee de `output/referencias/globsed/globsed-v3.asc`. Es la copia en ASCII de ArcGIS que guarda CaltechDATA (doi:10.22002/k4070-ngc79, dominio público), porque NOAA retiró su página en mayo de 2025. Hay que bajar `GlobSed.zip` (65 MB, MD5 `4e3f112e0cdc820bd74d3b261414e2cd`) y sacar de él `globsed-v3.asc`.
+
 También mide la **convergencia de las fosas** (diagnóstico de `nota_ciclo_fosas.md` §0): la componente perpendicular al borde (cm/año) por clases, su media ponderada por longitud y el área que se hunde. Lo hace tramo a tramo con la tasa de divergencia de Bird (clases SUB, fosas, y OCB, convergencia sin fosa) y en la malla con la regla de la nota. Fundir las placas pequeñas quita sobre todo fosas de microplacas de arco: las de las 15 mayores hunden 1,5 km²/año de los 2,7 de todas.
 
 ## La deriva en varias semillas

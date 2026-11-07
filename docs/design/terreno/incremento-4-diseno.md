@@ -1039,3 +1039,214 @@ Bird CCB (`bordes_bird.py`, ahora también para esta clase): 23 000 km a 1,87 cm
 6. Lluvia: reparto por latitudes (nota propia); barlovento con objetivo ~1,2 (CHELSA).
 7. Acortamiento andino, flexión de la litosfera, retroceso de fosas y cuencas tras el arco; casquetes polares.
 
+
+## 46. La Tierra real con la regla del modelo (2026-11-07 e)
+
+Pregunta del responsable, antes de cambiar nada: si se pone la Tierra real en la regla del modelo, ¿sale su nivel del mar? Herramienta: `herramientas/analisis/tierra_regla_modelo.py`, con salida en `config/referencias/tierra_nivel_mar.toml`.
+
+**Cómo se mide.**
+- Entradas:
+  - las edades del fondo de Seton et al. (2020);
+  - el grosor del sedimento de GlobSed (Straume et al. 2019), de la copia de CaltechDATA (NOAA retiró la página en mayo de 2025);
+  - el volumen de agua del modelo (`gel_m` = 2 617 m).
+- Celdas de nivel 3 (~26 km).
+- El fondo con edad (57,4 % del planeta) toma la curva de profundidad del modelo (Parsons y Sclater: `t_x` 20, `d_∞` 6 400 m, `τ` 62,8 Myr) y la isostasia de su sedimento: sube `S·(ρ_m − ρ_s)/(ρ_m − ρ_w)`, con ρ_s = 2 400 (0,40·S).
+- El resto conserva la roca real sin hielo con su rebote.
+
+| | Nivel del mar | Profundidad media del océano | Mar |
+|---|---|---|---|
+| Tierra (roca sin hielo con rebote), a nivel 0 | 0 | 3 667 m | 71,6 % |
+| Tierra con el volumen de agua del modelo | −14 m | 3 683 m | — |
+| **Regla del modelo** | **−386 m** | **3 992 m** | 65,5 % |
+| Regla sin sedimento | −579 m | 4 051 m | 64,6 % |
+| Regla con ρ_s = 2 000 (sedimento pelágico poco compactado) | −302 m | 3 968 m | 66,0 % |
+| Regla solo en el fondo de menos de 80 Myr | −134 m | 3 882 m | 67,4 % |
+| GDH1 (Stein y Stein 1992) | −340 m | 3 978 m | 65,8 % |
+| Raíz de la edad sin límite | −523 m | 4 036 m | 64,8 % |
+| Placa ajustada a la **mediana** del zócalo real: `d_∞` 5 310 m, `A` 2 373 m, `τ` 31 Myr (rms 62 m) | −150 m | 3 893 m | 67,2 % |
+| Placa ajustada a la **media** del zócalo real: `d_∞` 5 070 m, `A` 1 809 m, `τ` 34 Myr (rms 85 m) | −25 m | 3 706 m | 70,6 % |
+
+Las curvas ajustadas conservan la raíz del modelo hasta `t_x` = 20 Myr (`2 500 + 350·√t`, que ya coincide con el fondo joven real). Después son `d_∞ − A·e^(−t/τ)`, continuas en `t_x`, con `d_∞` y `τ` por mínimos cuadrados ponderados por área en las clases de 20 a 180 Myr. Con una curva ajustada, la densidad del sedimento apenas cambia el nivel del mar: la misma isostasia descarga el zócalo al medirlo y lo carga en la regla.
+
+Zócalo (el fondo descargado de su sedimento) por edad, en m:
+
+| Edad (Myr) | Área del planeta | Mediana | Media | Sedimento medio | Modelo | GDH1 | Raíz |
+|---|---|---|---|---|---|---|---|
+| 0–10 | 5,9 % | 3 308 | 3 242 | 145 | 3 283 | 3 416 | 3 283 |
+| 20–30 | 5,7 % | 4 214 | 4 150 | 248 | 4 251 | 4 417 | 4 250 |
+| 40–50 | 4,2 % | 4 727 | 4 569 | 365 | 4 837 | 4 943 | 4 848 |
+| 60–70 | 3,9 % | 5 023 | 4 788 | 448 | 5 263 | 5 245 | 5 322 |
+| 80–90 | 2,9 % | 5 165 | 4 963 | 548 | 5 573 | 5 418 | 5 727 |
+| 100–110 | 2,6 % | 5 315 | 5 158 | 935 | 5 799 | 5 517 | 6 086 |
+| 120–130 | 2,5 % | 5 205 | 4 950 | 1 120 | 5 963 | 5 574 | 6 413 |
+| 140–150 | 1,4 % | 5 266 | 4 982 | 1 210 | 6 082 | 5 607 | 6 715 |
+| 160–170 | 0,8 % | 5 012 | 4 674 | 1 040 | 6 169 | 5 626 | 6 996 |
+
+**Lo que sale.**
+1. El volumen de agua del modelo es el de la Tierra: con la roca real, el nivel queda a −14 m.
+2. La regla del modelo hace las cuencas demasiado hondas incluso con las edades reales: el nivel baja 386 m y la profundidad media sube a 3 992 m.
+3. **El zócalo real deja de bajar hacia los 80 Myr.** Entre 70 y 180 Myr, la mediana se queda en 5,0–5,4 km y la media en 4,7–5,2 km, sin tendencia.
+4. **La curva del modelo sí se aplana, pero tarde y hondo.**
+   - No sigue la raíz de la edad sin límite: la raíz daría −523 m.
+   - Sigue bajando 556 m entre 80 y 150 Myr.
+   - En el fondo de más de 100 Myr queda 0,6–1,5 km más honda que la media real.
+5. Hasta los 30 Myr, la curva del modelo coincide con la mediana real (±40 m).
+6. Dos tercios del desfase vienen del fondo de más de 80 Myr: con la regla solo en el más joven, el nivel queda a −134 m.
+7. GDH1 apenas mejora (−340 m). Aplana a 5,65 km, pero en el fondo joven es 100–200 m más honda que la Tierra.
+8. La densidad del sedimento pesa unos 85 m: con 2 000 kg/m³, que es la del sedimento pelágico de su primer kilómetro, el nivel queda a −302 m.
+9. En el fondo viejo, la media real es 200–300 m más somera que la mediana. Son las mesetas, los montes submarinos y los abombamientos de los puntos calientes, que el modelo no tiene.
+
+10. **Con una curva de placa ajustada a la mediana real, el desfase baja de −386 a −150 m.** Los 125 m que quedan hasta la media (−25 m) son el volumen de las mesetas, los montes submarinos y los abombamientos de los puntos calientes, que el modelo no tiene.
+
+**Consecuencia para el modelo.** El océano del modelo es viejo: 112 Myr de media al final de la v4, frente a 64 en la Tierra. Con la curva de Parsons y Sclater, el fondo viejo sigue hundiéndose y agranda el problema de la edad. Con el aplanamiento real, un fondo de 150 Myr estaría casi a la misma profundidad que uno de 90.
+
+## 47. Adenda v7: la pérdida en los choques según el grosor (implementación)
+
+**Regla.**
+- `η_col` pasa a ser `η(h) = η_min + (1 − η_min)·clamp((h − h_1)/(h_2 − h_1), 0, 1)`, en `TectonicaCfg::eta_choque`.
+- Parámetros: `eta_min` 0,5 (inicial; se calibra dentro de 0–0,5), `h1_choque_km` 20 y `h2_choque_km` 35.
+- `h` es el espesor de la corteza cristalina (`h`) de la muestra de la placa de abajo que se consume en el solape: toda la de un continente; en el fondo oceánico, sus 7 km y lo que han añadido los arcos o la acreción.
+- Los arcos siguen con `η_arco` = 0,9.
+- La `η` de cada choque viaja con él (`Choque.eta`) para la cuenta del engrosamiento.
+
+**No regresión.** Con `h_1 = h_2 = 10⁹`, la regla es la vieja (η = 0,5 siempre). Así, el planeta de `config/terreno.toml` sale idéntico byte a byte al de 5c8ef1c (5,57 MB).
+
+**Prueba nueva.** `en_un_choque_se_pierde_la_corteza_fina_y_se_queda_la_gruesa`.
+
+**Consecuencia: falla `un_gran_choque_no_apila_corteza_por_encima_de_80_km`.**
+- En esa prueba, la India es un bloque uniforme de 35 km. Con la v7 tiene η = 1, así que se queda entera y apila en Asia el doble que antes.
+- El máximo llega a 89,0 km; el límite de la prueba es 88 (80 más un 10 % por la resolución).
+- Causas posibles, que decide el responsable:
+  - la base del escenario: la India del escenario no tiene el margen norte adelgazado que tuvo la Gran India real;
+  - `τ_del` y `D_0`, que se calibraron con la mitad de la corteza perdida.
+- No se toca la prueba ni ningún parámetro antes de calibrar.
+
+## 48. Nota de fosas v5: zonas de fractura (implementación)
+
+**Detección (cada paso).**
+- Pares de celdas vecinas de lado de una misma placa, las dos de fondo oceánico, con un escalón de edad de más de `Δa_fz` (`da_fz_myr` = 10).
+- Son candidatos los que cumplen la regla de las transformantes: lado viejo de más de `a_min` y escalón de más de la mitad de su edad.
+
+**Sorteo.**
+- Por placa y bloque de `L_borde`, con `p = 1 − exp(−λ_esp·((a − a_min)/100)·L·Δt)`, como las transformantes.
+- Tiene su propia corriente del generador (`P_ESPONTANEO_ZF`).
+
+**Nacimiento.**
+- La fosa sigue el escalón: todos los pares candidatos de la placa conexos con los del bloque.
+- La placa se parte por él (`partir_por_zona_fractura`):
+  - cada celda oceánica va con el lado del escalón que tiene más cerca por el océano de la placa;
+  - más allá de los extremos, el corte sigue la dirección del escalón hasta los bordes existentes. Una zona de fractura es la traza de una transformante y la continúa (decisión de quien implementa: «la misma maquinaria que la invasión», que también corta por la fuente más cercana);
+  - cada continente va entero con el lado que más lo rodea.
+- El lado viejo se hunde y puede ser una microplaca, desde (3·L_borde)². El joven queda arriba y tiene al menos `A_min`.
+- La fosa se pone en los bordes del escalón con `L = X_ini`; el resto del corte es transformante.
+- Una placa se parte una vez por paso como mucho.
+
+**Métricas.**
+- Por paso: `nacimientos_zf`, `separar_zf` (intentos y fallidos), `zf_escalon_km` y `zf_candidata_km`.
+- En el balance: `nacimientos_zf_100myr`, `separar_zf_fallidos_frac`, `zf_escalon_km` y `zf_candidata_km`.
+
+**Pruebas nuevas.**
+- `una_zona_de_fractura_con_fondo_viejo_hace_nacer_una_fosa_y_parte_la_placa`: 200 frente a 50 Myr. Nace la fosa, la placa se parte, el lado viejo se hunde y tira, el continente va entero con el joven y la corteza se conserva.
+- `un_escalon_pequeno_en_fondo_viejo_no_hace_nacer_ninguna_fosa`: 200 frente a 160 Myr es zona de fractura, pero no candidata.
+
+**La regla frente a la Tierra.** Escalones de edad entre celdas vecinas de 52 km en Seton (`tierra_nivel_mar.toml`, sección `zonas_fractura`). Toda la Tierra suma 1,31·10⁷ km de lados con edad.
+
+| Escalón | Longitud |
+|---|---|
+| Más de 5 Myr | 798 310 km |
+| Más de 10 Myr | 200 255 km |
+| Más de 20 Myr | 39 770 km |
+| Más de 40 Myr | 8 027 km |
+| Más de 70 Myr | 1 616 km |
+| **Regla v5** (viejo > 140 Myr, contraste > ½·viejo, escalón > Δa_fz) | **417 km** |
+| Sin el contraste (viejo > 140 Myr, escalón > Δa_fz) | 18 347 km |
+| Con `a_min` = 100 y el contraste | 2 189 km |
+
+**Lo que sale.**
+- Con `a_min` = 140 Myr y el contraste de más de la mitad de la edad vieja, todo candidato tiene ya un escalón de más de 70 Myr. Así, `Δa_fz` (5–20) nunca decide nada y no se puede calibrar.
+- En la Tierra real, la regla deja 417 km de candidatos en todo el planeta: unas 8 celdas.
+- Las zonas de fractura reales del fondo viejo separan fondos con decenas de Myr de diferencia, no con más de la mitad de su edad.
+- Además, con el aplanamiento real (§46), dos fondos de más de 80 Myr apenas difieren en profundidad (ni en densidad).
+
+**No regresión.** Con `Δa_fz` = 10⁹ (sin zonas de fractura) y la v7 apagada, la salida del planeta es igual a la de 5c8ef1c, sin contar las claves nuevas de las métricas. Se comprobó leyendo los dos JSON.
+
+## 49. Lo que hacen la v7 y la v5 en el planeta (5 semillas, sin calibrar)
+
+Valores iniciales: `η_min` 0,5, `λ_esp` 4·10⁻⁶ y `Δa_fz` 10. «Las dos apagadas» es la v4.
+
+| | Las dos apagadas (v4) | Solo v7 | Solo v5 | Las dos | Las dos, `η_min` = 0 | Tierra u objetivo |
+|---|---|---|---|---|---|---|
+| Pérdida en choques (AU) | 3,54 | 0,97 | 3,57 | 1,42 | 2,10 | 0,4–0,7 |
+| Delaminación (AU) | 0,67 | 2,30 | 0,55 | 1,88 | 1,51 | ≈1,1 |
+| Sedimento al mar (AU) | 2,56 | 3,86 | 2,16 | 3,25 | 2,94 | ≈1,8 |
+| Celdas·paso de más de 80 km | 2 655 | 75 581 | 2 830 | 61 233 | 58 618 | 0 |
+| Muestra más gruesa de la deriva (km) | 146 | 221 | 143 | 205 | 205 | 70–80 |
+| Edad media del fondo en la deriva (Myr) | 89 | 95 | 71 | 71 | 73 | 64 |
+| Fondo de más de 180 Myr al final | 19 % | 24 % | 7 % | 9 % | 12 % | < 1 % |
+| Márgenes pasivos: vida de los que acaban (Myr) | 117 | 115 | 97 | 94 | 99 | 130–180 |
+| Márgenes al final: edad media / máxima (Myr) | 212 / 650 | 237 / 646 | 147 / 613 | 159 / 620 | 165 / 628 | ~104 / ~180 |
+| Longitud de fosa (km) | 68 400 | 62 300 | 86 500 | 80 900 | 79 700 | ~51 000 |
+| Área que se hunde (km²/año) | 3,55 | 3,18 | 4,72 | 4,25 | 4,20 | 2,7–3,4 |
+| ΔV_cont | −15 % | −12 % | −8 % | −6 % | −8 % | ±10 % |
+| `f_cont` | 0,313 | 0,322 | 0,338 | 0,355 | 0,347 | 0,40 |
+| Nacimientos en zonas de fractura (por 100 Myr) | — | — | 11,4 | 13,0 | 11,3 | — |
+| Candidatos a zona de fractura (km) | — | — | 105 700 | 111 600 | 101 700 | 417 (Tierra) |
+
+**La v7.**
+- Baja la pérdida en los choques de 3,5 a 1,0 AU, pero la corteza que se queda se apila. Las celdas de más de 80 km se multiplican por 28.
+- La delaminación sube a 2,3 AU, el doble de su objetivo, y el sedimento al mar a 3,9 AU.
+- `τ_del` y `D_0` se calibraron con la mitad de la corteza perdida.
+- Con `η_min` = 0,5, el techo del rango, la pérdida es de 1,0 AU (1,4 con la v5). El objetivo de 0,4–0,7 AU no se alcanza dentro de 0–0,5.
+
+**La v5.**
+- Hace lo que se buscaba: el fondo rejuvenece (71 Myr de media en la deriva, 7 % de más de 180 al final) y también los márgenes (147 Myr de media al final).
+- Pero la fosa sube a 86 500 km (×1,7 de la Tierra) y el área que se hunde a 4,7 km²/año.
+- Y los márgenes que acaban viven menos (97 Myr).
+
+**Qué son los candidatos a zona de fractura en el modelo** (`diagnostico_zonas_fractura`, semillas 42 y 1, cada 100 Myr).
+- Crecen con la deriva: 19 000–77 000 km a los 100 Myr y 85 000–160 000 km a los 300–500.
+- El lado joven tiene sobre todo 20–100 Myr y el viejo 140–300.
+- Entre el 40 y el 75 % de su longitud está en líneas de más de 1 000 km.
+- Solo el 1–8 % son celdas jóvenes sueltas («agujeros») y el 5–15 % están junto a otra placa.
+- **Son las costuras del fondo viejo del propio modelo:** fondos de 140–300 Myr pegados a fondos jóvenes dentro de una placa.
+- La Tierra casi no tiene fondo de más de 180 Myr ni escalones así: 1 616 km de más de 70 Myr en todo el planeta.
+- Así, la v5 cierra el océano viejo del modelo por un camino que en la Tierra no existe: el disparo lo pone la propia irrealidad que se quiere corregir.
+
+**Qué corteza entra en los choques** (nuevas cuentas `choque_solapado_por_grosor_km3` y `choque_perdida_por_grosor_km3`, sin la de arco; fracción de toda la deriva, 5 semillas, `η_min` = 0,5):
+
+| Corteza que entra | Solapada (las dos / solo v7) | Perdida (las dos / solo v7) |
+|---|---|---|
+| Continental de menos de 20 km | 0,1 % / 0,1 % | 0,4 % / 0,4 % |
+| Continental de 20–35 km | 14 % / 14 % | 18 % / 25 % |
+| Continental de más de 35 km | 64 % / 73 % | 0 / 0 |
+| De tipo continental sobre fondo oceánico, no de arco | 22 % / 13 % | 81 % / 75 % |
+
+- **En el modelo no hay márgenes adelgazados.** Los rifts parten los continentes sin estirar su corteza (`F_rift` es provisional, §45 y TREE). Así, al choque casi no llega corteza continental de menos de 20 km, y la regla de `η_min` no tiene sobre qué actuar.
+- **La pérdida que queda, 1,0–1,4 AU, sale sobre todo de columnas oceánicas con corteza de tipo continental que no cuenta como arco (75–81 %).**
+  - Es la que ponen en el fondo oceánico el engrosamiento de los choques, el flujo lateral o la absorción de la convergencia difusa.
+  - Basta que entre algo así en una columna sin corteza continental para que deje de ser de arco (`sumar_hc`).
+  - Su grosor (7 km más `hc`) queda por debajo de 20 km, así que pierde `η_min`.
+- La corteza de grosor normal (64–73 % de lo solapado) se queda entera y se apila. De ahí las celdas de más de 80 km, la delaminación y el sedimento al mar de más.
+
+## 50. Pendientes (2026-11-07 e, en orden; decide el responsable antes de calibrar)
+
+1. **La curva de profundidad (§46), que es la base.** Opciones:
+   - mantener Parsons y Sclater (la Tierra real daría −386 m);
+   - GDH1 (−340 m);
+   - la placa ajustada a la mediana real, que es el fondo normal medido (`d_∞` 5 310 m, `A` 2 373 m, `τ` 31 Myr; −150 m). Los 125 m que faltan son las mesetas, los montes submarinos y los puntos calientes, mecanismos que faltan;
+   - la placa ajustada a la media real (−25 m), que mete esos relieves en la curva.
+   - **Recomendación:** la mediana, con las mesetas y los puntos calientes en la lista de lo que falta.
+2. **La regla de la v5 (§48–§49).**
+   - `Δa_fz` es redundante con el contraste de ½·viejo y `a_min` = 140, así que no se puede calibrar.
+   - En la Tierra la regla deja 417 km de candidatos; en el modelo, 100 000–160 000 km.
+   - Esos candidatos son las costuras de su fondo viejo, que la Tierra no tiene. La v5 rejuvenece el océano, pero alarga la fosa a ×1,7 de la Tierra.
+3. **La regla de la v7 sobre la base actual (§47, §49).**
+   - Sin márgenes adelgazados no se alcanza el objetivo de 0,4–0,7 AU con `η_min` en 0–0,5.
+   - La corteza normal que se queda se apila (×28 celdas de más de 80 km).
+   - La prueba India–Asia pasa de 80 km: su India no tiene margen adelgazado.
+   - Hacen falta dos decisiones:
+     - si los rifts deben estirar y adelgazar la corteza de los márgenes;
+     - qué `η` corresponde a la corteza de tipo continental sobre fondo oceánico que no es de arco.
+   - Después habrá que volver a calibrar `τ_del` y `D_0` con la v7.
+4. Después: calibrar `η_min`, `λ_esp` y `Δa_fz` (si sigue en la regla) con 5 semillas, y repetir la tabla de cierre. Ya tiene filas para el nivel del mar, la profundidad media, la pérdida total en los choques y los nacimientos en zonas de fractura.
+5. Siguen de §45: el ciclo de Wilson y el estado inicial; la ampliación futura de fosa y área; las agujas de sumar muestras y el sedimento máximo; la erosión con la exportación; la lluvia por latitudes; el acortamiento andino, la flexión, el retroceso de fosas y los casquetes.

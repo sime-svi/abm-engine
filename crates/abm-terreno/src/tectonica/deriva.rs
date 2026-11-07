@@ -487,6 +487,8 @@ struct Choque {
     k: u32,
     /// Lo que se queda arriba (`η·V_sol`, km³).
     vol: f64,
+    /// La fracción `η` con que se quedó (adenda v7 §6.5).
+    eta: f64,
     /// La corteza solapada era de arco.
     arco: bool,
 }
@@ -2257,14 +2259,34 @@ impl Deriva {
                     c.hc * a
                 };
                 if v_sol > 0.0 {
-                    let eta = if c.arco { cfg.eta_arco } else { cfg.eta_col };
+                    // La eficacia depende del grosor de la corteza que entra (adenda v7 §6.5): se
+                    // hunde sobre todo el margen adelgazado.
+                    let eta = if c.arco {
+                        cfg.eta_arco
+                    } else {
+                        cfg.eta_choque(c.h)
+                    };
                     choques.push(Choque {
                         k,
                         vol: eta * v_sol,
+                        eta,
                         arco: c.arco,
                     });
                     self.cuentas.choque_solapado_km3 += v_sol;
                     self.cuentas.choque_perdida_km3 += (1.0 - eta) * v_sol;
+                    if !c.arco {
+                        let clase = if !c.cont {
+                            3
+                        } else if c.h < cfg.h1_choque_km {
+                            0
+                        } else if c.h < cfg.h2_choque_km {
+                            1
+                        } else {
+                            2
+                        };
+                        self.cuentas.choque_solapado_por_grosor_km3[clase] += v_sol;
+                        self.cuentas.choque_perdida_por_grosor_km3[clase] += (1.0 - eta) * v_sol;
+                    }
                     // ¿Cuelga aún la losa de una fosa entre las dos (v4 §6.6)?
                     let arriba = self.dueno[k as usize];
                     let con_losa = arriba != NADA
@@ -3210,12 +3232,7 @@ impl Deriva {
         }
         self.solape_en_borde_paso.clear();
         for c in choques {
-            let eta = if c.arco {
-                self.cfg.eta_arco
-            } else {
-                self.cfg.eta_col
-            };
-            let v = c.vol / eta.max(1e-12);
+            let v = c.vol / c.eta.max(1e-12);
             self.cuentas.choque_solapado_por_borde_km3[tipo_en[c.k as usize] as usize] += v;
             self.solape_en_borde_paso
                 .push((c.k, tipo_en[c.k as usize], v));
@@ -4564,6 +4581,10 @@ impl Deriva {
             edad_max_margen_myr: margenes.2,
             margen_fin_km: margenes.3,
             margen_fin_vida_km_myr: margenes.4,
+            nacimientos_zf: self.fosas_paso.nacen_zf,
+            separar_zf: self.fosas_paso.separar_zf,
+            zf_escalon_km: self.fosas_paso.zf_escalon_km,
+            zf_candidata_km: self.fosas_paso.zf_candidata_km,
         });
     }
 

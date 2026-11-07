@@ -143,7 +143,9 @@ p_se         = 0.4         # erosión por subducción por km² que se hunde (med
 v_ero_cm_anio = 6.0        # margen erosivo si converge más rápido... (medido: Clift y Vannucchi 2004)
 s_ero_km     = 1.0         # ...y le llega menos sedimento (medido: Clift y Vannucchi 2004)
 f_acr        = 0.2         # fracción del sedimento de fosa que se pega al margen acrecionario (calibrado, 5 semillas: acrecionado/subducido 0,24; Tierra 0,3/1,0–1,65)
-eta_col      = 0.5         # choque continente–continente: queda arriba (medido: India–Asia, ~50 %)
+eta_min      = 0.5         # choque continente–continente: queda arriba de la corteza más fina, el margen adelgazado (adenda v7 §6.5; calibrar dentro de 0–0,5 con la pérdida a largo plazo, 0,4–0,7 AU; 0,5 es el techo de India–Asia)
+h1_choque_km = 20.0        # por debajo, la corteza que entra es margen adelgazado y conserva η_min (físico: márgenes estirados de 10–30 km)
+h2_choque_km = 35.0        # por encima, corteza de grosor normal, que se queda entera (físico: 35–40 km)
 eta_arco     = 0.9         # choque arco–continente: queda arriba (medido: Luzón en Taiwán, ~90 %)
 h_del_km     = 50.0        # la base de la corteza pasa a eclogita (físico: 1,2–1,5 GPa)
 tau_del_myr  = 25.0        # delaminación del exceso (calibrado, 5 semillas con D_0 = 50: 0,71 AU frente a 0,46 con 50 Myr; India–Asia igual). Caída convectiva de una raíz: 10–30 Myr
@@ -169,9 +171,10 @@ l_borde_km   = 150.0       # radio del borde suavizado (calibrado contra los bor
 # Ciclo de vida de las fosas (nota_ciclo_fosas.md v2). W_dif, la franja de la convergencia difusa, es L_borde.
 x_ini_km     = 150.0       # convergencia acumulada para que nazca una fosa (Gurnis et al. 2004: 100–150 km; Li y Gurnis 2023: ~200)
 tau_muerte_myr = 10.0      # sin convergencia durante este tiempo, la fosa muere (supuesto)
-lambda_esp   = 4.0e-6      # nacimiento espontáneo, ya solo en transformantes con contraste de edad (nota v4), por km y Myr y por 100 Myr de edad sobre a_min: raro (~0,2–0,6 por 100 Myr)
+lambda_esp   = 4.0e-6      # nacimiento espontáneo en transformantes y zonas de fractura con contraste de edad (nota v5 §6.4), por km y Myr y por 100 Myr de edad sobre a_min: raro (~0,2–0,6 por 100 Myr)
 l_losa_km    = 800.0       # losa con la que el tirón es pleno (llega a 660 km con 45–60°; 660–1000)
-a_min_myr    = 140.0       # edad mínima del fondo para un nacimiento espontáneo en una transformante (supuesto físico; 100–180)
+a_min_myr    = 140.0       # edad mínima del fondo para un nacimiento espontáneo en una transformante o una zona de fractura (supuesto físico; 100–180)
+da_fz_myr    = 10.0        # escalón de edad entre celdas vecinas de una placa oceánica que hace zona de fractura, candidata al nacimiento espontáneo (nota v5 §6.4; supuesto, 5–20)
 v_inv_km_myr = 25.0        # una fosa se alarga desde su extremo por transformantes y márgenes pasivos (nota v4 §6.4). Calibrado, 5 semillas: la vida de los márgenes que acaban apenas cambia (91–124 Myr con 0–150) y es la más cercana a 130–180 con 25; Antillas Menores y Escocia, ~1 000–1 500 km en 40–50 Myr
 a_inv_myr    = 60.0        # edad mínima del fondo que una fosa puede invadir (supuesto: Antillas Menores, fondo cretácico; 40–100)
 t_rot_joven_myr = 10.0     # la losa se rompe tras un choque: a los 10 Myr si es joven... (van Hunen y Allen 2011)

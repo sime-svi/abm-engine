@@ -1,0 +1,92 @@
+# La Tierra real con la regla del modelo (nivel del mar y profundidad media del océano).
+# Generado por herramientas/analisis/tierra_regla_modelo.py: edades de Seton et al. (2020),
+# sedimento de GlobSed (Straume et al. 2019; copia de CaltechDATA doi:10.22002/k4070-ngc79) y la
+# roca sin hielo con su rebote de ETOPO 2022 y Paxman et al. (2022), en celdas de nivel 3 (~26 km).
+# "tierra": la roca real; "modelo": el fondo con edad con la curva de profundidad y la isostasia
+# del sedimento del modelo (config/terreno.toml); "gdh1" y "raiz_sin_limite": otras curvas.
+
+[nivel_mar.tierra]
+volumen_km3 = 1.33484e+09
+profundidad_media_a_nivel_0_m = 3667.29
+area_mar_frac = 0.71634
+nivel_mar_con_el_volumen_m = -14.0582
+profundidad_media_m = 3683.14
+fondo_con_edad_frac = 0.574269
+profundidad_media_fondo_con_edad_m = 4265.35
+sedimento_medio_fondo_con_edad_m = 553.93
+
+[nivel_mar.modelo]
+nivel_mar_m = -385.704
+profundidad_media_m = 3992.45
+area_mar_frac = 0.655487
+profundidad_media_fondo_con_edad_m = 4314.63
+
+[nivel_mar.modelo_sin_sedimento]
+nivel_mar_m = -579.43
+profundidad_media_m = 4051.32
+area_mar_frac = 0.645963
+profundidad_media_fondo_con_edad_m = 4340.52
+
+[nivel_mar.modelo_rho_s_2000]
+nivel_mar_m = -302.169
+profundidad_media_m = 3967.6
+area_mar_frac = 0.659593
+profundidad_media_fondo_con_edad_m = 4300.55
+
+[nivel_mar.modelo_solo_hasta_80_myr]
+nivel_mar_m = -133.883
+profundidad_media_m = 3881.8
+area_mar_frac = 0.674171
+profundidad_media_fondo_con_edad_m = 4275.31
+
+[nivel_mar.gdh1]
+nivel_mar_m = -340
+profundidad_media_m = 3977.78
+area_mar_frac = 0.657905
+profundidad_media_fondo_con_edad_m = 4307.98
+
+[nivel_mar.raiz_sin_limite]
+nivel_mar_m = -522.578
+profundidad_media_m = 4035.9
+area_mar_frac = 0.64843
+profundidad_media_fondo_con_edad_m = 4333.18
+
+[nivel_mar.zocalo_por_edad]
+desde_myr = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
+area_frac = [0.0585781, 0.0607391, 0.0573262, 0.049841, 0.0421698, 0.0366936, 0.0390277, 0.0372226, 0.0289881, 0.0227975, 0.0258652, 0.0262713, 0.0253984, 0.0205546, 0.0136584, 0.0142846, 0.00830928, 0.0032571, 0.00249024, 0.000433037, 0.000363206]
+zocalo_mediana_m = [3307.93, 3845.26, 4213.91, 4499.3, 4726.92, 4920.3, 5023.07, 5144.91, 5164.81, 5257.28, 5315.35, 5240.11, 5204.87, 5379.01, 5265.55, 5182.29, 5012.15, 5309.23, 5460.68, 4547.61, 6432.81]
+zocalo_media_m = [3242, 3765.91, 4149.68, 4381.81, 4568.69, 4667.61, 4788.22, 4925.25, 4962.78, 5069.61, 5158.15, 5061.8, 4950.24, 5060.76, 4982.4, 4913.27, 4673.82, 5073.03, 5249.05, 4594.67, 6268.28]
+fondo_mediana_m = [3271.08, 3782.3, 4138.1, 4396.75, 4602.11, 4751.13, 4856.27, 4917.69, 4964.56, 5072.52, 5049.63, 4903.87, 4790.31, 4972.28, 4550.53, 4701.26, 4650.72, 4625.91, 4071.85, 1127.86, 2752.78]
+sedimento_media_m = [145.239, 217.995, 248.082, 316.936, 365.242, 492.807, 447.97, 600.647, 548.233, 592.757, 935.304, 1094.63, 1119.79, 1043.82, 1210, 1044.47, 1040.38, 1710.95, 3360.47, 7981, 9010.71]
+modelo_m = [3282.62, 3855.54, 4250.87, 4567.23, 4837.03, 5067.1, 5263.31, 5430.64, 5573.33, 5695.02, 5798.8, 5887.3, 5962.77, 6027.13, 6082.02, 6128.83, 6168.75, 6202.79, 6231.82, 6256.58, 6287.05]
+gdh1_m = [3416.16, 4013.64, 4416.79, 4716.34, 4943.18, 5114.97, 5245.07, 5343.59, 5418.2, 5474.7, 5517.49, 5549.89, 5574.43, 5593.01, 5607.09, 5617.75, 5625.82, 5631.93, 5636.56, 5640.06, 5643.79]
+raiz_sin_limite_m = [3282.62, 3855.54, 4250, 4570.63, 4847.87, 5095.67, 5321.79, 5531.09, 5726.84, 5911.38, 6086.43, 6253.33, 6413.12, 6566.63, 6714.56, 6857.46, 6995.83, 7130.06, 7260.51, 7387.48, 7571.98]
+
+[nivel_mar.placa_ajustada_mediana]
+d_inf_m = 5310
+a_pl_m = 2372.86
+tau_pl_myr = 31
+rms_ajuste_m = 61.9082
+nivel_mar_m = -150.094
+profundidad_media_m = 3892.81
+area_mar_frac = 0.672265
+profundidad_media_fondo_con_edad_m = 4278.05
+
+[nivel_mar.placa_ajustada_media]
+d_inf_m = 5070
+a_pl_m = 1809.37
+tau_pl_myr = 34
+rms_ajuste_m = 85.425
+nivel_mar_m = -24.6125
+profundidad_media_m = 3706.3
+area_mar_frac = 0.706095
+profundidad_media_fondo_con_edad_m = 4253.7
+
+[zonas_fractura]
+nivel_lado_km = 52.1226
+vecinas_con_edad_km = 1.31104e+07
+escalon_mas_de_myr = [5, 10, 20, 40, 70]
+largo_km = [798310, 200255, 39769.6, 8026.88, 1615.8]
+regla_v5_km = 416.981
+regla_v5_sin_contraste_km = 18347.2
+regla_v5_con_a_min_100_km = 2189.15

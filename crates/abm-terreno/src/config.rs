@@ -183,8 +183,14 @@ pub struct TectonicaCfg {
     /// Fracción del sedimento de fosa que se pega a un margen acrecionario (calibrado).
     pub f_acr: f64,
     /// Fracción de la corteza solapada que se queda en la placa de arriba en un choque continente–
-    /// continente (India–Asia) y en uno arco–continente (Luzón–Taiwán).
-    pub eta_col: f64,
+    /// continente (adenda v7 §6.5): depende del grosor `h` de la que entra,
+    /// `η(h) = η_min + (1 − η_min)·clamp((h − h_1)/(h_2 − h_1), 0, 1)` ([`TectonicaCfg::eta_choque`]):
+    /// se hunde sobre todo el margen adelgazado (de menos de `h_1`) y la corteza de grosor normal (de
+    /// más de `h_2`) se queda entera. `η_min` se calibra.
+    pub eta_min: f64,
+    pub h1_choque_km: f64,
+    pub h2_choque_km: f64,
+    /// La misma fracción en un choque arco–continente (Luzón–Taiwán).
     pub eta_arco: f64,
     /// Delaminación: por encima de `h_del` la base de la corteza pasa a eclogita y se desprende con
     /// tiempo característico `tau_del` (calibrado).
@@ -237,6 +243,10 @@ pub struct TectonicaCfg {
     /// Edad mínima del fondo para un nacimiento espontáneo en una transformante (`a_min` de la nota
     /// de fosas, Myr; supuesto físico: solo el fondo viejo y denso se hunde solo; rango 100–180).
     pub a_min_myr: f64,
+    /// Escalón de edad del fondo entre celdas vecinas de una misma placa oceánica a partir del cual
+    /// hay zona de fractura, candidata al nacimiento espontáneo con el mismo contraste y fondo viejo
+    /// que una transformante (`Δa_fz` de la nota de fosas v5 §6.4, Myr; supuesto, rango 5–20).
+    pub da_fz_myr: f64,
     /// Velocidad media con la que una fosa activa se alarga desde su extremo al invadir una
     /// transformante o un margen pasivo (`v_inv` de la nota de fosas v4 §6.4, km/Myr). Resume
     /// también la fase lenta inicial (Gibraltar, ~20 Myr). Calibrado con la vida de los márgenes
@@ -316,7 +326,9 @@ impl Default for TectonicaCfg {
             v_ero_cm_anio: 6.0,
             s_ero_km: 1.0,
             f_acr: 0.2,
-            eta_col: 0.5,
+            eta_min: 0.5,
+            h1_choque_km: 20.0,
+            h2_choque_km: 35.0,
             eta_arco: 0.9,
             h_del_km: 50.0,
             tau_del_myr: 25.0,
@@ -342,6 +354,7 @@ impl Default for TectonicaCfg {
             lambda_esp: 4.0e-6,
             l_losa_km: 800.0,
             a_min_myr: 140.0,
+            da_fz_myr: 10.0,
             v_inv_km_myr: 25.0,
             a_inv_myr: 60.0,
             t_rot_joven_myr: 10.0,
@@ -377,6 +390,20 @@ impl TectonicaCfg {
             (self.rho_m - rho) / self.rho_m,
             (self.rho_m - rho) / (self.rho_m - self.rho_w),
         )
+    }
+
+    /// Fracción de la corteza continental de grosor `h_km` que se queda arriba al entrar en un
+    /// choque (adenda v7 §6.5): `η_min` por debajo de `h_1`, 1 por encima de `h_2` y lineal entre
+    /// los dos.
+    pub fn eta_choque(&self, h_km: f64) -> f64 {
+        let x = if self.h2_choque_km > self.h1_choque_km {
+            ((h_km - self.h1_choque_km) / (self.h2_choque_km - self.h1_choque_km)).clamp(0.0, 1.0)
+        } else if h_km > self.h1_choque_km {
+            1.0
+        } else {
+            0.0
+        };
+        self.eta_min + (1.0 - self.eta_min) * x
     }
 }
 
@@ -774,13 +801,16 @@ impl TectonicaCfg {
         if self.nivel_malla > 4 || (n0 as u64) << self.nivel_malla > 1 << 12 {
             return Err(invalid("nivel_malla demasiado fino (n0 · 2^nivel <= 4096)"));
         }
-        if ![self.f_cont, self.eta_col, self.eta_arco, self.f_acr]
+        if ![self.f_cont, self.eta_min, self.eta_arco, self.f_acr]
             .iter()
             .all(|x| (0.0..=1.0).contains(x))
         {
             return Err(invalid(
-                "se requiere que f_cont, eta_col, eta_arco y f_acr estén entre 0 y 1",
+                "se requiere que f_cont, eta_min, eta_arco y f_acr estén entre 0 y 1",
             ));
+        }
+        if !(self.h1_choque_km >= 0.0 && self.h2_choque_km >= self.h1_choque_km) {
+            return Err(invalid("se requiere 0 <= h1_choque_km <= h2_choque_km"));
         }
         if !(self.p_arc_oc >= 0.0
             && self.p_arc_cont >= 0.0
@@ -800,13 +830,14 @@ impl TectonicaCfg {
             && self.lambda_esp >= 0.0
             && self.l_losa_km > 0.0
             && self.a_min_myr >= 0.0
+            && self.da_fz_myr >= 0.0
             && self.v_inv_km_myr >= 0.0
             && self.a_inv_myr >= 0.0
             && self.t_rot_joven_myr >= 0.0
             && self.t_rot_viejo_myr >= self.t_rot_joven_myr)
         {
             return Err(invalid(
-                "se requiere p_arc_oc, p_arc_cont, p_se, s_ero_km, v_ero_cm_anio, d0_flujo_km2_myr >= 0, c_ref_km, tau_del_myr, h_del_km, h_flujo_km, l_borde_km, x_ini_km, tau_muerte_myr, l_losa_km > 0, lambda_esp, v_inv_km_myr, a_inv_myr >= 0, 0 <= t_rot_joven_myr <= t_rot_viejo_myr y 0 < theta_tr_grados < 90",
+                "se requiere p_arc_oc, p_arc_cont, p_se, s_ero_km, v_ero_cm_anio, d0_flujo_km2_myr >= 0, c_ref_km, tau_del_myr, h_del_km, h_flujo_km, l_borde_km, x_ini_km, tau_muerte_myr, l_losa_km > 0, lambda_esp, da_fz_myr, v_inv_km_myr, a_inv_myr >= 0, 0 <= t_rot_joven_myr <= t_rot_viejo_myr y 0 < theta_tr_grados < 90",
             ));
         }
         if !(self.rho_w < self.rho_s
