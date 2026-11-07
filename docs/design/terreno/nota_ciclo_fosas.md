@@ -2,9 +2,12 @@
 
 Documento de diseño. Complementa a diseno_relieve_tectonico.md (incremento 4 del terreno), a nota_bordes_placa.md y a adenda_balance_corteza.md (versión 5).
 
-Estado: versión 5. Diseño cerrado.
+Estado: versión 6. Diseño cerrado.
 
-Cambios de la versión 5:
+Cambios de la versión 6:
+- Se retiran las zonas de fractura de la versión 5. En la Tierra real, la regla apenas encuentra candidatos (417 km). En el modelo actúa sobre escalones de edad enormes (fondo de 140–300 Myr junto a fondo de 20–100) que la Tierra no tiene, así que antes hay que saber de dónde salen esos escalones.
+
+Cambios de la versión 5 (retirados en la versión 6):
 - Las zonas de fractura dentro de los océanos (escalones de edad del fondo dentro de una misma placa) pasan a ser candidatas al nacimiento espontáneo (6.4). Sin ellas, ningún nacimiento alcanza el fondo viejo del interior de las placas grandes.
 - Se aceptan las decisiones de implementación de la versión 4: microplacas desde ~0,2 Mkm²; margen pasivo solo en continentes de al menos (3·L_borde)²; el borde de un choque no es extremo de fosa; el escenario India–Asia va sin invasión.
 
@@ -158,7 +161,6 @@ El estado viaja con la celda de margen de la placa de arriba, como el resto de c
 | τ_muerte | Tiempo con convergencia nula o negativa tras el que muere una fosa | 10 | Myr | Supuesto; ajustable |
 | λ_esp | Probabilidad de nacimiento espontáneo en una falla transformante con contraste de edad, por km y por Myr, por cada 100 Myr de edad por encima de a_min | calibrar (hoy 4·10⁻⁶) | 1/(km·Myr) | Calibrado: debe ser raro, con pocos casos en la Tierra actual |
 | a_min | Edad mínima del fondo para un nacimiento espontáneo | 140 | Myr | Supuesto físico; rango 100–180 |
-| Δa_fz | Escalón de edad entre celdas vecinas de una placa oceánica a partir del cual se considera zona de fractura | 10 | Myr | Supuesto: las grandes zonas de fractura separan fondos con decenas de Myr de diferencia; rango 5–20 |
 | v_inv | Velocidad media con la que una fosa se alarga al invadir, a lo largo del borde | calibrar | km/Myr | Calibrado contra la vida de los márgenes pasivos y la edad del fondo. No hay una medida directa; resume también la fase lenta inicial |
 | a_inv | Edad mínima del fondo para que una fosa pueda invadirlo | 60 | Myr | Supuesto: el fondo que se hunde bajo las Antillas Menores es del Cretácico; rango 40–100 |
 | t_rot,joven / t_rot,viejo | Tiempo entre el inicio de un choque y la rotura de la losa, para losa joven / vieja | 10 / 25 | Myr | Modelos numéricos (van Hunen y Allen 2011) |
@@ -213,13 +215,7 @@ El extremo que avanza se une a los bordes existentes con una falla transformante
 
 La invasión se detiene cuando el fondo de al lado tiene menos de a_inv, cuando llega a otro borde o cuando la fosa muere.
 
-**Nacimiento espontáneo (raro).** Candidatos:
-- fallas transformantes entre placas, y
-- zonas de fractura dentro de una placa oceánica, es decir, escalones de edad del fondo mayores que Δa_fz entre celdas vecinas de la misma placa.
-
-En ambos casos hace falta un contraste de edad mayor que la mitad de la edad del lado viejo. Así empezó Izu-Bonin-Marianas, en una vieja zona de fractura. Y así nacen dentro de los océanos viejos los arcos de islas que luego chocan con los márgenes y acaban cerrando el océano, como en el cierre del antiguo océano Iapetus. Los márgenes pasivos no son candidatos.
-
-Cuando nace en una zona de fractura, la fosa sigue el escalón de edad. Sus extremos se unen a los bordes existentes con fallas transformantes, y el lado que queda se separa como placa nueva o microplaca, con la misma maquinaria que la invasión.
+**Nacimiento espontáneo (raro).** Solo en fallas transformantes entre placas con un contraste de edad entre lados mayor que la mitad de la edad del lado viejo, como en Izu-Bonin-Marianas. Los márgenes pasivos no son candidatos. Las zonas de fractura dentro de las placas quedan como ampliación futura, a la espera del diagnóstico de los escalones de edad del modelo.
 
 Se divide cada falla candidata en segmentos de longitud L_borde. Para cada segmento con fondo de más de a_min en el lado viejo:
 
@@ -346,7 +342,7 @@ Todas las reglas son funciones puras del estado. El nacimiento espontáneo usa e
 
 1. **Tirón de la losa.** Depende de la edad del fondo, no de la longitud de la losa. Se añade el factor de 6.5.
 2. **División de placas.** Existe (la usan los rifts y los saltos de dorsal), pero corta por un círculo. Para los márgenes pasivos se corta por el tipo de corteza (6.4); el resto se reutiliza.
-3. **Zonas de fractura.** No se guardan como trazas, pero se detectan en cada paso como escalones de edad del fondo dentro de una misma placa (6.4).
+3. **Zonas de fractura.** No se guardan. Detectarlas como escalones de edad (versión 5) no funcionó: en la Tierra casi no hay candidatos, y en el modelo los escalones grandes parecen un artefacto pendiente de diagnóstico.
 4. **Diagnóstico del §0.** Hecho: el exceso está en fosas rápidas. Objetivos del §10 corregidos.
 
 ---

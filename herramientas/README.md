@@ -160,19 +160,25 @@ Las otras pruebas exploratorias:
 - `calibracion_relajacion`: cuánto tarda la corteza engrosada de India–Asia en volver a 38 km, con cada `E_1`, `n_ero` y `D_0`;
 - `calibracion_flujo_lateral`: espesor máximo y meseta de India–Asia con cada `D_0`;
 - `diagnostico_pilas`: dos pasadas de la misma deriva. La primera halla los pasos en que alguna etapa deja una muestra por encima de `UMBRAL`, aunque otra la baje en el mismo paso. La segunda sigue esa muestra etapa a etapa, con su placa, su borde más cercano y sus vecinas;
-- `diagnostico_fondo_viejo`: dónde queda al final el fondo de más de 180 Myr (en qué placa, a qué distancia de su fosa y de su orilla continental).
+- `diagnostico_fondo_viejo`: dónde queda al final el fondo de más de 180 Myr (en qué placa, a qué distancia de su fosa y de su orilla continental);
+- `diagnostico_procedencia_del_fondo` (nota de fosas v6): cada 100 Myr, de dónde salen los escalones de edad enormes y cuánto del fondo de más de 180 Myr y de los márgenes pasivos viejos viene del estado inicial. Usa la procedencia de cada muestra (`Corteza.proc`: cómo nació, con qué evento llegó a su placa y por qué vía le llegó su corteza continental), que el modelo no lee.
+
+`deriva_en_varias_semillas` da además:
+- lo que choca y lo que se pierde en los choques por la clase de la corteza que entra y por la vía que la puso allí;
+- el perfil de los márgenes pasivos al final, con la anchura de su franja estirada (adenda v8).
 
 ## La tabla de cierre del planeta
 
 ```bash
-herramientas/planeta_semillas.py                        # semillas 42,1,2,3,4, a la vez (~4 min)
+herramientas/planeta_semillas.py                        # semillas 42,1,2,3,4, a la vez (~5 min)
 herramientas/planeta_semillas.py --semillas 7,8 --set tectonica.e1_km_myr=0.004
 ```
 
 Corre el planeta entero (génesis, relieve y un año de clima) con cada semilla y lo analiza como la batería (`analisis/terreno.py`). Da la media, la desviación y los extremos de cada fila:
 - **frente a ETOPO** (la roca sin hielo con su rebote, a 26 km): tierra emergida, altura media de la tierra, fracción por debajo de 200 m, pendiente media y anchura de la plataforma;
+- **el nivel del mar al final de la deriva y la profundidad media del océano**, frente a la Tierra (0 y 3 667 m; la Tierra real con la regla del modelo da −150 m, `tierra_regla_modelo.py`);
 - **frente a los objetivos de la adenda y de la nota de fosas:** corteza máxima, edad del fondo, `f_cont`, cambio de volumen, velocidad de las placas, sedimento al mar, longitud de fosa, área que se hunde, vida y edad de los márgenes pasivos (Bradley 2008) y tiempo;
-- **los choques, solo diagnóstico, frente a Bird CCB:** longitud, convergencia, duración y pérdida antes y después de la rotura de la losa.
+- **los choques, frente a Bird CCB:** longitud, convergencia, duración y pérdida antes y después de la rotura de la losa; la pérdida total, frente a 0,4–0,7 AU (adenda v7).
 
 Escribe cada corrida en `output/semillas/` y el resumen en `output/semillas/cierre.json`. El tiempo de cada semilla está medido con las cinco a la vez: el de una sola es el de la batería.
 

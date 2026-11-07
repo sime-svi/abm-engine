@@ -307,6 +307,8 @@ impl Deriva {
                 };
                 let f = self.malla.area[l as usize] / self.malla.area[lq as usize];
                 c.sed *= f;
+                c.proc.lote = self.lotes.len() as u32;
+                self.lotes.push(lote::SUAVIZADO);
                 self.placas[q as usize].insertar(lq, c, k);
             }
             self.dueno[ku] = q;
@@ -415,11 +417,11 @@ impl Deriva {
                 match self.placas[q as usize].get_mut(lq) {
                     Some(d) => {
                         // Ya hay una muestra de q ahí: se suman con su volumen.
-                        d.sumar_hc(c.hc * f, c.arco, rs, rc, h_cont_min);
+                        d.sumar_hc(c.hc * f, c.arco, rs, rc, h_cont_min, via::ISLAS);
                         d.sed += c.sed * f;
                     }
                     None => {
-                        let c2 = Corteza {
+                        let mut c2 = Corteza {
                             h: if c.cont {
                                 c.h * f
                             } else {
@@ -427,8 +429,11 @@ impl Deriva {
                             },
                             hc: c.hc * f,
                             sed: c.sed * f,
+                            proc: c.proc.escalada(f),
                             ..c
                         };
+                        c2.proc.lote = self.lotes.len() as u32;
+                        self.lotes.push(lote::ISLA);
                         self.placas[q as usize].insertar(lq, c2, k);
                     }
                 }

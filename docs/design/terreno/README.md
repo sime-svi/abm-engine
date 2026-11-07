@@ -489,3 +489,35 @@ Detalle técnico en `incremento-4-diseno.md` §9–§11; la adenda, en `adenda_b
 - Qué curva de profundidad usar.
 - Si la regla de las zonas de fractura debe ser otra.
 - Si los continentes deben estirarse al partirse, para que tengan bordes finos que perder al chocar.
+
+### Una curva de profundidad real, rifts que estiran y de dónde viene el fondo (07-11-2026, sexta parte)
+
+**Lo que decidió el responsable.**
+- **La profundidad del fondo oceánico sigue ahora a la Tierra real.** El fondo se hunde al envejecer hasta unos 80 millones de años y después se queda a unos 5,3 km. Con las edades reales, el mar de la Tierra quedaría a 150 m de su sitio, y no a 386.
+  - Esos 150 m son mesetas, montes submarinos y abombamientos de puntos calientes, que el modelo aún no tiene. Quedan apuntados como mecanismo pendiente.
+- **Se retiran las fosas que nacían en las zonas de fractura.** En la Tierra casi no hay candidatas. En el modelo actuaban sobre unos escalones de edad enormes que la Tierra no tiene. Antes hay que saber de dónde salen esos escalones.
+- **Los continentes se estiran antes de partirse.** Cuando un continente se abre, la corteza de los bordes se estira como un chicle durante unos millones de años, hasta que en el eje queda muy fina (10 km) y se rompe. Entonces empieza el fondo oceánico.
+  - Cada orilla queda con una rampa de unos 150 km de corteza cada vez más fina hacia el mar. Es el margen estirado, sobre el que se forman las plataformas continentales.
+  - Se conserva todo el volumen de corteza. Antes, el modelo adelgazaba los bordes al 70 % y tiraba lo que quitaba.
+  - La India de las pruebas de choque tiene ahora ese margen estirado.
+
+**De dónde viene cada trozo de fondo.** Para saber qué produce los escalones de edad enormes, cada muestra de corteza lleva ahora una ficha de su procedencia, que el modelo nunca lee:
+- cómo nació: estado inicial, dorsal, hueco que quedó al moverse las placas o rift;
+- si llegó a su placa al fundirse dos placas, en un salto de dorsal o en un rift;
+- por qué vía le llegó la corteza continental que tenga encima: un arco, un choque, el flujo lateral, la convergencia difusa…
+
+Con esa ficha el planeta da exactamente los mismos números: solo se lleva la cuenta.
+
+**Lo que salió.**
+- **El mar del modelo sube a su sitio.** Al final de la deriva queda a unos 300 m del dato, frente a 500–1 000 antes. El océano mide 3,95 km de media (la Tierra, 3,67) y las plataformas son algo más anchas: 8 km, frente a 5 (la Tierra, 43).
+- **Los choques pierden menos corteza:** 1,1 km³ al año, frente a 3,5. Pero el objetivo de la Tierra es 0,4–0,7, y no se alcanza.
+  - Casi lo único que se pierde es corteza de arco que el modelo deja de reconocer como arco en cuanto le llega algo de otra procedencia. En la Tierra, esos arcos se pegarían casi enteros al continente.
+  - La corteza continental fina casi no llega a los choques. Los márgenes estirados solo existen donde hubo un rift durante la deriva, y la mayoría de los continentes son los del principio, con bordes gruesos.
+- **Las cordilleras retienen más corteza.** Hace falta que su parte baja, caliente, se desparrame más deprisa hacia los lados para que no pasen de 70–80 km, como el Tíbet. Eso cuesta tiempo de cálculo: el planeta tarda ahora 230 s, frente a los 200 del presupuesto.
+- **Los escalones de edad enormes del fondo los fabrica la manera de representar las placas.** Sobre todo, el fondo nuevo que rellena los huecos entre placas donde no hay dorsal, y las muestras que se mueven sueltas de un sitio a otro. No vienen del estado inicial del planeta.
+- **El fondo viejo tampoco viene del estado inicial:** lo crea la propia deriva y luego ninguna fosa lo consume.
+- **Casi no hay continentes que se partan.** En 500 millones de años, el planeta tiene de uno a cuatro rifts. Por eso casi ningún borde de continente está estirado: sus márgenes tienen 35 km de corteza en la costa. En la Tierra, casi todos vienen de la rotura de Pangea. Es el ciclo de los supercontinentes, aún pendiente.
+- **Dos pruebas de los escenarios India–Asia ya no cumplen,** por el nivel del mar que da la curva real en ese escenario:
+  - una cordillera tarda en relajarse unos 240 millones de años (el objetivo era 100–200);
+  - la India va algo más deprisa de lo previsto tras romperse la losa.
+  - Su arreglo depende de decisiones del responsable.

@@ -1250,3 +1250,250 @@ Valores iniciales: `η_min` 0,5, `λ_esp` 4·10⁻⁶ y `Δa_fz` 10. «Las dos a
    - Después habrá que volver a calibrar `τ_del` y `D_0` con la v7.
 4. Después: calibrar `η_min`, `λ_esp` y `Δa_fz` (si sigue en la regla) con 5 semillas, y repetir la tabla de cierre. Ya tiene filas para el nivel del mar, la profundidad media, la pérdida total en los choques y los nacimientos en zonas de fractura.
 5. Siguen de §45: el ciclo de Wilson y el estado inicial; la ampliación futura de fosa y área; las agujas de sumar muestras y el sedimento máximo; la erosión con la exportación; la lluvia por latitudes; el acortamiento andino, la flexión, el retroceso de fosas y los casquetes.
+
+## 51. Decisiones del responsable y su implementación (2026-11-07 f)
+
+**Curva de profundidad.**
+- Se adopta la placa ajustada a la mediana del zócalo real: `d_∞` 5 310 m, `A_pl` 2 373 m, `τ_pl` 31 Myr, con la raíz de Parsons y Sclater hasta `t_x` = 20 Myr (§46).
+- Las mesetas oceánicas, los montes submarinos y los puntos calientes quedan como mecanismo pendiente: ~150 m de nivel del mar en la Tierra real (TREE).
+- La prueba de la curva comprueba que es continua y que baja menos de 200 m entre 80 y 150 Myr.
+
+**Nota de fosas v6: se retiran las zonas de fractura.**
+- Se quita su código: detección, sorteo, nacimiento y partición de la placa.
+- Se quitan también `da_fz_myr`, sus métricas, sus dos pruebas, su línea del informe y su fila de la tabla de cierre.
+- El nacimiento espontáneo vuelve a ser solo de transformantes.
+
+**Procedencia de cada muestra** (diagnóstico de la v6 y de los choques; `Corteza.proc`, que ninguna regla lee).
+- `nace`: cómo nació la muestra (estado inicial, dorsal, hueco de creación residual, rift estirado, continente que perdió su corteza).
+- `lote`: el último evento que juntó su corteza con la de otra placa o la separó de su madre (sutura, absorción, salto de dorsal o rift; `Deriva::lotes`).
+- `vias`: la corteza de tipo continental de la columna por la vía que la puso allí (arco, acreción, sedimento, choque, flujo lateral, difusa, dientes, islas, fusión, inicial, rift).
+  - Se reparte en proporción cuando se quita corteza y se escala cuando una muestra cambia de celda.
+  - En los choques se cuenta lo solapado y lo perdido por clase y por vía (`Deriva::diag_choque_km3`).
+- Diagnóstico nuevo: `diagnostico_procedencia_del_fondo`.
+- **No regresión:** sin la v5 y con la procedencia, el planeta (curva vieja y `f_rift`) es igual al de bd45fa6 con `Δa_fz` = 10⁹, sin contar las claves retiradas de la v5. Se comprobó leyendo los dos JSON.
+
+**Adenda v8 §6.10: rifts que estiran los bordes** (`deriva/rifts.rs`).
+- Al partirse una placa por un rift, cada lado con corteza continental junto al corte apunta su franja de partida.
+  - Es la corteza continental a menos de `W_0 = W_m·(h_0 + h_rot)/(2·h_0)` del corte, por las celdas de la placa.
+  - `h_0` es el espesor medio de la corteza continental a menos de `W_m` del corte.
+- En cada paso, la corteza nueva de la abertura junto a la franja pasa a corteza continental de la franja (`nace` = rift).
+- El volumen de la franja se reparte en una rampa por la distancia al eje:
+  - la franja mide `w = W_0 + e`, siendo `e` el área abierta en ese lado entre la longitud del rift;
+  - el espesor junto al eje es `h_0·(2·W_0/w − 1)`, y como mínimo `h_rot`.
+- Solo se mueve corteza entre las muestras de la franja, en orden fijo, así que el volumen se conserva exactamente.
+- Cuando `e` llega a `W_m − W_0`, ese lado se rompe y lo que se abre después es fondo oceánico.
+- **Se retira `f_rift`** (`H ← 0,7·H` a menos de `w_margen` del corte), con su sumidero provisional `F_rift`: estirar conserva el volumen. `w_margen_km` pasa a ser `W_m` (150 km) y se añade `h_rot_km` (10 km).
+- Prueba nueva: `un_rift_estira_sus_bordes_en_rampa_conservando_el_volumen_y_despues_abre_el_oceano`.
+  - Durante la fase de rift no nace fondo oceánico.
+  - El volumen continental cambia menos de 10⁻⁹.
+  - Al romperse, la rampa va de menos de 20 km junto al océano nuevo a más de 33 km a 200–300 km.
+- **La India de las pruebas de choque tiene su margen estirado:** una rampa de 35 km a `h_rot` en los `W_m` más cercanos a su borde.
+
+## 52. Lo que la base nueva cambia en los escenarios India–Asia
+
+Escenario de `un_gran_choque_no_apila_corteza_por_encima_de_80_km` (malla de 104 km, 50 Myr) y de `dos_continentes_chocan_frenan_y_levantan_una_cordillera` (208 km):
+
+| | Corteza máxima | India tras romperse la losa |
+|---|---|---|
+| Curva vieja, India uniforme | 88,3 km | 5,7 cm/año |
+| Curva nueva, India uniforme | 93,6 km | 6,0 |
+| Curva vieja, India estirada | 89,6 km | 5,7 |
+| Curva nueva, India estirada | 92,0 km | 6,0 |
+
+- El margen estirado apenas cambia el máximo (±1,5 km): la mayor parte de la India tiene corteza normal y con la v7 se queda entera.
+- **Lo que mueve las pruebas es la curva nueva, por el nivel del mar del escenario.**
+  - El escenario tiene un 29 % de continente, un océano de 80 y 150 Myr y el agua de la Tierra.
+  - Con Parsons y Sclater, su mar quedaba a −1 890 m; con la curva nueva, a −1 255 m. Asia está a +130–300 m sobre el dato.
+  - Así el orógeno sobresale menos sobre el mar y se erosiona más despacio (la erosión crece con la altura sobre el mar elevada a 2,5).
+
+**`D_0`, recalibrado contra su observación** (India–Asia, 70–80 km; en la v6 se eligió por 72 km a los 50 Myr). No es para tapar picos:
+
+| `D_0` (km²/Myr) | Máximo | A los 50 Myr | Relajación por debajo de 38 km |
+|---|---|---|---|
+| 50 | 92,0 | 87,1 | 231 Myr |
+| 100 | 88,8 | 81,8 | 250 |
+| 200 | 84,0 | 78,6 | 243 |
+| 400 | 79,5 | 75,5 | 242 |
+| 800 | 75,3 | 72,4 | 239 |
+| 1 600 | 71,8 | 69,8 | — |
+
+Con `τ_del` = 10 Myr (y `D_0` = 50), 83,6 km. Pero bajar `τ_del` aleja aún más la delaminación de su objetivo: 2,3 AU con la v7 frente a ≈1,1.
+
+**Dos pruebas quedan fuera por la base nueva, y no se tocan sus parámetros:**
+1. **`la_relajacion_de_un_orogeno_tarda_entre_100_y_200_myr`: 231–250 Myr con cualquier `D_0`** (149 con la curva vieja).
+   - `E_1` y `n_ero` se calibraron con esta prueba cuando el mar del escenario estaba a −1 890 m, una base irreal que inflaba la erosión.
+   - Subir la erosión para recuperarla aumentaría el sedimento al mar del planeta, que ya pasa del objetivo.
+   - Decide el responsable. Las opciones son:
+     - revisar el objetivo: los Urales conservan raíces de ~50 km tras 250 Myr;
+     - añadir el colapso posorogénico;
+     - o recalibrar la erosión.
+2. **`dos_continentes_chocan_frenan_y_levantan_una_cordillera`: tras romperse la losa, la India va a 5,8–6,0 cm/año frente al límite de 5,75** (la mitad de 11,5). Ya estaba al borde (5,7).
+   - Mientras la losa cuelga, la India va a 3,9 cm/año, un tercio, como la India real.
+   - Tras la rotura se acelera, por el giro que le dan las fosas de los lados (§40), mientras la real siguió frenando.
+   - `c_col` no puede arreglar las dos fases a la vez, y el responsable pidió no tocarlo (v4).
+
+## 53. `D_0` en el planeta (5 semillas, curva nueva, v7 y v8, `η_min` = 0,5)
+
+| `D_0` (km²/Myr) | 50 | 400 | 800 | Objetivo |
+|---|---|---|---|---|
+| Celdas·paso de más de 80 km | 84 480 | 18 659 | 7 036 | 0 |
+| Muestra más gruesa de la deriva (km) | 194 | 171 | 192 | 70–80 |
+| Pérdida en choques (AU) | 0,98 | 1,10 | 1,06 | 0,4–0,7 |
+| Delaminación (AU) | 2,59 | 2,26 | 2,44 | ≈1,1 |
+| Sedimento al mar (AU) | 3,33 | 3,51 | 3,68 | ≈1,8 |
+| ΔV_cont | −11,7 % | −10,2 % | −11,5 % | ±10 % |
+| Edad media del fondo en la deriva; más de 180 Myr al final | 93; 22 % | 93; 22 % | 90; 22 % | 64; < 1 % |
+| Márgenes que acaban: vida (Myr) | 110 | 111 | 116 | 130–180 |
+| Flujo lateral en el coste de la deriva (15 derivas a la vez) | 15–18 % | 29–36 % | 49–52 % | — |
+
+Se elige `D_0` = 400:
+- en India–Asia da 79,5 km de máximo y 75,5 a los 50 Myr, dentro de 70–80;
+- con 800 el flujo pasaría a la mitad del coste de la deriva, y el planeta, de los 200 s.
+
+## 54. Qué corteza se pierde en los choques (diagnóstico (c) del responsable)
+
+Mientras tanto se le aplica `η(h)` según su grosor (`h` = 7 km + `hc`, casi siempre `η_min`). Reparto de lo perdido en toda la deriva (5 semillas, `η_min` = 0,5; igual con `D_0` 50, 400 y 800):
+
+| Corteza que entra | Solapada | Perdida |
+|---|---|---|
+| Continental de menos de 20 km | 0,2 % | 1 % |
+| Continental de 20–35 km | 9–12 % | 20–21 % |
+| Continental de más de 35 km | 75–79 % | 0 |
+| De tipo continental sobre fondo oceánico, no de arco | 12–14 % | **78–79 %** |
+
+**La corteza sobre fondo oceánico que se pierde, por la vía que la puso allí:**
+
+| Vía | Fracción |
+|---|---|
+| Arco | 44 % |
+| Engrosamiento de un choque | 28 % |
+| Dientes (astillas de borde que pasan a otra placa) | 12–13 % |
+| Sedimento que pasó a corteza al sumarle corteza encima | 12–13 % |
+| Acreción, convergencia difusa y flujo lateral | ~1 % cada una |
+
+- **No es sedimento acrecionado ni restos de la convergencia difusa** (~1 % cada uno). Las astillas de borde son el 12–13 %.
+- **Casi la mitad es corteza de arco que dejó de contar como arco.**
+  - En `sumar_hc`, una columna es de arco solo si toda su corteza continental lo es. Basta con que le llegue algo que no es de arco (un choque, un diente, la difusa) para que toda la columna cuente como continental.
+  - Su grosor (7 km más `hc`) la deja por debajo de `h_1`, así que pierde con `η_min`.
+  - En la Tierra, esos arcos se acrecionarían casi enteros (`η_arco` = 0,9; Luzón en Taiwán).
+- **El 28 % es corteza que el engrosamiento de un choque puso en el fondo oceánico de la placa de arriba:** el frente reparte en cualquier corteza a menos de `W_min_orog`.
+- **La corteza continental fina (menos de 20 km) apenas entra en los choques, también con la v8** (0,2 % de lo solapado).
+  - Sí aparece la de los márgenes estirados: un 35 % de lo que se pierde de esa clase viene de los rifts.
+  - Pero la mayoría de los márgenes que chocan son los del estado inicial. Sus continentes tienen espesor normal hasta la costa y nunca se estiraron.
+
+## 55. Calibración de `η_min` y `λ_esp` (5 semillas; curva nueva, v7, v8 y `D_0` = 400)
+
+| | `η_min` 0,5; `λ_esp` 4·10⁻⁶ | `η_min` 0,25 | `λ_esp` 4·10⁻⁵ | `λ_esp` 4·10⁻⁴ | Objetivo |
+|---|---|---|---|---|---|
+| Pérdida en choques (AU) | 1,10 | 1,50 | 1,15 | 0,94 | 0,4–0,7 |
+| Nacimientos espontáneos por 100 Myr | 0,2 | 0,4 | 2,2 | 20,8 | raros |
+| Edad media del fondo en la deriva (Myr) | 93 | 89 | 90 | 98 | 64 |
+| Fondo de más de 180 Myr al final | 22 % | 19 % | 21 % | 25 % | < 1 % |
+| Márgenes que acaban: vida (Myr) | 111 | 116 | 109 | 115 | 130–180 |
+| Márgenes al final: edad media (Myr) | 227 | 213 | 210 | 213 | ~104 |
+
+- **`η_min` = 0,5, el techo de su rango.** La pérdida sube al bajarlo (0,25: 1,5 AU; 0: 2,1 AU en la ronda anterior), así que 0,4–0,7 AU no se alcanza en 0–0,5. El 78 % de lo que se pierde es la corteza sobre fondo oceánico de §54, sobre todo arcos que dejaron de contar como arco.
+- **`λ_esp` = 4·10⁻⁶, sin cambios.** Con 10 y 100 veces más nacimientos (2 y 21 por 100 Myr), ni la edad del fondo ni la de los márgenes se mueven más que la dispersión entre semillas (74–112 Myr de edad media). Los nacimientos en transformantes no llegan al fondo viejo del interior de las placas. Se deja el valor raro, como en la Tierra: pocos casos, como Izu-Bonin-Marianas.
+
+## 56. De dónde sale el fondo viejo y sus escalones (diagnóstico de la nota de fosas v6)
+
+`diagnostico_procedencia_del_fondo`, 5 semillas, al final de la deriva (500 Myr). Los escalones enormes son los de antes: fondo de más de `a_min` junto a fondo de menos de la mitad de su edad, dentro de una misma placa; 105 000–274 000 km.
+
+**(a) Su causa**, por el lote más reciente de los dos lados, si no llegaron juntos a la placa:
+
+| Causa | Fracción de la longitud |
+|---|---|
+| Relleno de huecos con fondo nuevo (creación residual, en tramos transformantes o convergentes) | 33–48 % |
+| «Dorsal»: los dos lados nacieron en dorsales, en el mismo lote | 20–44 % |
+| Suavizado de la pertenencia de los bordes oceánicos | 1–13 % |
+| Separación de un océano por invasión | 4–12 % |
+| Diente recolocado | 2–8 % |
+| Isla absorbida | 0–2 % |
+| Fusiones de placas (sutura, absorción) | 0–5 % |
+| Rift | 0–2 % |
+| Salto de dorsal | 0 % |
+| Fondo del estado inicial junto a fondo nuevo | 0–8 % (71–92 % a los 100 Myr) |
+
+- **Casi todo sale de la representación de las placas, no de procesos de la Tierra.**
+  - El relleno de huecos pone fondo de edad 0 junto a fondo viejo donde no hay dorsal.
+  - Los dientes, islas y suavizado mueven una muestra vieja a otro sitio.
+  - Las fusiones, los saltos de dorsal y los rifts suman menos del 6 %.
+- **La clase «dorsal» no tiene ningún evento marcado.** Dos fondos de dorsal del mismo linaje no deberían diferir en más de la mitad de su edad. Lo más probable son muestras ocultas bajo otra placa que reaparecen junto a fondo joven, también de la representación (sin medir).
+- **El estado inicial solo pesa al principio:** su campo de edades (ruido, sin dorsales) pone fondo de 0–150 Myr junto a las dorsales iniciales.
+
+**(b) Qué parte del fondo y de los márgenes viejos viene del estado inicial:**
+
+| | Total | Del estado inicial |
+|---|---|---|
+| Fondo de más de 180 Myr | 51–109 Mkm² (10–21 % del planeta) | 0–6 % (una semilla, 21 %) |
+| Márgenes pasivos de más de 180 Myr | 2 500–6 600 celdas | 1–11 % |
+| Todos los márgenes pasivos | 6 400–9 950 celdas | 1–5 % |
+
+- **El fondo y los márgenes viejos no son la herencia del estado inicial.** Los crea la deriva y sobreviven demasiado: en la Tierra, menos del 1 % del fondo pasa de 180 Myr.
+- Los márgenes de 600–650 Myr que quedan sí son del estado inicial, pero son pocos.
+
+## 57. Tabla de cierre (5 semillas, planeta entero; curva nueva, v7, v8, `D_0` = 400, `η_min` = 0,5)
+
+| | Modelo | Tierra u objetivo | v4 (§43) | |
+|---|---|---|---|---|
+| Tierra emergida | 0,334 ± 0,015 | 0,284 | 0,321 | ✗ |
+| Altura media de la tierra | 1 143 ± 158 m | 671 m | 1 207 | ✗ |
+| Tierra por debajo de 200 m | 0,068 ± 0,006 | 0,283 | 0,037 | ✗ |
+| Pendiente media (±25 km) | 0,0128 | 0,0052 | 0,0120 | ✗ |
+| Anchura de la plataforma | 8,2 ± 1,3 km | 42,8 km | 4,7 | ✗ |
+| **Nivel del mar al final de la deriva** | **−305 ± 144 m** | 0 (la Tierra real con la regla: −150) | −500 a −1 000 | — |
+| **Profundidad media del océano** | **3 952 ± 88 m** | 3 667 m | — | ✗ |
+| Corteza máxima al final / en toda la deriva | 79 ± 3 / 117 ± 14 km | 70–80 km | 75 / 99 | ✓ / ✗ |
+| Edad media del fondo al final; más de 180 Myr | 119 ± 28 Myr; 21,8 % | 64,2; < 1 % | 112; 18,9 % | ✗ |
+| `f_cont`; cambio de volumen | 0,318; −10,3 ± 4,6 % | 0,40; ±10 % | 0,313; −14,9 % | ✗ (por poco) |
+| Velocidad de las placas | 4,40 ± 0,39 cm/año | 4,39 | 4,55 | ✓ |
+| Sedimento al mar | 3,51 ± 0,71 AU | ≈1,8 | 2,56 | ✗ |
+| Longitud de fosa | 69 800 ± 5 900 km | ~51 000 ± 25 % | 68 400 | ✗ (×1,37) → ampliación futura |
+| Área que se hunde | 3,37 ± 0,30 km²/año | 2,7–3,4 | 3,55 | ✓ |
+| Márgenes pasivos: vida de los que acaban | 111 ± 6 Myr | 130–180 | 117 | ✗ |
+| Márgenes al final: edad media / máxima | 228 / 643 Myr | ~104 / ~180 | 212 / 650 | ✗ |
+| Choques: longitud, convergencia, duración | 12 100 km; 1,76 cm/año; 63 Myr | CCB 23 000 km; 1,87 | 8 700; 1,89; 71 | — |
+| Choques: pérdida con la losa / tras la rotura / total | 1,06 / 0,04 / 1,10 AU | total 0,4–0,7 | 2,40 / 1,14 / 3,54 | ✗ |
+| Tiempo de cálculo del planeta | 246 ± 24 s con cinco a la vez | 200 s | 191–203 con cinco | ✗ |
+
+**Lo que mejora.**
+- El nivel del mar sube de −500/−1 000 a −305 m.
+- La tierra baja de 200 m pasa del 3,7 al 6,8 % y la plataforma de 4,7 a 8,2 km, por la curva nueva y los márgenes estirados.
+- La pérdida en los choques baja de 3,5 a 1,1 AU y el cambio de volumen de −15 a −10 %.
+- El área que se hunde y la velocidad de las placas cumplen.
+
+**Los márgenes estirados casi no se ven en el planeta.** Perfil de los márgenes pasivos al final (`deriva_en_varias_semillas`, 5 semillas):
+
+| Distancia a la costa | 0–50 km | 50–100 | 100–150 | 150–200 | 200–300 |
+|---|---|---|---|---|---|
+| Espesor de la corteza | 35,2 km | 38,9 | 40,1 | 40,3 | 40,1 |
+
+- La franja estirada mide 65 km (25–75), frente a 100–300 por lado en la Tierra.
+- **La causa es que casi no hay rifts.** Con `τ_rift` = 150 Myr para todo el planeta, salen 1–4 rifts en 500 Myr (uno en la semilla 42). Su corteza estirada existe: 94 muestras de 15 km de media a los 400 Myr. Pero casi ningún margen pasivo del modelo nace de un rift.
+- En la Tierra casi todos los márgenes pasivos son de rift, de la rotura de Pangea. Es el ciclo de Wilson pendiente (§45.1): el planeta no forma un supercontinente ni lo rompe.
+
+**Lo que sigue sin cuadrar.**
+- El fondo viejo: no viene del estado inicial (§56).
+- El relieve.
+- `f_cont`.
+- El sedimento al mar, más alto que antes porque las cordilleras retienen más corteza (v7).
+- La pérdida en los choques (§54).
+- **El tiempo**: el flujo lateral con `D_0` = 400 y la corteza que retiene la v7 cuestan un 25 % más.
+
+## 58. Pendientes (2026-11-07 f, en orden; decide el responsable)
+
+1. **Dos pruebas de escenario fuera de su objetivo por la base nueva** (§52). Son la razón de que `main` no avance.
+   - La relajación del orógeno (231–250 Myr frente a 100–200). Su calibración (`E_1`, `n_ero`) se hizo con un mar del escenario a −1 890 m, una base irreal. Opciones: revisar el objetivo, el colapso posorogénico o recalibrar la erosión, aunque subirla empeora el sedimento al mar.
+   - El frenado de la India tras romperse la losa (5,8–6,0 cm/año frente a 5,75). La India se acelera tras la rotura; `c_col` no puede arreglar las dos fases y el responsable pidió no tocarlo.
+2. **El tiempo del planeta: 230 s solo (246 con cinco a la vez), frente a un presupuesto de 200.** Lo sube el flujo lateral de `D_0` = 400 con la corteza que retiene la v7. No se ha tocado el presupuesto.
+3. **La corteza de arco que deja de contar como arco al mezclarse** (§54). Es el 44 % de la pérdida sobre fondo oceánico, el 78 % del total. Hace falta una regla de origen por fracción en vez de todo o nada. Con eso, `η_min` podría calibrarse contra 0,4–0,7 AU.
+4. **Los escalones de edad y el fondo viejo salen de la representación de las placas** (§56): relleno de huecos con fondo nuevo, movimientos de muestras sueltas y separaciones. No vienen del estado inicial. El fondo de más de 180 Myr (22 %) lo crea la deriva y ninguna fosa lo consume.
+5. **Mecanismo pendiente: mesetas oceánicas, montes submarinos y puntos calientes** (~150 m de nivel del mar en la Tierra real).
+6. **Casi no hay rifts** (1–4 en 500 Myr con `τ_rift` = 150 Myr): los márgenes estirados de la v8 casi no aparecen (franja de 65 km frente a 100–300). Va con el ciclo de Wilson.
+7. Siguen de §45:
+   - el ciclo de Wilson;
+   - la ampliación futura de fosa (×1,37) y área;
+   - las agujas de sumar muestras y el sedimento máximo;
+   - la erosión con la exportación (3,5 AU frente a ≈1,8);
+   - la lluvia por latitudes;
+   - el acortamiento andino, la flexión, el retroceso de fosas y los casquetes.

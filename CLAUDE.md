@@ -59,6 +59,7 @@ Nunca implementes una capa N+1 si la capa N no produce datos estables y verifica
 
 ## 5. Convenciones de código
 
+- **Idioma:** responde siempre en español, también en los mensajes de cada sesión, no solo en los documentos y los commits. *(Confirmado por el responsable el 2026-11-07.)*
 - **Formato:** `cargo fmt` obligatorio antes de cada commit. Sin excepciones.
 - **Linter:** `cargo clippy -- -D warnings` debe pasar limpio. Los warnings son errores.
 - **Orientación a datos:** favorece Struct of Arrays sobre Array of Structs. Evita `Box<dyn Trait>` en los bucles calientes; el dispatch dinámico rompe la caché.

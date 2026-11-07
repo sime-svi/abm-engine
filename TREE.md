@@ -76,9 +76,10 @@ abm/
 │   │   │   └── tectonica/           # Relieve tectónico (incremento 4): deriva de placas → relieve de nacimiento
 │   │   │       ├── [x] mod.rs       # Génesis tectónica, estado final, interpolación a las celdas del terreno
 │   │   │       ├── [x] malla.rs     # Malla tectónica (nivel 2 del cubo) y cuaterniones
-│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques, delaminación, flujo lateral cúbico (adenda v6), erosión, sedimento (solo al océano mundial), eventos, márgenes pasivos
+│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques con η según el grosor (adenda v7), delaminación, flujo lateral cúbico (adenda v6), erosión, sedimento (solo al océano mundial), eventos, márgenes pasivos; procedencia de cada muestra (diagnóstico: cómo nació, lote, vías de su corteza continental)
 │   │   │       ├── [x] deriva/suavizado.rs # Borde suavizado (nota de bordes): pertenencia φ, normal, tipo de tramo, suavizado de la pertenencia, islas
-│   │   │       ├── [x] deriva/fosas.rs     # Ciclo de las fosas (nota de fosas v4): tramos difusos y activos, nacimientos (espontáneos solo en transformantes), invasión de transformantes y márgenes pasivos, polaridad, losa, rotura de la losa tras un choque, convergencia difusa
+│   │   │       ├── [x] deriva/fosas.rs     # Ciclo de las fosas (nota de fosas v6): tramos difusos y activos, nacimientos (espontáneos solo en transformantes), invasión de transformantes y márgenes pasivos, polaridad, losa, rotura de la losa tras un choque, convergencia difusa
+│   │   │       ├── [x] deriva/rifts.rs     # Adelgazamiento de los márgenes en los rifts (adenda v8 §6.10): la abertura se rellena estirando la corteza en rampa, conservando el volumen, hasta la rotura
 │   │   │       ├── [x] isostasia.rs # Altura isostática (con el agua), Parsons y Sclater, fosas, nivel del mar
 │   │   │       └── [x] historia.rs  # Eventos, métricas de cada Myr y cuentas de la corteza continental
 │   │   └── tests/
@@ -259,7 +260,10 @@ metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
   - **relieve tectónico, lo que falta para que sea el de la Tierra** (hallazgos de `incremento-4-diseno.md` §6–§7):
     1. ~~adenda de balance~~ y ~~nota de bordes~~ hechas. **Siguen:** las fuerzas de las placas (las fosas miden 2 veces las de la Tierra con cualquier `L_borde` de 100–300 km; nota de bordes §11.2); la exportación al mar (3,1 AU, ≈1,8): no depende de `τ_ero`; falta la delaminación (0,05 AU, ≈1,1): ¿raíces de los arcos o erosión no lineal? (decide el responsable); rifts que estiren conservando (`F_rift` provisional); los 3 pasos de 500 que pasan la alarma de 80 km; después, calibrar `τ_del` y revisar `f_acr`;
     2. inicio de subducción en márgenes pasivos viejos (hoy sobrevive un 15 % de fondo de más de 200 Myr);
-    3. fondo oceánico real (sedimento abisal, mesetas y montes submarinos, puntos calientes) y márgenes continentales sumergidos: con 1–3, el nivel del mar debería volver al dato sin forzar `H_nivel`. **Medido (2026-11-07, `tierra_regla_modelo.py`):** con las edades y el sedimento reales, la curva del modelo deja el mar a −386 m: el zócalo real deja de bajar hacia los 80 Myr y la curva de Parsons y Sclater no. Una curva de placa ajustada a la mediana real lo deja a −150 m. Los 125 m que faltan hasta la media son las mesetas, los montes submarinos y los puntos calientes;
+    3. **mecanismo pendiente: mesetas oceánicas, montes submarinos y puntos calientes**, unos 150 m de nivel del mar en la Tierra real.
+       - Con las edades y el sedimento reales, la curva de profundidad del modelo, que desde el 2026-11-07 es la placa ajustada a la mediana del zócalo real, deja el mar a −150 m. Con la media, que incluye esos relieves, quedaría a −25 m (`tierra_regla_modelo.py`, `incremento-4-diseno.md` §46).
+       - Con la curva vieja de Parsons y Sclater, a −386 m.
+       - Siguen pendientes el sedimento abisal propio y los márgenes continentales sumergidos;
     4. acortamiento andino, ciclo de Wilson (rifts por suturas viejas), flexión de la litosfera (cuencas de antepaís), microplacas;
     5. ~~reducir el remuestreo de la deriva~~ hecho: conservación exacta (2·10⁻¹⁵); la polaridad de la subducción y los papeles de un choque se deciden **por par de placas**, provisional: en la Tierra quién se hunde puede cambiar a lo largo de un mismo borde;
     5b. ~~umbral de transformantes a 20°~~ hecho (`theta_tr_grados`, nota de bordes);

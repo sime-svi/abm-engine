@@ -118,18 +118,25 @@ mod tests {
     }
 
     #[test]
-    fn parsons_y_sclater_continua_y_con_los_valores_del_documento() {
+    fn la_curva_de_placa_es_continua_y_se_aplana_como_el_fondo_real() {
+        // Raíz de Parsons y Sclater hasta t_x y placa ajustada a la mediana del zócalo real
+        // (incremento-4-diseno.md §46): 4 727 m a 40–50 Myr, ~5,2–5,3 km desde los 80.
         let c = TectonicaCfg::default();
         assert_eq!(profundidad_por_edad(&c, 0.0), 2500.0);
         let antes = profundidad_por_edad(&c, 20.0);
         let despues = profundidad_por_edad(&c, 20.0 + 1e-9);
         assert!(
-            (antes - despues).abs() < 10.0,
+            (antes - despues).abs() < 1.0,
             "salto de {} m",
             antes - despues
         );
-        assert!((profundidad_por_edad(&c, 40.0) - 4710.0).abs() < 30.0);
-        assert!((profundidad_por_edad(&c, 150.0) - 6100.0).abs() < 30.0);
+        assert!((profundidad_por_edad(&c, 45.0) - 4727.0).abs() < 50.0);
+        assert!((profundidad_por_edad(&c, 150.0) - 5290.0).abs() < 30.0);
+        let aplanado = profundidad_por_edad(&c, 150.0) - profundidad_por_edad(&c, 80.0);
+        assert!(
+            aplanado < 200.0,
+            "de 80 a 150 Myr baja {aplanado:.0} m (Parsons y Sclater: 556)"
+        );
     }
 
     #[test]

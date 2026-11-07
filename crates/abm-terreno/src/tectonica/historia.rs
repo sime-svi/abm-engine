@@ -79,8 +79,6 @@ pub struct MetricaMyr {
     pub f_col_au: f64,
     pub f_del_au: f64,
     pub f_den_au: f64,
-    /// Adelgazamiento de los rifts (AU): sumidero provisional, hasta la nota de rifts.
-    pub f_rift_au: f64,
     /// Sedimento de fosa que se pega al margen (AU; traslado interno).
     pub f_acr_au: f64,
     /// Material continental de las placas (km³): `V_cont` de la adenda, todas las muestras.
@@ -163,17 +161,6 @@ pub struct MetricaMyr {
     pub margen_fin_km: f64,
     #[serde(default)]
     pub margen_fin_vida_km_myr: f64,
-    /// Nota de fosas v5 (§6.4): nacimientos espontáneos en zonas de fractura del paso, intentos de
-    /// partir la placa por ellas y fallidos, y longitud (km) de los escalones de edad de más de
-    /// `Δa_fz` dentro de las placas oceánicas y de los que cumplen la regla del nacimiento.
-    #[serde(default)]
-    pub nacimientos_zf: u32,
-    #[serde(default)]
-    pub separar_zf: [u32; 2],
-    #[serde(default)]
-    pub zf_escalon_km: f64,
-    #[serde(default)]
-    pub zf_candidata_km: f64,
 }
 
 /// Cuentas del material continental (km³) a lo largo de la deriva (adenda de balance §6 y §8).
@@ -219,9 +206,6 @@ pub struct CuentasCorteza {
     pub delaminacion_km3: f64,
     /// Corteza que el flujo lateral pasa de una columna gruesa a sus vecinas (§6.6b; traslado).
     pub flujo_lateral_km3: f64,
-    /// Adelgazamiento de los rifts (`H ← f_rift·H`): sumidero provisional. En la Tierra estirar
-    /// conserva el volumen; se revisa en la nota de rifts.
-    pub rift_km3: f64,
     /// Erosión de la génesis (§6.7, traslado interno): llega al mar (`F_den`) o a cuencas cerradas.
     pub erosion_km3: f64,
     pub sedimento_al_mar_km3: f64,
@@ -260,7 +244,6 @@ impl CuentasCorteza {
             - self.choque_perdida_km3
             - self.choque_sin_sitio_km3
             - self.delaminacion_km3
-            - self.rift_km3
             - self.sedimento_sin_destino_km3
     }
 }
@@ -327,7 +310,6 @@ pub struct BalanceMedio {
     pub choques_au: f64,
     pub delaminacion_au: f64,
     pub sedimento_al_mar_au: f64,
-    pub rift_au: f64,
     /// Fondo oceánico que se hunde y que se crea (km²/año).
     pub area_subducida_km2_anio: f64,
     pub area_creada_km2_anio: f64,
@@ -409,15 +391,4 @@ pub struct BalanceMedio {
     pub duracion_media_choques_myr: f64,
     #[serde(default)]
     pub choques_terminados: u32,
-    /// Nota de fosas v5 (medias tras el rodaje): nacimientos en zonas de fractura por 100 Myr,
-    /// fracción de los intentos de partir la placa que fallan, y longitud media de los escalones
-    /// de edad de más de `Δa_fz` y de los candidatos (km).
-    #[serde(default)]
-    pub nacimientos_zf_100myr: f64,
-    #[serde(default)]
-    pub separar_zf_fallidos_frac: f64,
-    #[serde(default)]
-    pub zf_escalon_km: f64,
-    #[serde(default)]
-    pub zf_candidata_km: f64,
 }

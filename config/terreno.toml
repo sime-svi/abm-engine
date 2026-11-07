@@ -127,9 +127,9 @@ h_cont_min_km = 20.0       # un arco oceánico más grueso pasa a continental
 # Fondo oceánico (Parsons y Sclater, 1977; §5.3)
 d_r_m        = 2500.0
 c_hs         = 350.0
-d_inf_m      = 6400.0
-a_pl_m       = 3200.0
-tau_pl_myr   = 62.8
+d_inf_m      = 5310.0       # fondo viejo: placa ajustada a la mediana del zócalo real (Seton + GlobSed, decisión del responsable 2026-11-07; tierra_regla_modelo.py)
+a_pl_m       = 2373.0       # continua con la raíz en t_x
+tau_pl_myr   = 31.0         # el zócalo real deja de bajar hacia los 80 Myr (antes, Parsons y Sclater: 6 400 / 3 200 / 62,8)
 t_x_myr      = 20.0
 d_fosa_m     = 3000.0
 w_fosa_km    = 50.0
@@ -150,11 +150,11 @@ eta_arco     = 0.9         # choque arco–continente: queda arriba (medido: Luz
 h_del_km     = 50.0        # la base de la corteza pasa a eclogita (físico: 1,2–1,5 GPa)
 tau_del_myr  = 25.0        # delaminación del exceso (calibrado, 5 semillas con D_0 = 50: 0,71 AU frente a 0,46 con 50 Myr; India–Asia igual). Caída convectiva de una raíz: 10–30 Myr
 h_flujo_km   = 50.0        # por encima, la corteza inferior caliente fluye hacia los lados (adenda v3 §6.6b; físico, 45–60)
-d0_flujo_km2_myr = 50.0    # D_0 (adenda v6: D = D_0·(c/c_ref)³, c = h_c − h_flujo). Calibrado con India–Asia (70–80 km): 72 km a los 50 Myr (con 100, 69; con 1600, 61). ~2·10²⁰ Pa·s en un canal de 10 km (Clark y Royden 2000: 10¹⁸–10²¹)
+d0_flujo_km2_myr = 400.0   # D_0 (adenda v6: D = D_0·(c/c_ref)³, c = h_c − h_flujo). Recalibrado con India–Asia (70–80 km) tras la adenda v7 y la curva de profundidad nueva: 75,5 km a los 50 Myr y 79,5 de máximo (con 50: 87 y 92; con 800: 72 y 75, pero el flujo pasa a la mitad del coste de la deriva). ~2,5·10¹⁹ Pa·s en un canal de 10 km (Clark y Royden 2000: 10¹⁸–10²¹)
 c_ref_km     = 10.0        # espesor de canal de referencia (normalización, no física)
 w_min_orog_km = 150.0
-w_margen_km  = 150.0
-f_rift       = 0.7
+w_margen_km  = 150.0       # W_m: anchura de la franja estirada a cada lado de un rift al romperse (adenda v8 §6.10; físico, 100–300)
+h_rot_km     = 10.0        # espesor de la corteza junto al eje al romperse (físico: menos de 10–15 km; 5–15)
 # Dinámica de placas (§5.5)
 f_sp         = 1.0         # tirón de la placa (referencia de las fuerzas)
 f_rp         = 0.2         # empuje de dorsal
@@ -171,10 +171,9 @@ l_borde_km   = 150.0       # radio del borde suavizado (calibrado contra los bor
 # Ciclo de vida de las fosas (nota_ciclo_fosas.md v2). W_dif, la franja de la convergencia difusa, es L_borde.
 x_ini_km     = 150.0       # convergencia acumulada para que nazca una fosa (Gurnis et al. 2004: 100–150 km; Li y Gurnis 2023: ~200)
 tau_muerte_myr = 10.0      # sin convergencia durante este tiempo, la fosa muere (supuesto)
-lambda_esp   = 4.0e-6      # nacimiento espontáneo en transformantes y zonas de fractura con contraste de edad (nota v5 §6.4), por km y Myr y por 100 Myr de edad sobre a_min: raro (~0,2–0,6 por 100 Myr)
+lambda_esp   = 4.0e-6      # nacimiento espontáneo, solo en transformantes con contraste de edad (nota de fosas v6), por km y Myr y por 100 Myr de edad sobre a_min: raro (~0,2–0,6 por 100 Myr)
 l_losa_km    = 800.0       # losa con la que el tirón es pleno (llega a 660 km con 45–60°; 660–1000)
-a_min_myr    = 140.0       # edad mínima del fondo para un nacimiento espontáneo en una transformante o una zona de fractura (supuesto físico; 100–180)
-da_fz_myr    = 10.0        # escalón de edad entre celdas vecinas de una placa oceánica que hace zona de fractura, candidata al nacimiento espontáneo (nota v5 §6.4; supuesto, 5–20)
+a_min_myr    = 140.0       # edad mínima del fondo para un nacimiento espontáneo en una transformante (supuesto físico; 100–180)
 v_inv_km_myr = 25.0        # una fosa se alarga desde su extremo por transformantes y márgenes pasivos (nota v4 §6.4). Calibrado, 5 semillas: la vida de los márgenes que acaban apenas cambia (91–124 Myr con 0–150) y es la más cercana a 130–180 con 25; Antillas Menores y Escocia, ~1 000–1 500 km en 40–50 Myr
 a_inv_myr    = 60.0        # edad mínima del fondo que una fosa puede invadir (supuesto: Antillas Menores, fondo cretácico; 40–100)
 t_rot_joven_myr = 10.0     # la losa se rompe tras un choque: a los 10 Myr si es joven... (van Hunen y Allen 2011)

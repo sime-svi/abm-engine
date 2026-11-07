@@ -63,6 +63,12 @@ def prof_gdh1(t):
     return 2600.0 + 365.0 * math.sqrt(t) if t < 20.0 else 5651.0 - 2473.0 * math.exp(-0.0278 * t)
 
 
+def prof_ps77(t):
+    """Parsons y Sclater (1977) con su aplanamiento, la curva del modelo hasta el 2026-11-07 (m)."""
+    t = max(t, 0.0)
+    return 2500.0 + 350.0 * math.sqrt(t) if t <= 20.0 else 6400.0 - 3200.0 * math.exp(-t / 62.8)
+
+
 def prof_raiz(c, t):
     """La raíz de la edad sin límite, con los parámetros del modelo (m)."""
     return c['d_r_m'] + c['c_hs'] * math.sqrt(max(t, 0.0))
@@ -303,6 +309,7 @@ def main():
         ('modelo_rho_s_2000', mod, k_2000, math.inf),
         # Qué parte viene del fondo joven: la regla solo hasta 80 Myr, el resto como en la Tierra.
         ('modelo_solo_hasta_80_myr', mod, k_sed, 80.0),
+        ('parsons_sclater_1977', prof_ps77, k_sed, math.inf),
         ('gdh1', prof_gdh1, k_sed, math.inf),
         ('raiz_sin_limite', lambda t: prof_raiz(c, t), k_sed, math.inf),
     ]

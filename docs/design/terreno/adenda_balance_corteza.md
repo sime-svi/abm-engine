@@ -2,7 +2,10 @@
 
 Documento de diseño. Complementa a diseno_relieve_tectonico.md (incremento 4 del terreno).
 
-Estado: versión 7. Diseño cerrado.
+Estado: versión 8. Diseño cerrado.
+
+Cambios de la versión 8:
+- Los rifts adelgazan la corteza de los bordes antes de que nazca el océano (6.10). Así se forman márgenes estirados como los reales, sobre los que se asientan las plataformas continentales, y la regla de pérdida en los choques (6.5) tiene corteza fina sobre la que actuar.
 
 Cambios de la versión 7:
 - La pérdida en los choques depende del grosor de la corteza que entra (6.5). Se pierde sobre todo el margen adelgazado; la corteza de grosor normal se queda y engruesa la cordillera. Con un η_col fijo de 0,5, los choques de la Tierra actual perderían 7–9 AU, frente a los 0,4–0,7 medidos.
@@ -149,6 +152,8 @@ Todo el sedimento cuenta como material continental, porque en este modelo su ún
 | f_acr | Fracción del sedimento que se pega a un margen acrecionario | 0,3 (inicial) | adimensional | Calibrado: acreción global ≈0,3 AU frente a 1,0–1,65 AU subducidos |
 | η_min | Fracción que se conserva de la corteza más fina (margen adelgazado) en un choque continente–continente | 0,5 (inicial) | adimensional | Calibrado dentro de 0–0,5 con la pérdida media a largo plazo en los choques, 0,4–0,7 AU. El 0,5 de India–Asia es su techo |
 | h_1 / h_2 | Grosor por debajo del cual la corteza que entra se comporta como margen adelgazado / por encima del cual es corteza normal que se conserva entera | 20 / 35 | km | Físico: los márgenes estirados tienen 10–30 km; la corteza continental normal, 35–40 |
+| W_m | Anchura de la franja de corteza estirada a cada lado de un rift, al romperse | 150 | km | Físico: los márgenes pasivos reales tienen franjas estiradas de unos 100–300 km; se puede mover en ese rango |
+| h_rot | Grosor de la corteza junto al eje en el momento de la rotura, cuando empieza el fondo oceánico | 10 | km | Físico: junto al límite océano–continente la corteza estirada baja a menos de 10–15 km; rango 5–15 |
 | η_arco | Fracción conservada en un choque arco–continente | 0,9 | adimensional | Medido: el arco de Luzón se acreciona casi un 90 % en Taiwán |
 | h_del | Espesor a partir del cual la base de la corteza se vuelve eclogita y se desprende | 50 | km | Físico (presiones de 1,2–1,5 GPa); rango 45–55 |
 | τ_del | Tiempo característico de la delaminación del exceso | 50 (inicial) | Myr | Calibrado: delaminación global ≈1,1 AU y espesor máximo de 70–80 km |
@@ -280,6 +285,22 @@ V_cont(t + Δt) − V_cont(t) = (F_arc − F_SE − F_sed − F_col − F_del) �
 
 El error relativo debe ser como mucho ε_cons. Si no se cumple, el test falla. El remuestreo, la erosión con su sedimento y la acreción no aparecen en la ecuación porque solo trasladan volumen.
 
+### 6.10 Adelgazamiento de los márgenes en los rifts
+
+Un continente no se parte en seco. Antes de que nazca fondo oceánico, la corteza se estira y se adelgaza durante millones de años a lo largo de una franja ancha, como un chicle del que se tira. Cuando por fin se rompe, cada orilla queda con un margen de corteza cada vez más fina hacia el océano. Ese margen fino flota más bajo, el mar lo cubre y el sedimento lo rellena: sobre él se forman las plataformas continentales.
+
+**Fase de rift.** Cuando un rift corta corteza continental de grosor h_0, la abertura de las primeras etapas no se rellena con fondo oceánico. Se rellena estirando la corteza continental de una franja de anchura W_0 a cada lado, conservando su volumen. Al final de la fase, el perfil de cada lado es una rampa lineal: grosor h_0 en el borde interior de la franja y h_rot junto al eje, a lo largo de W_m. Por conservación del volumen:
+
+W_0 = W_m · (h_0 + h_rot) / (2 · h_0)
+
+La extensión total antes de la rotura es E_rot = 2 · (W_m − W_0). Con los valores por defecto (h_0 = 35 km, h_rot = 10 km, W_m = 150 km) salen W_0 ≈ 96 km y E_rot ≈ 107 km.
+
+**Rotura.** Cuando la separación acumulada del rift llega a E_rot, la corteza se rompe junto al eje y empieza a nacer fondo oceánico normal, como hasta ahora.
+
+Durante la fase de rift, el reparto entre celdas sigue la rampa, en un orden fijo, y el volumen continental se conserva exactamente. La isostasia ya existente hunde la corteza fina, y el sedimento la rellena hasta la plataforma (−130 m).
+
+**Ampliación futura.** El hundimiento térmico de los márgenes después de la rotura (unos 2–3 km en 100 Myr en la parte distal) y los márgenes hiperextendidos, donde la corteza llega casi a desaparecer.
+
 ---
 
 ## 7. Eventos discretos
@@ -344,6 +365,8 @@ Relación con otros trabajos:
 | f_cont al final | 0,40 ± 0,03 (criterio propuesto) | — |
 | Relajación de la corteza engrosada | vuelve a 35–38 km en 100–200 Myr | Clift et al. (arcos y continentes) |
 | Espesor máximo de corteza | 70–80 km | Tíbet, Andes centrales |
+| Anchura de la franja estirada de los márgenes pasivos | 100–300 km por lado | Perfiles de márgenes pasivos reales |
+| Anchura media de la plataforma continental | ≈43 km, medida igual que en ETOPO | ETOPO 2022 |
 | Área de fondo oceánico que se hunde (igual a la que se crea en las dorsales) | 2,7–3,4 km²/año | Cogné y Humler 2006; Rowley 2002; Bird 2003 |
 | Longitud de bordes por tipo (fosas, dorsales, fallas transformantes) | La de los bordes de Bird (2003) proyectados sobre la misma malla y medidos con el mismo método | Bird 2003 |
 | Ciclo de supercontinentes | más creación al romperse, más destrucción al juntarse | Stern y Scholl 2010 |

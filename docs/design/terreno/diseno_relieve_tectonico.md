@@ -149,12 +149,12 @@ Cortial et al. (2019), "Procedural Tectonic Planets" (Computer Graphics Forum, E
 | `H_nivel` | espesor continental que queda al nivel del mar (relación empírica terrestre; ver §6.6) | 32 | km |
 | `H_cont_min` | espesor a partir del cual un arco oceánico pasa a contar como continental | 20 | km |
 
-### 5.3 Fondo oceánico (Parsons y Sclater, 1977)
+### 5.3 Fondo oceánico (Parsons y Sclater, 1977; fondo viejo ajustado a la Tierra)
 | Símbolo | Significado | Defecto | Unidades |
 |---|---|---|---|
 | `d_r` | profundidad de la cresta de la dorsal | 2 500 | m |
 | `c_hs` | subsidencia por enfriamiento (fondo joven) | 350 | m/Myr^½ |
-| `d_∞`, `A_pl`, `τ_pl` | modelo de placa (fondo viejo) | 6 400 / 3 200 / 62,8 | m / m / Myr |
+| `d_∞`, `A_pl`, `τ_pl` | modelo de placa (fondo viejo), ajustado a la mediana del zócalo real (decisión del responsable, 2026-11-07; antes, Parsons y Sclater: 6 400 / 3 200 / 62,8) | 5 310 / 2 373 / 31 | m / m / Myr |
 | `t_x` | edad de cambio de un modelo al otro | 20 | Myr |
 | `D_fosa`, `w_fosa` | sobreprofundidad y anchura de la fosa | 3 000 / 50 | m / km |
 

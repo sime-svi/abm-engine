@@ -1301,3 +1301,50 @@ Formato de entrada:
   2. la regla de la v5;
   3. márgenes adelgazados en los rifts y la `η` de la corteza continental sobre fondo oceánico;
   4. después, calibrar y repetir la tabla de cierre.
+
+## [2026-11-07] Curva de profundidad real, nota de fosas v6 (fuera las zonas de fractura), adenda v8 (rifts que estiran), procedencia del fondo y calibración
+
+- **Qué pidió el responsable.**
+  - Responder siempre en español (añadido a CLAUDE.md §5).
+  - Adoptar la placa ajustada a la mediana del zócalo real (`d_∞` 5 310, `A` 2 373, `τ` 31) y anotar en TREE las mesetas, los montes submarinos y los puntos calientes (~150 m).
+  - Nota de fosas v6: quitar las zonas de fractura y diagnosticar, sin cambiar nada, (a) de dónde salen los escalones de edad enormes y (b) cuánto fondo de más de 180 Myr y cuántos márgenes viejos vienen del estado inicial.
+  - Adenda v8 §6.10: rifts que estiran los bordes en rampa conservando el volumen, y una India con su margen estirado.
+  - Diagnosticar (c) qué es la corteza sobre fondo oceánico que se pierde en los choques.
+  - Calibrar `η_min` y `λ_esp` con 5 semillas y repetir la tabla de cierre, con el nivel del mar y la profundidad media.
+- **Hecho** (incremento-4-diseno.md §51–§58).
+  - Curva nueva, con su prueba.
+  - v5 retirada: código, `da_fz_myr`, métricas y pruebas.
+  - Procedencia de cada muestra (`Corteza.proc`: `nace`, `lote` y `vias`, que nada lee). Sin la v5 y con la procedencia, el planeta es igual al de bd45fa6, sin contar las claves retiradas.
+  - v8 en `deriva/rifts.rs`, con prueba de conservación. Se retira `f_rift` y su sumidero `F_rift`; `w_margen_km` pasa a ser `W_m` y entra `h_rot_km`.
+  - India con su margen estirado.
+- **Escenarios India–Asia** (§52).
+  - La curva nueva sube su nivel del mar de −1 890 a −1 255 m (su océano viejo es enorme y tiene el agua de la Tierra). El orógeno sobresale menos y se erosiona más despacio.
+  - El margen estirado apenas cambia el máximo.
+  - `D_0` recalibrado contra su observación (70–80 km): de 50 a 400, ~2,5·10¹⁹ Pa·s.
+  - Quedan en rojo la relajación del orógeno (231–250 Myr frente a 100–200; `E_1` y `n_ero` se calibraron con aquel mar irreal) y el frenado tras romperse la losa (5,8 frente a 5,75). No se tocan sin el responsable.
+- **Diagnósticos.**
+  - (c) De lo perdido en los choques, el 78 % es corteza de tipo continental sobre fondo oceánico. Dentro de ella: arcos que dejaron de contar como arco al mezclarse (44 %), engrosamiento de choques (28 %), dientes, es decir astillas (12 %), y sedimento hecho corteza (12 %). Sedimento acrecionado y difusa, ~1 % cada uno.
+  - La corteza continental fina casi no choca, ni con la v8: los márgenes que chocan son sobre todo los del estado inicial, sin estirar.
+  - (a) Los escalones: relleno de huecos (33–48 %), clase «dorsal» del mismo linaje sin evento (20–44 %), suavizado, dientes e islas (4–23 %), invasión (4–12 %). Fusiones, saltos y rifts, ≤ 6 %; estado inicial, ≤ 8 % (domina solo al principio).
+  - (b) Del fondo de más de 180 Myr (10–21 % del planeta) solo el 0–6 % es inicial, y de los márgenes viejos, el 1–11 %.
+- **Márgenes estirados:** la v8 funciona, pero en el planeta casi no hay rifts (1–4 en 500 Myr con `τ_rift` = 150). Los márgenes pasivos tienen 35 km en la costa y una franja estirada de 65 km (Tierra: 100–300). Va con el ciclo de Wilson.
+- **Calibración** (§55).
+  - `η_min` = 0,5, el techo: la pérdida queda en 1,1 AU y no llega a 0,4–0,7.
+  - `λ_esp` = 4·10⁻⁶ sin cambios: ni ×100 mueve la edad del fondo.
+- **Tabla de cierre** (§57).
+  - Mar a −305 m (antes −500/−1 000), océano de 3 952 m, plataforma de 8,2 km.
+  - Pérdida en choques 1,1 AU (antes 3,5), ΔV_cont −10 %, área que se hunde 3,37 ✓.
+  - Siguen mal la edad del fondo (119 Myr; 22 % de más de 180), los márgenes, el relieve, el sedimento (3,5 AU) y la fosa (×1,37).
+  - **El tiempo:** 230 s solo, frente a un presupuesto de 200. No se ha subido.
+- **Batería:** 28 márgenes del planeta movidos con su nota; el presupuesto de tiempo, no. Agentes idénticos a `main`.
+- **Herramientas:**
+  - `diagnostico_procedencia_del_fondo`;
+  - en el informe de varias semillas, el reparto de la pérdida por vía y el perfil de los márgenes pasivos con la anchura de la franja estirada;
+  - en `planeta_semillas.py`, las filas de nivel del mar, profundidad media y pérdida total.
+- **`main` sigue en 5c8ef1c:** en la rama fallan a propósito las dos pruebas de escenario, hasta que decida el responsable.
+- **Pendiente (§58), en orden:**
+  1. las dos pruebas y el tiempo;
+  2. el origen de arco por fracción;
+  3. la representación que fabrica escalones y fondo viejo;
+  4. las mesetas y los puntos calientes;
+  5. lo que sigue de §45.

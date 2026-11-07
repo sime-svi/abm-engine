@@ -2,8 +2,8 @@
 //! oceánica es difuso (aún sin fosa) o una fosa activa, con memoria entre pasos. Un tramo difuso
 //! acumula convergencia y, al llegar a `X_ini`, nace la fosa con su polaridad fija; una fosa alarga
 //! su losa, que tira más cuanto más larga es, y muere si deja de converger o si le llega corteza que
-//! flota. También nacen fosas espontáneas, raras, en transformantes y en zonas de fractura con mucho
-//! contraste de edad y fondo viejo (nota v5 §6.4).
+//! flota. También nacen fosas espontáneas, raras, en transformantes con mucho contraste de edad y
+//! fondo viejo (nota de fosas v6 §6.4).
 //!
 //! El estado va en un mapa de cada placa (celda local → estado), en las celdas de borde de las dos
 //! orillas del tramo: viaja con la placa. Cada paso se rehace con los bordes de ahora, heredando el
@@ -74,15 +74,6 @@ pub struct ConteoFosas {
     pub mueren: [u32; 2],
     /// Roturas de losa (v4 §6.6).
     pub roturas: u32,
-    /// Nacimientos espontáneos en zonas de fractura (v5 §6.4) e intentos de partir la placa por la
-    /// zona de fractura, y fallidos (el lado viejo no llega a (3·L_borde)² o el joven a `A_min`).
-    pub nacen_zf: u32,
-    pub separar_zf: [u32; 2],
-    /// Escalones de edad de más de `Δa_fz` entre celdas vecinas de lado de una misma placa, las dos
-    /// de fondo oceánico (km), y los que además cumplen la regla del nacimiento espontáneo (fondo de
-    /// más de `a_min` en el lado viejo y contraste de más de la mitad de su edad).
-    pub zf_escalon_km: f64,
-    pub zf_candidata_km: f64,
     /// Fondo retirado en la convergencia difusa (km²).
     pub area_difusa_km2: f64,
 }
@@ -128,26 +119,8 @@ struct CandTransf {
     regs: Vec<usize>,
 }
 
-/// Candidato espontáneo en una zona de fractura (nota v5 §6.4) de una placa y un bloque: longitud,
-/// Σ edad vieja·longitud y sus pares (índices en la lista de [`Deriva::zonas_de_fractura`]).
-#[derive(Default)]
-struct CandZf {
-    largo: f64,
-    edad_l: f64,
-    pares: Vec<usize>,
-}
-
-/// Par de celdas vecinas de lado de una zona de fractura candidata: placa, celda vieja, celda joven,
-/// edad vieja (Myr) y longitud del lado común (km).
-type ParZf = (u32, u32, u32, f64, f64);
-
-/// Placa partida por una zona de fractura: placa de arriba (lado joven), placa que se hunde (lado
-/// viejo), celdas viejas y jóvenes del escalón, su longitud (km) y su edad vieja media (Myr).
-type PartidaZf = (usize, usize, Vec<u32>, Vec<u32>, f64, f64);
-
 const P_POLARIDAD: u64 = 11;
 const P_ESPONTANEO: u64 = 12;
-const P_ESPONTANEO_ZF: u64 = 13;
 
 fn raiz(padre: &mut [u32], mut i: u32) -> u32 {
     while padre[i as usize] != i {
@@ -746,8 +719,6 @@ impl Deriva {
     /// tramos.
     pub(super) fn nacimientos_espontaneos(&mut self) {
         let lam = self.cfg.lambda_esp;
-        // Zonas de fractura de ahora (v5 §6.4): también se miden sin nacimientos.
-        let zf = self.zonas_de_fractura();
         if lam <= 0.0 {
             self.aplicar_estado_fosas();
             return;
@@ -832,185 +803,7 @@ impl Deriva {
                 },
             );
         }
-        // C. Zonas de fractura (v5 §6.4): por placa y bloque, como las transformantes.
-        let mut cand_zf: std::collections::BTreeMap<(u64, u64), CandZf> = Default::default();
-        for (i, &(p, o, _, vieja, largo)) in zf.iter().enumerate() {
-            let e = cand_zf
-                .entry((self.placas[p as usize].id, bloque(o as usize)))
-                .or_default();
-            e.largo += largo;
-            e.edad_l += vieja * largo;
-            e.pares.push(i);
-        }
-        let mut nacidas: Vec<Vec<usize>> = Vec::new();
-        for (&(id, b), c) in &cand_zf {
-            let a = c.edad_l / c.largo;
-            if azar(self.seed, self.paso, id ^ splitmix64(b), P_ESPONTANEO_ZF, 1) < prob(a, c.largo)
-            {
-                nacidas.push(c.pares.clone());
-            }
-        }
-        if !nacidas.is_empty() {
-            self.nacer_en_zonas_de_fractura(&zf, nacidas);
-        }
         self.aplicar_estado_fosas();
-    }
-
-    /// Zonas de fractura (nota de fosas v5 §6.4): pares de celdas vecinas de lado de una misma
-    /// placa, las dos de fondo oceánico, con un escalón de edad de más de `Δa_fz`. Apunta en el
-    /// conteo del paso su longitud y la de los que cumplen la regla del nacimiento espontáneo (fondo
-    /// de más de `a_min` en el lado viejo y contraste de más de la mitad de su edad, como en las
-    /// transformantes), y devuelve estos.
-    fn zonas_de_fractura(&mut self) -> Vec<ParZf> {
-        let (da, a_min) = (self.cfg.da_fz_myr, self.cfg.a_min_myr);
-        let mut out = Vec::new();
-        let (mut escalon, mut candidata) = (0.0, 0.0);
-        for k in 0..self.malla.num {
-            let p = self.dueno[k];
-            if p == NADA {
-                continue;
-            }
-            let Some(ck) = self.corteza(k) else {
-                continue;
-            };
-            if ck.cont {
-                continue;
-            }
-            for (i, &j) in LADOS.iter().enumerate() {
-                let v = self.malla.vec[k][j];
-                if v == NADA || (v as usize) <= k || self.dueno[v as usize] != p {
-                    continue;
-                }
-                let Some(cv) = self.corteza(v as usize) else {
-                    continue;
-                };
-                if cv.cont {
-                    continue;
-                }
-                let dif = (ck.edad_oc - cv.edad_oc).abs();
-                if dif <= da {
-                    continue;
-                }
-                let largo = self.malla.lado_comun[k][i];
-                escalon += largo;
-                let vieja = ck.edad_oc.max(cv.edad_oc);
-                if vieja <= a_min || dif <= 0.5 * vieja {
-                    continue;
-                }
-                candidata += largo;
-                let (o, y) = if ck.edad_oc > cv.edad_oc {
-                    (k as u32, v)
-                } else {
-                    (v, k as u32)
-                };
-                out.push((p, o, y, vieja, largo));
-            }
-        }
-        self.fosas_paso.zf_escalon_km = escalon;
-        self.fosas_paso.zf_candidata_km = candidata;
-        out
-    }
-
-    /// Fosas espontáneas en zonas de fractura (nota de fosas v5 §6.4). La fosa sigue el escalón de
-    /// edad: todos los pares candidatos de la placa conexos con los del bloque que nace. La placa se
-    /// parte por él ([`Deriva::partir_por_zona_fractura`]) y el lado viejo se hunde bajo el joven con
-    /// la losa de un nacimiento (`L = X_ini`). Una placa se parte una vez por paso como mucho.
-    fn nacer_en_zonas_de_fractura(&mut self, zf: &[ParZf], nacidas: Vec<Vec<usize>>) {
-        let mut por_celda: HashMap<u32, Vec<usize>> = HashMap::new();
-        for (i, &(_, o, y, ..)) in zf.iter().enumerate() {
-            por_celda.entry(o).or_default().push(i);
-            por_celda.entry(y).or_default().push(i);
-        }
-        let mut partidas: Vec<PartidaZf> = Vec::new();
-        for semilla in nacidas {
-            let p = zf[semilla[0]].0 as usize;
-            if !self.placas[p].viva {
-                continue;
-            }
-            let mut visto: std::collections::HashSet<usize> = semilla.iter().copied().collect();
-            let mut pila = semilla.clone();
-            let mut tramo = Vec::new();
-            while let Some(i) = pila.pop() {
-                tramo.push(i);
-                let (_, o, y, ..) = zf[i];
-                for c in [o, y] {
-                    let cerca = self.malla.vec[c as usize]
-                        .iter()
-                        .copied()
-                        .chain(std::iter::once(c));
-                    for w in cerca {
-                        if w == NADA {
-                            continue;
-                        }
-                        for &j in por_celda.get(&w).map_or(&[][..], |l| &l[..]) {
-                            if zf[j].0 as usize == p && visto.insert(j) {
-                                pila.push(j);
-                            }
-                        }
-                    }
-                }
-            }
-            tramo.sort_unstable();
-            let mut viejas: Vec<u32> = tramo.iter().map(|&i| zf[i].1).collect();
-            let mut jovenes: Vec<u32> = tramo.iter().map(|&i| zf[i].2).collect();
-            viejas.sort_unstable();
-            viejas.dedup();
-            jovenes.sort_unstable();
-            jovenes.dedup();
-            // Una celda vieja de un par y joven de otro va con el lado viejo.
-            jovenes.retain(|c| viejas.binary_search(c).is_err());
-            let largo: f64 = tramo.iter().map(|&i| zf[i].4).sum();
-            let edad = tramo.iter().map(|&i| zf[i].3 * zf[i].4).sum::<f64>() / largo;
-            self.fosas_paso.separar_zf[0] += 1;
-            match self.partir_por_zona_fractura(p, &viejas, &jovenes) {
-                Some((arriba, hunde)) => {
-                    partidas.push((arriba, hunde, viejas, jovenes, largo, edad));
-                }
-                None => self.fosas_paso.separar_zf[1] += 1,
-            }
-        }
-        if partidas.is_empty() {
-            return;
-        }
-        // La fosa: el borde nuevo entre las dos placas en las celdas del escalón; más allá de sus
-        // extremos, el corte es transformante.
-        self.clasificar_bordes();
-        for (arriba, hunde, viejas, jovenes, largo, edad) in partidas {
-            let en_tramo =
-                |k: u32| viejas.binary_search(&k).is_ok() || jovenes.binary_search(&k).is_ok();
-            let regs: Vec<usize> = (0..self.bordes.len())
-                .filter(|&i| {
-                    let b = &self.bordes[i];
-                    let par = (b.p as usize, b.q as usize);
-                    (par == (arriba, hunde) || par == (hunde, arriba))
-                        && (en_tramo(b.k) || en_tramo(b.k_q))
-                })
-                .collect();
-            if regs.is_empty() {
-                continue;
-            }
-            self.poner_fosa(&regs, arriba as u32, hunde as u32);
-            self.fosas_paso.nacen_zf += 1;
-            let (id_a, id_h) = (self.placas[arriba].id, self.placas[hunde].id);
-            let area_h: f64 = (0..self.malla.num)
-                .filter(|&k| self.dueno[k] as usize == hunde)
-                .map(|k| self.malla.area[k])
-                .sum();
-            let punto = Some(self.malla.dir[viejas[0] as usize]);
-            self.evento_det(
-                "nacimiento_fosa",
-                vec![id_h, id_a],
-                largo,
-                0.0,
-                punto,
-                Detalle {
-                    clase: Some("espontaneo_zona_fractura".into()),
-                    edad_fondo_myr: Some(edad),
-                    ..Detalle::default()
-                },
-            );
-            self.evento("placa_nueva", vec![id_a, id_h], 0.0, area_h, punto);
-        }
     }
 
     /// Invasión (nota de fosas v4 §6.4), la vía por la que se cierran los océanos viejos: cada
@@ -1447,6 +1240,8 @@ impl Deriva {
             };
             self.fosas_paso.separar[0] += 1;
             if let Some((h_c, h_o)) = self.partir_por_fosa(p, &tramo, &cuerpo_grande) {
+                self.estampar(h_c, lote::INVASION);
+                self.estampar(h_o, lote::INVASION);
                 self.placas[h_c].invadidas.clear();
                 self.placas[h_c].inv_intento_km = 0.0;
                 partidas.push((h_c, h_o, l_max, edad, largo, k0));
@@ -1687,149 +1482,6 @@ impl Deriva {
         Some((ic, ic + 1))
     }
 
-    /// Parte la placa `pi` por una zona de fractura (nota de fosas v5 §6.4): cada celda oceánica va
-    /// con el lado del escalón (`viejas`, el que se hunde, o `jovenes`) que tiene más cerca por el
-    /// océano de la placa. Más allá de los extremos del escalón, el corte sigue su dirección hasta
-    /// los bordes existentes, como las fallas transformantes que continúan una zona de fractura. Cada
-    /// continente va entero con el lado que más lo rodea, y lo que queda sin lado (océano tras un
-    /// continente), con el más cercano. El lado viejo puede ser una microplaca, desde (3·L_borde)²,
-    /// como en la invasión; el joven, al menos `A_min`. Devuelve (placa de arriba, placa que se
-    /// hunde), o `None` si no llegan.
-    pub(super) fn partir_por_zona_fractura(
-        &mut self,
-        pi: usize,
-        viejas: &[u32],
-        jovenes: &[u32],
-    ) -> Option<(usize, usize)> {
-        let num = self.malla.num;
-        let p = pi as u32;
-        let de_p: Vec<bool> = (0..num)
-            .map(|k| self.dueno[k] == p && self.rep[k] != NADA)
-            .collect();
-        let oc: Vec<bool> = (0..num)
-            .map(|k| de_p[k] && self.corteza(k).is_some_and(|c| !c.cont))
-            .collect();
-        let mut fuentes: Vec<(u32, f64, u32)> = Vec::with_capacity(viejas.len() + jovenes.len());
-        fuentes.extend(viejas.iter().map(|&k| (k, 0.0, 1)));
-        fuentes.extend(jovenes.iter().map(|&k| (k, 0.0, 0)));
-        let mut campo = std::mem::take(&mut self.campo);
-        campo.calcular(&self.malla, &fuentes, |u, v| oc[u] && oc[v], f64::INFINITY);
-        let mut lado: Vec<u32> = (0..num)
-            .map(|k| if oc[k] { campo.fuente[k] } else { NADA })
-            .collect();
-        // Cada continente (8 vecinas), entero con el lado de la mayoría de su costa.
-        let mut visto = vec![false; num];
-        for s in 0..num {
-            if visto[s] || !de_p[s] || oc[s] {
-                continue;
-            }
-            visto[s] = true;
-            let mut comp = vec![s as u32];
-            let mut votos = [0u32; 2];
-            let mut i = 0;
-            while i < comp.len() {
-                let c = comp[i] as usize;
-                i += 1;
-                for &v in &self.malla.vec[c] {
-                    if v == NADA || !de_p[v as usize] {
-                        continue;
-                    }
-                    let vu = v as usize;
-                    if oc[vu] {
-                        if lado[vu] != NADA {
-                            votos[lado[vu] as usize] += 1;
-                        }
-                    } else if !visto[vu] {
-                        visto[vu] = true;
-                        comp.push(v);
-                    }
-                }
-            }
-            if votos[0] + votos[1] > 0 {
-                let l = u32::from(votos[1] > votos[0]);
-                for &c in &comp {
-                    lado[c as usize] = l;
-                }
-            }
-        }
-        // Lo que queda sin lado, con el más cercano por toda la placa.
-        if (0..num).any(|k| de_p[k] && lado[k] == NADA) {
-            let fuentes: Vec<(u32, f64, u32)> = (0..num)
-                .filter(|&k| de_p[k] && lado[k] != NADA)
-                .map(|k| (k as u32, 0.0, lado[k]))
-                .collect();
-            campo.calcular(
-                &self.malla,
-                &fuentes,
-                |u, v| de_p[u] && de_p[v],
-                f64::INFINITY,
-            );
-            for k in 0..num {
-                if de_p[k] && lado[k] == NADA {
-                    lado[k] = if campo.fuente[k] == NADA {
-                        0
-                    } else {
-                        campo.fuente[k]
-                    };
-                }
-            }
-        }
-        self.campo = campo;
-        let (mut a_h, mut a_tot) = (0.0, 0.0);
-        for k in 0..num {
-            if de_p[k] {
-                a_tot += self.malla.area[k];
-                if lado[k] == 1 {
-                    a_h += self.malla.area[k];
-                }
-            }
-        }
-        let a_min = self.cfg.a_min_frac * self.malla.area_total();
-        let a_micro = (3.0 * self.cfg.l_borde_km).powi(2);
-        if a_h < a_micro || a_tot - a_h < a_min {
-            return None;
-        }
-        let paso = self.paso;
-        let t = self.t_myr;
-        let madre = &self.placas[pi];
-        let mut h_a = Placa::hermana(madre, id_hija(madre.id, paso, 4), t);
-        let mut h_h = Placa::hermana(madre, id_hija(madre.id, paso, 5), t);
-        for s in 0..madre.celda.len() {
-            let l = madre.celda[s];
-            let c = madre.cort[s];
-            let k = madre.mundo[s] as usize;
-            let dest = if de_p[k] && lado[k] == 1 {
-                &mut h_h
-            } else {
-                &mut h_a
-            };
-            dest.insertar(l, c, madre.mundo[s]);
-            if let Some(e) = madre.fosas.get(&l) {
-                dest.fosas.insert(l, *e);
-            }
-            if let Some(e) = madre.invadidas.get(&l) {
-                dest.invadidas.insert(l, *e);
-            }
-        }
-        h_a.actualizar_cap(&self.malla);
-        h_h.actualizar_cap(&self.malla);
-        self.placas[pi].morir();
-        let ia = self.placas.len();
-        self.placas.push(h_a);
-        self.placas.push(h_h);
-        for k in 0..num {
-            if self.dueno[k] == p {
-                let l = self.rep[k];
-                self.dueno[k] = if self.placas[ia].mapa[l as usize] != NADA {
-                    ia as u32
-                } else {
-                    ia as u32 + 1
-                };
-            }
-        }
-        Some((ia, ia + 1))
-    }
-
     /// Convergencia difusa (nota de fosas v3 §6.2): el área oceánica solapada de un tramo difuso se
     /// retira como en una fosa, pero sin arco ni sumideros, y su basalto no pasa nunca a corteza
     /// continental (a esta escala, el pliegue del fondo apenas cambia el relieve). La corteza de tipo
@@ -1881,7 +1533,7 @@ impl Deriva {
                 puesto += self.en_celda(&inv, j as usize, w, false, |c, _, f| {
                     // `f` = w / Σ área de las muestras de la celda: el espesor por km³ repartido.
                     if v_hc > 0.0 {
-                        c.sumar_hc(v_hc * f, d.c.arco, rs, rc, h_cont_min);
+                        c.sumar_hc(v_hc * f, d.c.arco, rs, rc, h_cont_min, via::DIFUSA);
                         c.dh_dt += v_hc * f / cfg.dt_myr;
                         c.edad_orog = 0.0;
                     }

@@ -21,6 +21,7 @@ use std::collections::{BinaryHeap, HashMap};
 use super::historia::{CuentasCorteza, EventoTectonico, MetricaMyr};
 
 mod fosas;
+mod rifts;
 mod suavizado;
 use super::isostasia;
 use super::malla::{LADOS, Malla, Mat3, NADA, Quat, aplicar, aplicar_t, velocidad};
@@ -105,6 +106,106 @@ pub struct Corteza {
     pub edad_orog: f64,
     /// Ritmo de engrosamiento del paso (km/Myr): arcos y choques.
     pub dh_dt: f64,
+    /// De dónde viene la muestra (diagnóstico; el modelo nunca la lee).
+    pub proc: Procedencia,
+}
+
+/// Cómo nació una muestra ([`Procedencia::nace`]).
+pub mod nace {
+    /// Estado inicial del planeta.
+    pub const INICIAL: u8 = 0;
+    /// Fondo nuevo en un hueco de un borde divergente (dorsal).
+    pub const DORSAL: u8 = 1;
+    /// Fondo nuevo en un hueco de un tramo transformante o convergente (creación residual).
+    pub const HUECO: u8 = 2;
+    /// Corteza continental estirada en la abertura de un rift (adenda v8 §6.10).
+    pub const RIFT: u8 = 3;
+    /// Fondo que dejó una columna continental al perder toda su corteza continental.
+    pub const SIN_CONTINENTE: u8 = 4;
+}
+
+/// Tipo de un lote ([`Procedencia::lote`], [`Deriva::lotes`]): el evento que juntó la corteza de una
+/// placa con la de otra o la separó de su madre.
+pub mod lote {
+    pub const NINGUNO: u8 = 0;
+    pub const SUTURA: u8 = 1;
+    pub const ABSORCION: u8 = 2;
+    pub const SALTO_DORSAL: u8 = 3;
+    pub const RIFT: u8 = 4;
+    /// Movimientos de una sola muestra a otro sitio u otra placa: un diente recolocado, una isla
+    /// absorbida por su vecina y el suavizado de la pertenencia de los bordes oceánicos.
+    pub const DIENTE: u8 = 5;
+    pub const ISLA: u8 = 6;
+    pub const SUAVIZADO: u8 = 7;
+    /// Separación de un océano por la invasión de un margen pasivo (v4 §6.4).
+    pub const INVASION: u8 = 8;
+    pub const NOMBRES: [&str; 9] = [
+        "ninguno",
+        "sutura",
+        "absorción",
+        "salto de dorsal",
+        "rift",
+        "diente recolocado",
+        "isla absorbida",
+        "suavizado de la pertenencia",
+        "invasión",
+    ];
+}
+
+/// Vía por la que llegó a una columna su corteza de tipo continental ([`Procedencia::vias`]).
+pub mod via {
+    pub const ARCO: usize = 0;
+    pub const ACRECION: usize = 1;
+    /// Sedimento que pasa a corteza al sumarle corteza encima.
+    pub const SEDIMENTO: usize = 2;
+    pub const CHOQUE: usize = 3;
+    pub const FLUJO: usize = 4;
+    pub const DIFUSA: usize = 5;
+    /// Dientes de los bordes recolocados en otra placa.
+    pub const DIENTES: usize = 6;
+    /// Islas de una placa absorbidas por su vecina al suavizar los bordes.
+    pub const ISLAS: usize = 7;
+    /// Muestras de una placa fundida que no encuentran sitio en la otra.
+    pub const FUSION: usize = 8;
+    pub const INICIAL: usize = 9;
+    pub const RIFT: usize = 10;
+    pub const N: usize = 11;
+    pub const NOMBRES: [&str; N] = [
+        "arco",
+        "acreción",
+        "sedimento",
+        "choque",
+        "flujo lateral",
+        "difusa",
+        "dientes",
+        "islas",
+        "fusión",
+        "inicial",
+        "rift",
+    ];
+}
+
+/// Procedencia de una muestra: diagnóstico de la nota de fosas v6 y de la adenda v8. Viaja con la
+/// muestra, pero ninguna regla del modelo la lee.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Procedencia {
+    /// Cómo nació ([`nace`]).
+    pub nace: u8,
+    /// Último evento que juntó su corteza con la de otra placa o la separó de su placa madre:
+    /// índice en [`Deriva::lotes`] (0, ninguno).
+    pub lote: u32,
+    /// Corteza de tipo continental (km) por la vía que la puso en la columna ([`via`]); suma `hc`.
+    pub vias: [f32; via::N],
+}
+
+impl Procedencia {
+    /// La misma procedencia con su corteza de tipo continental multiplicada por `f`.
+    pub fn escalada(mut self, f: f64) -> Self {
+        for v in &mut self.vias {
+            *v = (*v as f64 * f) as f32;
+        }
+        self
+    }
 }
 
 impl Corteza {
@@ -118,11 +219,14 @@ impl Corteza {
             edad_oc: 0.0,
             edad_orog: 0.0,
             dh_dt: 0.0,
+            proc: Procedencia::default(),
         }
     }
 
     /// Corteza continental de espesor `h` (km), sin sedimento.
     pub fn continental(h: f64) -> Self {
+        let mut proc = Procedencia::default();
+        proc.vias[via::INICIAL] = h as f32;
         Self {
             cont: true,
             h,
@@ -132,6 +236,18 @@ impl Corteza {
             edad_oc: 0.0,
             edad_orog: 1000.0,
             dh_dt: 0.0,
+            proc,
+        }
+    }
+
+    /// Diagnóstico: cambia `hc` en `dh` km por la vía `v` (si suma) o quita en proporción (si
+    /// resta). Solo lleva la cuenta: quien llama cambia `hc`.
+    #[inline]
+    fn anotar_hc(&mut self, hc_antes: f64, dh: f64, v: usize) {
+        if dh >= 0.0 {
+            self.proc.vias[v] += dh as f32;
+        } else if hc_antes > 0.0 {
+            self.proc = self.proc.escalada(((hc_antes + dh) / hc_antes).max(0.0));
         }
     }
 
@@ -152,7 +268,16 @@ impl Corteza {
     /// incorpora a la corteza (se conserva su masa). La columna es de arco si toda su corteza
     /// continental lo es; la oceánica que supera `h_cont_min` pasa a continental. Devuelve `true`
     /// si la columna acaba de pasar a continental.
-    fn sumar_hc(&mut self, dh: f64, de_arco: bool, rs: f64, rc: f64, h_cont_min: f64) -> bool {
+    #[allow(clippy::too_many_arguments)]
+    fn sumar_hc(
+        &mut self,
+        dh: f64,
+        de_arco: bool,
+        rs: f64,
+        rc: f64,
+        h_cont_min: f64,
+        v: usize,
+    ) -> bool {
         if dh <= 0.0 {
             return false;
         }
@@ -163,9 +288,11 @@ impl Corteza {
             self.h += roca;
             self.hc += roca;
             self.sed = 0.0;
+            self.proc.vias[via::SEDIMENTO] += roca as f32;
         }
         self.h += dh;
         self.hc += dh;
+        self.proc.vias[v] += dh as f32;
         if !self.cont && self.h > h_cont_min {
             self.cont = true;
             return true;
@@ -178,18 +305,22 @@ impl Corteza {
     /// perdió así su corteza continental.
     fn quitar_hc(&mut self, dh: f64, h_oc: f64, edad: f64) -> bool {
         let dh = dh.min(self.hc);
+        let antes = self.hc;
         self.h -= dh;
         self.hc -= dh;
+        self.anotar_hc(antes, -dh, 0);
         if self.hc > 1e-9 {
             return false;
         }
         self.hc = 0.0;
         self.arco = false;
+        self.proc.vias = [0.0; via::N];
         let era_cont = self.cont;
         if era_cont {
             self.cont = false;
             self.h = self.h.max(h_oc);
             self.edad_oc = edad;
+            self.proc.nace = nace::SIN_CONTINENTE;
         }
         era_cont
     }
@@ -802,6 +933,15 @@ pub struct Deriva {
     pub dientes_cont_por_via_km3: [f64; 4],
     /// Nacimientos, muertes y convergencia difusa del último paso (nota de fosas §8).
     pub fosas_paso: ConteoFosas,
+    /// Diagnóstico de procedencia (nota de fosas v6): tipo de cada lote ([`lote`]); el 0 es
+    /// «ninguno».
+    pub lotes: Vec<u8>,
+    /// Diagnóstico de los choques (adenda v7 y v8): corteza de tipo continental solapada (0) y
+    /// perdida (1) por la clase de la muestra que entra (continental < h_1, h_1–h_2, > h_2, sobre
+    /// fondo oceánico; sin la de arco) y por la vía que la puso allí ([`via`]), km³.
+    pub diag_choque_km3: [[[f64; via::N]; 4]; 2],
+    /// Lados de rift aún en fase de estiramiento (adenda v8 §6.10).
+    rifts_activos: Vec<rifts::LadoRift>,
     /// Potencia de cada fuerza en cada placa en el último reparto de velocidades (nota de fosas
     /// §10, medida 3): índice de la placa, su área (km²) y `τ·ω` del tirón de la losa, el empuje de
     /// dorsal, la resistencia de los choques y el arrastre basal (en equilibrio suman cero).
@@ -1022,6 +1162,9 @@ impl Deriva {
             fosas_por_convergencia_km: [0.0; 10],
             max_tras_dientes_km: [0.0; 2],
             fosas_paso: ConteoFosas::default(),
+            lotes: vec![lote::NINGUNO],
+            diag_choque_km3: [[[0.0; via::N]; 4]; 2],
+            rifts_activos: Vec::new(),
             potencias: Vec::new(),
             dientes_cont_por_via_km3: [0.0; 4],
             traza: None,
@@ -1086,6 +1229,7 @@ impl Deriva {
         self.rellenar_huecos();
         self.trazar("rellenar_huecos");
         let (choques, tramos, difusas) = self.reconstruir_mapas();
+        self.estirar_rifts();
         self.trazar("reconstruir_mapas");
         // Suavizado de la pertenencia de los bordes oceánicos y absorción de las islas (nota de
         // bordes §6.5).
@@ -1251,6 +1395,7 @@ impl Deriva {
         self.recolocar_dientes();
         self.rellenar_huecos();
         let (_, tramos, difusas) = self.reconstruir_mapas();
+        self.estirar_rifts();
         self.area_subducida_km2 = tramos.iter().map(|t| t.a_sub).sum();
         self.area_reasignada_km2 = self.suavizar_pertenencia();
         self.area_islas_km2 = self.absorber_islas();
@@ -2038,7 +2183,7 @@ impl Deriva {
         };
         // Mismo volumen en una celda de otra área: se ajusta el espesor.
         let f = a / self.malla.area[lg as usize];
-        let c2 = Corteza {
+        let mut c2 = Corteza {
             h: if c.cont {
                 c.h * f
             } else {
@@ -2046,9 +2191,12 @@ impl Deriva {
             },
             hc: c.hc * f,
             sed: c.sed * f,
+            proc: c.proc.escalada(f),
             ..c
         };
+        c2.proc.lote = self.lotes.len() as u32;
         p.insertar(lg, c2, g);
+        self.lotes.push(lote::DIENTE);
         self.dueno[gu] = pi;
         self.rep[gu] = lg;
         self.hueco[gu] = false;
@@ -2286,6 +2434,14 @@ impl Deriva {
                         };
                         self.cuentas.choque_solapado_por_grosor_km3[clase] += v_sol;
                         self.cuentas.choque_perdida_por_grosor_km3[clase] += (1.0 - eta) * v_sol;
+                        let tot: f64 = c.proc.vias.iter().map(|&x| x as f64).sum();
+                        if tot > 0.0 {
+                            for (i, &x) in c.proc.vias.iter().enumerate() {
+                                let f = x as f64 / tot;
+                                self.diag_choque_km3[0][clase][i] += v_sol * f;
+                                self.diag_choque_km3[1][clase][i] += (1.0 - eta) * v_sol * f;
+                            }
+                        }
                     }
                     // ¿Cuelga aún la losa de una fosa entre las dos (v4 §6.6)?
                     let arriba = self.dueno[k as usize];
@@ -2347,7 +2503,7 @@ impl Deriva {
                 let w = self.malla.area[ju] / a_tot;
                 if let Some(d) = self.placas[pj as usize].get_mut(lj) {
                     let r = a * w / aj;
-                    d.sumar_hc(c.hc * r, c.arco, rs, rc, h_cont_min);
+                    d.sumar_hc(c.hc * r, c.arco, rs, rc, h_cont_min, via::DIENTES);
                     d.sed += c.sed * r;
                     if d.cont {
                         self.max_tras_dientes_km[cual] = self.max_tras_dientes_km[cual].max(d.h);
@@ -2358,10 +2514,13 @@ impl Deriva {
         // Huecos de tramos transformantes o convergentes que no llenó ningún diente: a la placa de
         // más φ, con fondo oceánico nuevo (creación residual: la pequeña apertura real del borde).
         self.creacion_residual_km2 = 0.0;
-        for k in 0..num {
+        // Diagnóstico de procedencia: qué huecos son de creación residual.
+        let mut residual = vec![false; num];
+        for (k, es_residual) in residual.iter_mut().enumerate() {
             if self.dueno[k] != NADA || !self.hueco[k] {
                 continue;
             }
+            *es_residual = true;
             let destino = self.fi(k, true).mayor().map(|x| x.0).or_else(|| {
                 self.malla.vec[k]
                     .iter()
@@ -2406,7 +2565,7 @@ impl Deriva {
         let mut nuevas: Vec<(u32, u32)> = Vec::new();
         self.area_nueva_km2 = 0.0;
         self.creacion_paso.clear();
-        for k in 0..num {
+        for (k, &es_residual) in residual.iter().enumerate() {
             if !self.hueco[k] {
                 continue;
             }
@@ -2419,7 +2578,13 @@ impl Deriva {
             let p = &mut self.placas[pi as usize];
             let l = self.malla.localizar(aplicar_t(&p.rot, self.malla.dir[k])) as u32;
             if p.mapa[l as usize] == NADA {
-                p.insertar(l, Corteza::oceanica(cfg.h_oc_km), k as u32);
+                let mut c = Corteza::oceanica(cfg.h_oc_km);
+                c.proc.nace = if es_residual {
+                    nace::HUECO
+                } else {
+                    nace::DORSAL
+                };
+                p.insertar(l, c, k as u32);
                 nuevas.push((pi, l));
             }
             self.rep[k] = l;
@@ -2440,7 +2605,13 @@ impl Deriva {
                 if !self.hueco[k2] {
                     continue;
                 }
-                self.placas[pi as usize].insertar(l2, Corteza::oceanica(cfg.h_oc_km), k2 as u32);
+                let mut c = Corteza::oceanica(cfg.h_oc_km);
+                c.proc.nace = if residual[k2] {
+                    nace::HUECO
+                } else {
+                    nace::DORSAL
+                };
+                self.placas[pi as usize].insertar(l2, c, k2 as u32);
             }
         }
         for p in self.placas.iter_mut().filter(|p| p.viva) {
@@ -2934,7 +3105,7 @@ impl Deriva {
             let ku = k as usize;
             let mut a_cont = 0.0;
             let puesto = self.en_celda(&inv, ku, vol, false, |c, a, dh| {
-                if c.sumar_hc(dh, true, rs, rc, h_cont_min) {
+                if c.sumar_hc(dh, true, rs, rc, h_cont_min, via::ARCO) {
                     a_cont += a;
                 }
                 c.dh_dt += dh / cfg.dt_myr;
@@ -3008,7 +3179,7 @@ impl Deriva {
                 for k in celdas {
                     let v = vol * self.malla.area[k as usize] / a_tot;
                     pegado += self.en_celda(&inv, k as usize, v, false, |c, _, dh| {
-                        c.sumar_hc(dh, true, rs, rc, h_cont_min);
+                        c.sumar_hc(dh, true, rs, rc, h_cont_min, via::ACRECION);
                     });
                 }
             }
@@ -3355,7 +3526,7 @@ impl Deriva {
         let h_cont_min = cfg.h_cont_min_km;
         for (k, vol, arco) in dh_mundo {
             let puesto = self.en_celda(&inv, k as usize, vol, solo_cont, |c, _, dh| {
-                c.sumar_hc(dh, arco, rs, rc, h_cont_min);
+                c.sumar_hc(dh, arco, rs, rc, h_cont_min, via::CHOQUE);
                 c.dh_dt += dh / cfg.dt_myr;
                 c.edad_orog = 0.0;
             });
@@ -3376,8 +3547,10 @@ impl Deriva {
                 let c = &mut p.cort[s];
                 if c.hc > cfg.h_del_km {
                     let dh = c.hc - tras_delaminar(c.hc, cfg.h_del_km, cfg.dt_myr, cfg.tau_del_myr);
+                    let antes = c.hc;
                     c.hc -= dh;
                     c.h -= dh;
+                    c.anotar_hc(antes, -dh, 0);
                     total += dh * self.malla.area[p.celda[s] as usize];
                 }
             }
@@ -3539,8 +3712,10 @@ impl Deriva {
                 let Some(c) = self.placas[p as usize].get_mut(l) else {
                     continue;
                 };
+                let antes = c.hc;
                 c.hc += dv / a;
                 c.h += dv / a;
+                c.anotar_hc(antes, dv / a, via::FLUJO);
                 red.hc[i] = c.hc;
                 if dv > 0.0 {
                     movido += dv;
@@ -3632,9 +3807,11 @@ impl Deriva {
                             c.sed -= roca * rc / rs;
                         } else {
                             let dh = roca - sed_roca;
+                            let antes = c.hc;
                             c.sed = 0.0;
                             c.h -= dh;
                             c.hc -= dh;
+                            c.anotar_hc(antes, -dh, 0);
                         }
                         let v = roca * self.malla.area[p.celda[s] as usize];
                         ero.push((k_ve as u32, v));
@@ -4064,6 +4241,7 @@ impl Deriva {
                         },
                         hc: c.hc * f,
                         sed: c.sed * f,
+                        proc: c.proc.escalada(f),
                         ..c
                     };
                     self.placas[a].insertar(l, c2, mundo);
@@ -4100,7 +4278,7 @@ impl Deriva {
                     let h_cont_min = self.cfg.h_cont_min_km;
                     if let Some(d) = self.placas[a].get_mut(destino) {
                         let r = ar_b / ar_a;
-                        d.sumar_hc(c.hc * r, c.arco, rs, rc, h_cont_min);
+                        d.sumar_hc(c.hc * r, c.arco, rs, rc, h_cont_min, via::FUSION);
                         d.sed += c.sed * r;
                     }
                 }
@@ -4175,6 +4353,7 @@ impl Deriva {
             }
             let (a, b) = if areas[x] >= areas[y] { (x, y) } else { (y, x) };
             let ids = vec![self.placas[a].id, self.placas[b].id];
+            self.estampar(b, lote::SUTURA);
             self.fundir(a, b);
             self.evento("sutura", ids, l, 0.0, Some(punto));
             cambio = true;
@@ -4185,13 +4364,7 @@ impl Deriva {
     /// Parte la placa `pi` por un círculo máximo de polo `polo` deformado por ruido. Devuelve los
     /// índices de las dos hijas (la del lado `+polo` primero), o `None` si una quedaría vacía o
     /// demasiado pequeña.
-    fn partir(
-        &mut self,
-        pi: usize,
-        polo: V3,
-        centro: V3,
-        adelgazar: bool,
-    ) -> Option<(usize, usize)> {
+    fn partir(&mut self, pi: usize, polo: V3, centro: V3) -> Option<(usize, usize)> {
         let cfg = self.cfg.clone();
         let amp = cfg.deformacion;
         let lado = |d: &Deriva, x: V3| -> f64 {
@@ -4222,16 +4395,9 @@ impl Deriva {
         let t = self.t_myr;
         let mut h1 = Placa::hermana(madre, id_hija(id_m, paso, 0), t);
         let mut h2 = Placa::hermana(madre, id_hija(id_m, paso, 1), t);
-        let w_rad = cfg.w_margen_km / self.malla.r_km;
-        let mut adelg = 0.0;
         for (s, &lado_s) in lados.iter().enumerate() {
             let l = madre.celda[s];
-            let mut c = madre.cort[s];
-            if adelgazar && c.cont && lado_s.abs() < w_rad {
-                adelg += c.hc * (1.0 - cfg.f_rift) * self.malla.area[l as usize];
-                c.h *= cfg.f_rift;
-                c.hc *= cfg.f_rift;
-            }
+            let c = madre.cort[s];
             let h = if lado_s >= 0.0 { &mut h1 } else { &mut h2 };
             h.insertar(l, c, madre.mundo[s]);
             if let Some(e) = madre.fosas.get(&l) {
@@ -4241,7 +4407,6 @@ impl Deriva {
                 h.invadidas.insert(l, *e);
             }
         }
-        self.cuentas.rift_km3 += adelg;
         // Apertura: giro alrededor del eje del círculo a 90° del centro (en el centro, v_rift).
         let t_eje = normalize(cross(polo, centro));
         let w = cfg.v_rift_cm_anio * CM_ANIO / (2.0 * self.malla.r_km);
@@ -4299,7 +4464,11 @@ impl Deriva {
             let (e, nn) = east_north(c);
             let th = std::f64::consts::PI * azar(self.seed, self.paso, id, P_ORIENT, 0);
             let polo = normalize(add(esc(e, th.cos()), esc(nn, th.sin())));
-            if let Some((h1, h2)) = self.partir(pi, polo, c, true) {
+            if let Some((h1, h2)) = self.partir(pi, polo, c) {
+                self.estampar(h1, lote::RIFT);
+                self.estampar(h2, lote::RIFT);
+                // Los bordes se estiran antes de que nazca el océano (adenda v8 §6.10).
+                self.iniciar_estiramiento(h1, h2);
                 let ids = vec![id, self.placas[h1].id, self.placas[h2].id];
                 // Longitud de la línea dentro del continente: celdas continentales junto a ella.
                 let largo = self.largo_rift(h1, h2);
@@ -4324,6 +4493,16 @@ impl Deriva {
             }
         }
         l
+    }
+
+    /// Diagnóstico de procedencia: marca todas las muestras de la placa `pi` con un lote nuevo de
+    /// tipo `tipo` ([`lote`]). No cambia nada del modelo.
+    fn estampar(&mut self, pi: usize, tipo: u8) {
+        let id = self.lotes.len() as u32;
+        self.lotes.push(tipo);
+        for c in &mut self.placas[pi].cort {
+            c.proc.lote = id;
+        }
     }
 
     /// Placas pequeñas (§6.5): menos de `A_min` → se absorben en la vecina con más borde común.
@@ -4361,6 +4540,7 @@ impl Deriva {
                 continue;
             };
             let ids = vec![self.placas[pi].id, self.placas[q as usize].id];
+            self.estampar(pi, lote::ABSORCION);
             self.fundir(q as usize, pi);
             self.evento("absorcion", ids, 0.0, area_p, None);
             cambio = true;
@@ -4398,8 +4578,10 @@ impl Deriva {
         let id = self.placas[pi].id;
         let th = std::f64::consts::PI * azar(self.seed, self.paso, id, P_SALTO, 0);
         let polo = normalize(add(esc(e, th.cos()), esc(nn, th.sin())));
-        match self.partir(pi, polo, c, false) {
+        match self.partir(pi, polo, c) {
             Some((h1, h2)) => {
+                self.estampar(h1, lote::SALTO_DORSAL);
+                self.estampar(h2, lote::SALTO_DORSAL);
                 let ids = vec![id, self.placas[h1].id, self.placas[h2].id];
                 self.evento("salto_dorsal", ids, 0.0, a_oc[pi], Some(c));
                 true
@@ -4532,7 +4714,6 @@ impl Deriva {
                 * au,
             f_del_au: (c.delaminacion_km3 - c0.delaminacion_km3) * au,
             f_den_au: (c.sedimento_al_mar_km3 - c0.sedimento_al_mar_km3) * au,
-            f_rift_au: (c.rift_km3 - c0.rift_km3) * au,
             f_acr_au: (c.sedimento_acrecionado_km3 - c0.sedimento_acrecionado_km3) * au,
             inventario_km3: v1,
             espesor_max_km: h_max,
@@ -4581,10 +4762,6 @@ impl Deriva {
             edad_max_margen_myr: margenes.2,
             margen_fin_km: margenes.3,
             margen_fin_vida_km_myr: margenes.4,
-            nacimientos_zf: self.fosas_paso.nacen_zf,
-            separar_zf: self.fosas_paso.separar_zf,
-            zf_escalon_km: self.fosas_paso.zf_escalon_km,
-            zf_candidata_km: self.fosas_paso.zf_candidata_km,
         });
     }
 

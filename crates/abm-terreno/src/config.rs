@@ -204,8 +204,11 @@ pub struct TectonicaCfg {
     pub d0_flujo_km2_myr: f64,
     pub c_ref_km: f64,
     pub w_min_orog_km: f64,
+    /// Rifts (adenda v8 §6.10): antes de que nazca el océano, la corteza de los bordes se estira,
+    /// conservando su volumen, hasta una rampa de anchura `W_m` (`w_margen_km`) a cada lado, de su
+    /// espesor de partida a `h_rot` junto al eje; entonces se rompe y empieza el fondo oceánico.
     pub w_margen_km: f64,
-    pub f_rift: f64,
+    pub h_rot_km: f64,
     // --- Dinámica de placas (§5.5) ---
     pub f_sp: f64,
     pub f_rp: f64,
@@ -243,10 +246,6 @@ pub struct TectonicaCfg {
     /// Edad mínima del fondo para un nacimiento espontáneo en una transformante (`a_min` de la nota
     /// de fosas, Myr; supuesto físico: solo el fondo viejo y denso se hunde solo; rango 100–180).
     pub a_min_myr: f64,
-    /// Escalón de edad del fondo entre celdas vecinas de una misma placa oceánica a partir del cual
-    /// hay zona de fractura, candidata al nacimiento espontáneo con el mismo contraste y fondo viejo
-    /// que una transformante (`Δa_fz` de la nota de fosas v5 §6.4, Myr; supuesto, rango 5–20).
-    pub da_fz_myr: f64,
     /// Velocidad media con la que una fosa activa se alarga desde su extremo al invadir una
     /// transformante o un margen pasivo (`v_inv` de la nota de fosas v4 §6.4, km/Myr). Resume
     /// también la fase lenta inicial (Gibraltar, ~20 Myr). Calibrado con la vida de los márgenes
@@ -312,9 +311,9 @@ impl Default for TectonicaCfg {
             h_cont_min_km: 20.0,
             d_r_m: 2500.0,
             c_hs: 350.0,
-            d_inf_m: 6400.0,
-            a_pl_m: 3200.0,
-            tau_pl_myr: 62.8,
+            d_inf_m: 5310.0,
+            a_pl_m: 2373.0,
+            tau_pl_myr: 31.0,
             t_x_myr: 20.0,
             d_fosa_m: 3000.0,
             w_fosa_km: 50.0,
@@ -333,11 +332,11 @@ impl Default for TectonicaCfg {
             h_del_km: 50.0,
             tau_del_myr: 25.0,
             h_flujo_km: 50.0,
-            d0_flujo_km2_myr: 50.0,
+            d0_flujo_km2_myr: 400.0,
             c_ref_km: 10.0,
             w_min_orog_km: 150.0,
             w_margen_km: 150.0,
-            f_rift: 0.7,
+            h_rot_km: 10.0,
             f_sp: 1.0,
             f_rp: 0.2,
             t_sat_myr: 80.0,
@@ -354,7 +353,6 @@ impl Default for TectonicaCfg {
             lambda_esp: 4.0e-6,
             l_losa_km: 800.0,
             a_min_myr: 140.0,
-            da_fz_myr: 10.0,
             v_inv_km_myr: 25.0,
             a_inv_myr: 60.0,
             t_rot_joven_myr: 10.0,
@@ -830,14 +828,13 @@ impl TectonicaCfg {
             && self.lambda_esp >= 0.0
             && self.l_losa_km > 0.0
             && self.a_min_myr >= 0.0
-            && self.da_fz_myr >= 0.0
             && self.v_inv_km_myr >= 0.0
             && self.a_inv_myr >= 0.0
             && self.t_rot_joven_myr >= 0.0
             && self.t_rot_viejo_myr >= self.t_rot_joven_myr)
         {
             return Err(invalid(
-                "se requiere p_arc_oc, p_arc_cont, p_se, s_ero_km, v_ero_cm_anio, d0_flujo_km2_myr >= 0, c_ref_km, tau_del_myr, h_del_km, h_flujo_km, l_borde_km, x_ini_km, tau_muerte_myr, l_losa_km > 0, lambda_esp, da_fz_myr, v_inv_km_myr, a_inv_myr >= 0, 0 <= t_rot_joven_myr <= t_rot_viejo_myr y 0 < theta_tr_grados < 90",
+                "se requiere p_arc_oc, p_arc_cont, p_se, s_ero_km, v_ero_cm_anio, d0_flujo_km2_myr >= 0, c_ref_km, tau_del_myr, h_del_km, h_flujo_km, l_borde_km, x_ini_km, tau_muerte_myr, l_losa_km > 0, lambda_esp, v_inv_km_myr, a_inv_myr >= 0, 0 <= t_rot_joven_myr <= t_rot_viejo_myr y 0 < theta_tr_grados < 90",
             ));
         }
         if !(self.rho_w < self.rho_s
@@ -885,6 +882,9 @@ impl TectonicaCfg {
             return Err(invalid(
                 "se requiere tau_rift, e1_km_myr, n_ero y t_sat > 0",
             ));
+        }
+        if !(self.w_margen_km >= 0.0 && self.h_rot_km > 0.0) {
+            return Err(invalid("se requiere w_margen_km >= 0 y h_rot_km > 0"));
         }
         Ok(())
     }
