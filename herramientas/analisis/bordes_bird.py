@@ -262,6 +262,13 @@ def main():
                 'media_cm_anio': r['conv_suma'] / max(sum(r['conv_fosa']), 1e-12),
                 'area_km2_anio': r['conv_suma'] * 1e-5}),
             (f'bordes.{nombre}.malla', {'placas': r['placas'], 'ambiguas_frac': r['ambiguas']}),
+            # Nota de fosas §10: lo que la regla de la nota llama fosa en cada clase de Bird (la
+            # referencia de la longitud de fosa es la fila SUB) y la oblicuidad y los tamaños.
+            (f'bordes.{nombre}.clase_a_fosa_regla_nota_km', {c: r['cruce_nota'][c]['fosa'] for c in CLASES}),
+            (f'bordes.{nombre}.oblicuidad_km', {'limites_grados': [10 * i for i in range(9)],
+                                                'converge': r['oblicuidad']['converge'],
+                                                'separa': r['oblicuidad']['separa']}),
+            (f'bordes.{nombre}.areas_placas_frac', {'mayor_a_menor': r['tamanos']}),
         ]
     # Diagnóstico de nota_ciclo_fosas.md §0: convergencia de las fosas (SUB) y de los bordes
     # convergentes sin fosa (OCB) de Bird, tramo a tramo.
@@ -375,6 +382,10 @@ def medir(etiqueta, ctx):
         g = math.hypot(ge, gn)
         return (ge / g, gn / g) if g > 0 else None
     cruce = {c: {t: 0.0 for t in TIPOS} for c in CLASES}   # clase de Bird → tipo con la regla del modelo
+    cruce_nota = {c: {t: 0.0 for t in TIPOS} for c in CLASES}   # ídem con la regla de la nota
+    # Oblicuidad del movimiento relativo (grados entre la velocidad y el borde: 0 = desgarre puro,
+    # 90 = de frente), con la normal del borde suavizado: longitud por clases de 10° y por signo.
+    oblicuidad = {'converge': [0.0] * 9, 'separa': [0.0] * 9}
     # Convergencia perpendicular (cm/año) de las fosas con la regla de la nota: longitud por clase.
     conv_fosa = [0.0] * len(LIM_CONV)
     conv_suma = 0.0                          # Σ v·L (cm/año·km) de las fosas con la regla de la nota
@@ -454,12 +465,25 @@ def medir(etiqueta, ctx):
             largo_b[f][tipo] += cuenta
             if f == 'modelo':
                 cruce[clase][tipo] += 0.5 * largo
+            if f == 'nota':
+                cruce_nota[clase][tipo] += cuenta if tipo == 'fosa' else 0.5 * largo
+                if vmm >= V_MIN:
+                    ang = math.degrees(math.asin(min(1.0, abs(div) / vmm)))
+                    oblicuidad['converge' if div < 0 else 'separa'][min(int(ang // 10), 8)] += 0.5 * largo
             if f == 'nota' and tipo == 'fosa' and cuenta > 0:
                 v = max(0.0, -div) / 10.0
                 conv_fosa[max(i for i in range(len(LIM_CONV)) if v >= LIM_CONV[i])] += cuenta
                 conv_suma += v * cuenta
-    return {'a': largo_a, 'b': largo_b, 'cruce': cruce, 'ambiguas': ambiguas / total_b,
-            'placas': len(set(etiqueta)), 'conv_fosa': conv_fosa, 'conv_suma': conv_suma}
+    # Áreas de las placas (fracción de la esfera), de mayor a menor.
+    area_reg = {}
+    for k in range(num):
+        if etiqueta[k] >= 0:
+            area_reg[etiqueta[k]] = area_reg.get(etiqueta[k], 0.0) + areas[k]
+    a_tot = sum(areas)
+    tamanos = sorted((a / a_tot for a in area_reg.values()), reverse=True)
+    return {'a': largo_a, 'b': largo_b, 'cruce': cruce, 'cruce_nota': cruce_nota,
+            'ambiguas': ambiguas / total_b, 'placas': len(set(etiqueta)), 'conv_fosa': conv_fosa,
+            'conv_suma': conv_suma, 'oblicuidad': oblicuidad, 'tamanos': tamanos}
 
 
 def convergencia_vectorial(tramos, clase):
@@ -502,6 +526,15 @@ def informe(r, vect, titulo):
         print(f'{c:<6}' + ''.join(f'{cruce[c][t]:>15.0f}' for t in TIPOS))
     print(f'Celdas de borde con la normal de la malla casi paralela al tramo (ambiguas): '
           f'{r["ambiguas"]:.1%} de la longitud')
+    cn = r['cruce_nota']
+    print('Con la regla de la nota, lo que es fosa en cada clase de Bird (km): ' +
+          ', '.join(f'{c} {cn[c]["fosa"]:.0f}' for c in CLASES))
+    ob = r['oblicuidad']
+    tc, ts = sum(ob['converge']), sum(ob['separa'])
+    print('Oblicuidad (10° por clase; % de la longitud que converge / se separa): ' +
+          str([round(100 * x / max(tc, 1e-12), 1) for x in ob['converge']]) + ' / ' +
+          str([round(100 * x / max(ts, 1e-12), 1) for x in ob['separa']]))
+    print('Áreas de las placas (% de la esfera): ' + str([round(100 * x, 1) for x in r['tamanos'][:20]]))
     cf = r['conv_fosa']
     t = sum(cf)
     if t > 0:

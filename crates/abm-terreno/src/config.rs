@@ -189,10 +189,6 @@ pub struct TectonicaCfg {
     /// Delaminación: por encima de `h_del` la base de la corteza pasa a eclogita y se desprende con
     /// tiempo característico `tau_del` (calibrado).
     pub h_del_km: f64,
-    /// Umbral de la delaminación en los arcos (adenda v4 §6.6): la raíz de cumulados densos de un
-    /// arco pesa más que el manto desde ~40 km (Jagoutz y Behn 2013: «negatively buoyant ... at
-    /// depths exceeding 40 kilometres»; discontinuidad a 38–42 km).
-    pub h_del_arco_km: f64,
     pub tau_del_myr: f64,
     /// Flujo lateral de la corteza engrosada (adenda v3 §6.6b): por encima de `h_flujo` la corteza
     /// inferior se desparrama hacia los lados con difusividad `d_flujo` (km²/Myr, calibrado).
@@ -224,6 +220,17 @@ pub struct TectonicaCfg {
     /// Radio del suavizado del borde (km): pertenencia, normal y tipo de tramo; también la distancia
     /// máxima para recolocar un diente (calibrado contra la longitud de los bordes de Bird).
     pub l_borde_km: f64,
+    // --- Ciclo de vida de las fosas (nota_ciclo_fosas.md v2) ---
+    /// Convergencia acumulada para que nazca una fosa en un tramo difuso (km; modelos numéricos:
+    /// 100–150 km en una zona de fractura, Gurnis et al. 2004; ~200 km, Li y Gurnis 2023).
+    pub x_ini_km: f64,
+    /// Tiempo seguido sin convergencia tras el que muere una fosa (Myr; supuesto).
+    pub tau_muerte_myr: f64,
+    /// Nacimiento espontáneo: probabilidad por km de tramo candidato y Myr, con fondo de 100 Myr
+    /// (1/(km·Myr); se calibra con la edad del fondo oceánico, Seton et al. 2020).
+    pub lambda_esp: f64,
+    /// Longitud de losa con la que el tirón es pleno (km; losa que llega a los 660 km con 45–60°).
+    pub l_losa_km: f64,
     // --- Eventos de placas (§5.6) ---
     pub n_p0: u32,
     pub n_cratones: u32,
@@ -233,7 +240,13 @@ pub struct TectonicaCfg {
     pub v_rift_cm_anio: f64,
     pub v_sutura_cm_anio: f64,
     pub t_sutura_myr: f64,
-    pub tau_orog_myr: f64,
+    /// Erosión de la génesis (adenda de balance v5 §6.7): `E = E_1·(z/1 km)^n_ero` km/Myr en la
+    /// tierra emergida, con `z` la altura sobre el mar (sustituto del relieve local, que la malla no
+    /// resuelve). `E_1`, la erosión a 1 km (calibrada con la relajación de un orógeno y la
+    /// exportación al mar), y `n_ero` (rango 1,5–3: la erosión crece mucho más que proporcional con
+    /// el relieve; Montgomery y Brandon 2002).
+    pub e1_km_myr: f64,
+    pub n_ero: f64,
     /// Deformación de los bordes de Voronoi, de los cratones y de las líneas de rift (fracción del
     /// radio): los bordes reales no son rectos.
     pub deformacion: f64,
@@ -288,7 +301,6 @@ impl Default for TectonicaCfg {
             eta_col: 0.5,
             eta_arco: 0.9,
             h_del_km: 50.0,
-            h_del_arco_km: 40.0,
             tau_del_myr: 50.0,
             h_flujo_km: 50.0,
             d_flujo_km2_myr: 3000.0,
@@ -306,6 +318,10 @@ impl Default for TectonicaCfg {
             v_inicial_max_cm_anio: 10.0,
             theta_tr_grados: 20.0,
             l_borde_km: 150.0,
+            x_ini_km: 150.0,
+            tau_muerte_myr: 10.0,
+            lambda_esp: 1.7e-7,
+            l_losa_km: 800.0,
             n_p0: 12,
             n_cratones: 8,
             n_min: 8,
@@ -314,7 +330,8 @@ impl Default for TectonicaCfg {
             v_rift_cm_anio: 2.0,
             v_sutura_cm_anio: 0.5,
             t_sutura_myr: 10.0,
-            tau_orog_myr: 63.0,
+            e1_km_myr: 0.01,
+            n_ero: 2.0,
             deformacion: 0.06,
             nivel_malla: 2,
             dt_myr: 1.0,
@@ -746,17 +763,20 @@ impl TectonicaCfg {
             && self.p_se >= 0.0
             && self.tau_del_myr > 0.0
             && self.h_del_km > 0.0
-            && self.h_del_arco_km > 0.0
             && self.s_ero_km >= 0.0
             && self.v_ero_cm_anio >= 0.0
             && self.h_flujo_km > 0.0
             && self.d_flujo_km2_myr >= 0.0
             && self.l_borde_km > 0.0
             && self.theta_tr_grados > 0.0
-            && self.theta_tr_grados < 90.0)
+            && self.theta_tr_grados < 90.0
+            && self.x_ini_km > 0.0
+            && self.tau_muerte_myr > 0.0
+            && self.lambda_esp >= 0.0
+            && self.l_losa_km > 0.0)
         {
             return Err(invalid(
-                "se requiere p_arc_oc, p_arc_cont, p_se, s_ero_km, v_ero_cm_anio, d_flujo_km2_myr >= 0, tau_del_myr, h_del_km, h_flujo_km, l_borde_km > 0 y 0 < theta_tr_grados < 90",
+                "se requiere p_arc_oc, p_arc_cont, p_se, s_ero_km, v_ero_cm_anio, d_flujo_km2_myr >= 0, tau_del_myr, h_del_km, h_flujo_km, l_borde_km, x_ini_km, tau_muerte_myr, l_losa_km > 0, lambda_esp >= 0 y 0 < theta_tr_grados < 90",
             ));
         }
         if !(self.rho_w < self.rho_s
@@ -796,8 +816,14 @@ impl TectonicaCfg {
         if !(self.detalle_persistencia > 0.0 && self.detalle_persistencia < 1.0) {
             return Err(invalid("se requiere 0 < detalle_persistencia < 1"));
         }
-        if !(self.tau_rift_myr > 0.0 && self.tau_orog_myr > 0.0 && self.t_sat_myr > 0.0) {
-            return Err(invalid("se requiere tau_rift, tau_orog y t_sat > 0"));
+        if !(self.tau_rift_myr > 0.0
+            && self.e1_km_myr > 0.0
+            && self.n_ero > 0.0
+            && self.t_sat_myr > 0.0)
+        {
+            return Err(invalid(
+                "se requiere tau_rift, e1_km_myr, n_ero y t_sat > 0",
+            ));
         }
         Ok(())
     }

@@ -440,7 +440,6 @@ fn balance_medio(metricas: &[MetricaMyr], fosas_km: &[f64; 10]) -> BalanceMedio 
         sedimento_acrecionado_au: media(|m| m.f_acr_au),
         choques_au: media(|m| m.f_col_au),
         delaminacion_au: media(|m| m.f_del_au),
-        delaminacion_arcos_au: media(|m| m.f_del_arcos_au),
         sedimento_al_mar_au: media(|m| m.f_den_au),
         rift_au: media(|m| m.f_rift_au),
         area_subducida_km2_anio: media(|m| m.area_subducida_km2_anio),
@@ -488,6 +487,41 @@ fn balance_medio(metricas: &[MetricaMyr], fosas_km: &[f64; 10]) -> BalanceMedio 
             } else {
                 0.0
             }
+        },
+        difusas_km: media(|m| m.difusas_km),
+        area_difusa_km2_anio: media(|m| m.area_difusa_km2_anio),
+        edad_media_fosas_myr: {
+            let l: f64 = val.iter().map(|m| m.fosas_km).sum();
+            if l > 0.0 {
+                val.iter()
+                    .map(|m| m.edad_media_fosas_myr * m.fosas_km)
+                    .sum::<f64>()
+                    / l
+            } else {
+                0.0
+            }
+        },
+        losa_media_frac: media(|m| m.losa_media_frac),
+        nacimientos_100myr: {
+            // Una métrica por paso de 1 Myr (§8).
+            let myr = val.len() as f64;
+            let mut x = [0.0; 3];
+            for m in &val {
+                for (i, v) in m.nacimientos.iter().enumerate() {
+                    x[i] += *v as f64 * 100.0 / myr;
+                }
+            }
+            x
+        },
+        muertes_100myr: {
+            let myr = val.len() as f64;
+            let mut x = [0.0; 2];
+            for m in &val {
+                for (i, v) in m.muertes.iter().enumerate() {
+                    x[i] += *v as f64 * 100.0 / myr;
+                }
+            }
+            x
         },
         fosas_por_convergencia_frac: {
             let t: f64 = fosas_km.iter().sum();

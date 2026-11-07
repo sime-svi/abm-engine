@@ -77,6 +77,7 @@ abm/
 │   │   │       ├── [x] malla.rs     # Malla tectónica (nivel 2 del cubo) y cuaterniones
 │   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques, delaminación, flujo lateral, erosión, sedimento, eventos
 │   │   │       ├── [x] deriva/suavizado.rs # Borde suavizado (nota de bordes): pertenencia φ, normal, tipo de tramo, suavizado de la pertenencia, islas
+│   │   │       ├── [x] deriva/fosas.rs     # Ciclo de las fosas (nota de fosas v2): tramos difusos y activos, nacimientos, polaridad, losa, muertes, convergencia difusa
 │   │   │       ├── [x] isostasia.rs # Altura isostática (con el agua), Parsons y Sclater, fosas, nivel del mar
 │   │   │       └── [x] historia.rs  # Eventos, métricas de cada Myr y cuentas de la corteza continental
 │   │   └── tests/
@@ -157,9 +158,9 @@ abm/
 │       │   ├── [x] propuesta_relieve_realista.md          # Diagnóstico del relieve (DECIDIDA: opción C con deriva)
 │       │   ├── [x] diseno_relieve_tectonico.md            # Diseño del responsable: relieve tectónico con deriva de placas (v1.0)
 │       │   ├── [x] incremento-4-diseno.md                 # Diseño técnico, calibraciones, resultados frente a la Tierra y hallazgos (IMPLEMENTADO, en medida)
-│       │   ├── [x] adenda_balance_corteza.md              # Adenda del responsable (v4): balance de la corteza continental, flujo lateral y raíz de los arcos (IMPLEMENTADA; incremento-4-diseno.md §9, §13 y §19)
+│       │   ├── [x] adenda_balance_corteza.md              # Adenda del responsable (v5): balance de la corteza, flujo lateral, erosión con la altura (IMPLEMENTADA; incremento-4-diseno.md §9, §13, §23 y §28; E_1 y n_ero provisionales)
 │       │   ├── [x] nota_bordes_placa.md                   # Nota del responsable: borde suavizado, dientes, 20°, islas (IMPLEMENTADA; incremento-4-diseno.md §12)
-│       │   └── [ ] nota_ciclo_fosas.md                    # Nota del responsable: nacimiento, vida y muerte de las fosas (DIAGNÓSTICO §0 HECHO: el exceso de fosa es rápido; espera decisión; incremento-4-diseno.md §17–§18)
+│       │   └── [x] nota_ciclo_fosas.md                    # Nota del responsable (v2): nacimiento, vida y muerte de las fosas (IMPLEMENTADA; incremento-4-diseno.md §24–§27; fosa ×1,55: medidas de fuerzas, espera decisión)
 │       ├── paquetes/              # Fase: código dividido en el workspace de paquetes
 │       │   └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)

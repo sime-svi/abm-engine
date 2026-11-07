@@ -108,14 +108,20 @@ Una malla de 52 km no puede dibujar una línea más fina que sus celdas, así qu
 
 Lo hace con las 52 placas de Bird y con una Tierra reducida a las 15 mayores (las pequeñas, fundidas con su vecina de más borde), como el modelo.
 
+Para la nota de fosas da también lo que su regla llama fosa en cada clase de Bird (la referencia de la longitud de fosa es la fila SUB), la oblicuidad de los bordes y los tamaños de las placas.
+
 También mide la **convergencia de las fosas** (diagnóstico de `nota_ciclo_fosas.md` §0): la componente perpendicular al borde (cm/año) por clases, su media ponderada por longitud y el área que se hunde. Lo hace tramo a tramo con la tasa de divergencia de Bird (clases SUB, fosas, y OCB, convergencia sin fosa) y en la malla con la regla de la nota. Fundir las placas pequeñas quita sobre todo fosas de microplacas de arco: las de las 15 mayores hunden 1,5 km²/año de los 2,7 de todas.
 
 ## La deriva en varias semillas
 
 ```bash
-SEMILLAS=42,1,2,3,4 H_DEL_ARCO=40 TAU_ERO=63,110 \
+SEMILLAS=42,1,2,3,4 VARIANTES="tectonica.lambda_esp=0;tectonica.lambda_esp=2e-7" \
   cargo test --release -p abm-terreno --test tectonica deriva_en_varias_semillas -- --ignored --nocapture
+E1=0.005,0.01,0.02 N_ERO=2,3 \
+  cargo test --release -p abm-terreno --test tectonica calibracion_relajacion -- --ignored --nocapture
 ```
+
+`VARIANTES` son ajustes de la config como los de `--set`: separados por comas dentro de una variante y por `;` entre variantes. Sin ella, la config tal cual.
 
 La deriva del planeta es caótica: un cambio pequeño cambia qué placas chocan y cuándo, y la semilla 42 de la batería da solo una realización. Entre semillas, la exportación de sedimento al mar varía ±0,5 AU y el cambio del volumen continental ±5 puntos. Para decidir una calibración se mira la media de varias semillas. Esta prueba exploratoria corre una deriva por cada semilla y valor, todas a la vez (~4 min con 10).
 
@@ -124,7 +130,10 @@ Por cada una da:
 - el consumo y el solape por tipo de borde, en las uniones triples y en los finales de fosa;
 - los picos de más de 80 km y si su muestra estaba oculta el paso anterior;
 - la erosión potencial por exceso de espesor;
-- el tiempo de cada etapa del paso, con la traza de `Deriva::dar_paso`.
+- el tiempo de cada etapa del paso, con la traza de `Deriva::dar_paso`;
+- las fosas de la nota de fosas: longitud activa y difusa, edad, tirón, nacimientos y muertes;
+- la edad del fondo;
+- las cuatro medidas de fuerzas del §10 de la nota: oblicuidad, tamaños de las placas, potencia de cada fuerza y área creada y consumida.
 
 ## La batería de escenarios
 

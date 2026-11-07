@@ -533,7 +533,7 @@ Lo que añadiría la nota de fosas:
 
 En total, del 3 al 5 % de la deriva: de 4 a 6 s más en el escenario del planeta, que quedaría en ~170 de 200 s. Si hiciera falta sitio, la etapa mayor es la erosión con el sedimento: calcula dos inundaciones por prioridad por paso.
 
-## 22. Pendientes (2026-11-07, en orden)
+## 22. Pendientes (2026-11-07; sustituida por §30)
 
 1. **Decisión del responsable sobre la nota de fosas.** El exceso de fosa es rápido (§17); la nota quitaría como mucho el 19 %.
    - La referencia coherente para un modelo sin microplacas es la fosa total de la Tierra (51 000 km a 5,3 cm/año), no la de las 15 mayores. Contra ella, el exceso es ×1,45 y casi todo es área: el modelo crea y hunde un 20–30 % más de fondo que la Tierra con la misma velocidad media.
@@ -544,4 +544,166 @@ En total, del 3 al 5 % de la deriva: de 4 a 6 s más en el escenario del planeta
 5. **Finales de fosa** asignados a la transformante vecina (3 % del consumo): es una cuenta, no un consumo en un borde que no converge.
 6. Calibrar `τ_del`, `f_acr`, `X_ini` y `λ_esp` tras la nota de fosas, con la media de varias semillas.
 7. Lluvia: reparto por latitudes (nota propia, tras cerrar la tectónica); barlovento con objetivo ~1,2 (CHELSA); `c_P` sin recalibrar.
+8. Acortamiento andino, ciclo de Wilson, flexión de la litosfera, microplacas; casquetes polares.
+
+## 23. Adenda v5: la base (2026-11-07, segunda entrega)
+
+En el orden del responsable: primero la cuenta de los finales de fosa y las muestras ocultas, después la nota de fosas y al final la erosión. Todo se mide con 5 semillas (42, 1, 2, 3 y 4) y su dispersión.
+
+- **Se retira la raíz de los arcos** (`h_del_arco_km`, la marca de la franja del arco y su cuenta): las tasas medidas de los arcos ya son netas.
+- **Finales de fosa:**
+  - Un frente de consumo a menos de `L_borde` de una fosa del mismo par se asigna a esa fosa (`tramos_en_el_borde`), con su arco y sus procesos.
+  - El consumo en bordes que no convergen baja del 3,2 % a 0,4–0,6 %.
+  - El solape continental en esos bordes (4,5 %) es solo una cuenta y no se toca.
+- **Las muestras ocultas fluyen** (`flujo_lateral`):
+  - Cada oculta intercambia con la visible de la celda donde cae su centro, con la misma ley y el acoplamiento de un lado de celda.
+  - El máximo de una oculta baja de 86–180 km a 69–92.
+- **Dientes:**
+  - Los que no encuentran hueco a menos de `L_borde` lo buscan, a menos de 3·`L_borde`, entre los huecos de tramo transformante o convergente que tocan su placa (los de dorsal no: no se pone corteza continental en una dorsal).
+  - Los que siguen sin hueco y tienen su placa alrededor esperan en ella, ocultos, al paso siguiente, sin repartirse.
+  - Las muestras sueltas, sin su placa alrededor, siguen pasando a la placa donde están.
+  - **Hallazgo:** los dientes movían ~5,8 AU de corteza continental al año. La mitad se repartía como engrosamiento en bordes que se deslizan, unos 1–3 AU, del orden de los arcos.
+- **Erosión en cuencas cerradas:** la cuenca se mira en la celda que ve la muestra, no en la de su centro (a menudo la vecina). Con la ley de la altura, una muestra alta junto a una depresión no se erosionaba nunca. El fallo venía de antes.
+
+Efecto, antes de la nota (5 semillas, erosión lineal):
+
+| | entrega anterior | + finales de fosa y ocultas | + segunda pasada de dientes | + dientes que esperan |
+|---|---|---|---|---|
+| Picos de más de 80 km (celdas·paso, 5 semillas) | 605 | 307 | 584 | 27 |
+| Espesor visible máximo tras el rodaje (km) | 89–113 | 85–106 | 85–157 | 76–88 |
+| Sedimento al mar (AU) | 3,13 | 3,22 ± 0,31 | 2,98 ± 0,58 | 2,55 ± 0,40 |
+
+El engrosamiento de los dientes también alimentaba la erosión: sin él, la exportación al mar baja 0,7 AU.
+
+## 24. Nota de fosas v2: implementación (2026-11-07)
+
+`deriva/fosas.rs`.
+
+**Estado del tramo.**
+- Cada celda de borde de un tramo convergente de corteza oceánica guarda un estado en el mapa de su placa (celda local → estado, en las dos orillas): difuso con `X`, o fosa activa con su polaridad, la longitud de la losa `L`, su edad y el tiempo sin converger.
+- Viaja con la placa. Cada paso se rehace con los bordes de ahora: el estado se hereda de la celda o de sus vecinas a uno y dos anillos, y el que ya no está en un borde con su par se descarta.
+- Un tramo es una componente conexa de los bordes convergentes del par, con las dos orillas.
+- Tras partirse o fundirse una placa, el estado que miraba a ella mira a sus hijas o a la fundida (`ancestros`).
+
+**Reglas.**
+- **6.1–6.2.** Un tramo nuevo es difuso con `X = 0`. Sus solapes no se consumen: la muestra que pierde se quita (la placa pierde área) y su corteza, su base basáltica y su sedimento se reparten como espesor entre las celdas de las dos placas a menos de `W_dif` = `L_borde`, por área. Se conserva el volumen; no hay arcos, ni `A_sub`, ni sumideros. `X` crece con la convergencia perpendicular media del tramo.
+- **6.3.** Con `X ≥ X_ini` (150 km) nace la fosa. Polaridad: se hunde el océano frente a corteza que flota; entre dos océanos, el más viejo; si empatan, sorteo sembrado.
+- **6.4.** Nacimiento espontáneo en márgenes pasivos (sin otra placa a menos de `L_borde`) y en transformantes entre fondos oceánicos con contraste de edad. Se trocean en bloques de unos `L_borde` y se hace una tirada sembrada por bloque y paso. En un margen, la parte oceánica conexa se separa como placa nueva (`partir_por_corteza`) y todo el borde nuevo es la fosa.
+- **6.5.** Una fosa activa consume con su polaridad fija (también en el torneo de dos océanos). `L` crece con la convergencia y el tirón se multiplica por `min(1, L/L_losa)`, con `L_losa` = 800 km.
+- **6.6.** Muere a los `τ_muerte` = 10 Myr sin converger, o por choque. Una muerte cuenta cuando el grupo de celdas que muere no toca celdas activas vivas de su par; si las toca, la fosa se acorta. Tras un choque, el tramo vuelve a difuso con `X = 0`.
+- **Sustituye** a la polaridad de dos océanos decidida por par de placas.
+
+**Decisiones de quien implementa** (huecos de la nota).
+- **Corteza que flota = corteza continental** (`h > h_cont_min` = 20 km; un arco más grueso ya es continental).
+  - Con «`hc > 0`», una capa fina de corteza de tipo continental (el sedimento que `sumar_hc` convierte en roca, el material de una muestra suelta) bastaba para matar la fosa por choque.
+  - En el planeta, las fosas vivían 2–3 Myr y casi toda la convergencia era difusa: 69 000 km, 3 km²/año, exportación de 11 AU.
+- **Una fosa espontánea nace con la losa que ya cuelga, `L = X_ini`:** con `L = 0` no tiraría y moriría a los 10 Myr.
+- **El tirón sigue mientras la fosa vive**, también en los pasos en que sus placas se deslizan.
+- **Para los escenarios que empiezan con una subducción en marcha**, `activar_fosas(L)` pone fosas maduras en los tramos convergentes: India–Asia y el borde dentado.
+
+**Pruebas** (§10 de la nota), en verde: convergencia lenta y corta (no nace, se engruesa y conserva), convergencia suficiente (nace a los 3 Myr y se hunde la vieja), polaridad fija, muerte tras `τ_muerte` con el tramo divergente, y nacimiento espontáneo en un margen pasivo con placa nueva y balance exacto. India–Asia sigue igual.
+
+## 25. Calibración de `λ_esp` y resultados de la nota (2026-11-07)
+
+`λ_esp` se calibra con la edad del fondo (Seton et al. 2020), con 5 semillas y la erosión lineal anterior:
+
+| `λ_esp` (1/(km·Myr)) | edad media del fondo (Myr) | fondo de más de 180 Myr | fosa activa (km) | se hunden (km²/año) | al mar (AU) |
+|---|---|---|---|---|---|
+| 0 | 103 ± 11 | 26 % | 58 700 ± 5 800 | 2,92 | 3,9 |
+| 1·10⁻⁷ | 71 ± 4 | 7,0 % | 72 300 | 4,17 | 4,7 |
+| 2·10⁻⁷ | 62 ± 6 | 6,1 % | 81 100 | 4,60 | 4,9 |
+| 4·10⁻⁷ | 56 ± 7 | 4,2 % | 92 000 | 5,27 | 5,3 |
+| 1·10⁻⁶ | 52 ± 9 | 4,7 % | 100 300 | 5,69 | 5,4 |
+
+- La edad media de la Tierra (64,2 Myr) sale con `λ_esp` = 1,7·10⁻⁷, el valor por defecto.
+- La fracción por encima de 180 Myr no baja del 4 % con ningún `λ_esp`: hay fondo viejo en el interior de placas oceánicas grandes que ningún nacimiento alcanza.
+
+Con `λ_esp` = 1,7·10⁻⁷ y la erosión con la altura provisional (§28), 5 semillas:
+
+| | modelo | Tierra |
+|---|---|---|
+| Fosa activa | 79 300 ± 7 400 km a 5,7 cm/año | ~51 000 km a 5,3 (Bird SUB; 49 300 en la malla) |
+| Convergencia difusa | 10 300 ± 1 100 km a 1,9 cm/año; absorbe 0,31 km²/año | 16 200–17 400 km a 1,3 (OCB); ~0,2 km²/año |
+| Se hunden / se crean (km²/año) | 4,4 ± 0,5 / 4,9 | 2,7 + 0,2 / 2,7–3,4 |
+| Edad media del fondo; más de 180 Myr | 68 ± 8 Myr; 7,8 % | 64,2; menos del 1 % |
+| Edad media de las fosas; fracción del tirón | 67 Myr; 0,82 | — |
+| Velocidad de las placas; Forsyth–Uyeda (fosa) | 4,56 cm/año; 0,68 | 4,39; positiva |
+| Nacimientos por 100 Myr | 174 inducidos (muchos son trozos que alargan una fosa), 5,5 en margen, 0,1 en transformante | — |
+| Arcos / choques / al mar (AU) | 4,5 / 3,1 / 4,2 ± 1,0 | ~1,8 al mar |
+| V_cont; `f_cont` | −7,4 ± 4,1 %; 0,37 | ±10 %; 0,40 |
+
+- **La fosa sigue 1,55 veces por encima de la referencia.** Según el §10 de la nota, se miden las fuerzas y se traen al responsable antes de tocar nada (§27).
+- **Sin nacimientos espontáneos** (`λ_esp` = 0), fosa, área y tamaños de placa son los de la Tierra: 58 700 km (×1,15), se hunden 2,92 + 0,28 km²/año, y la placa mayor ocupa el 25 % de la esfera. Pero el fondo es demasiado viejo.
+- Los nacimientos en márgenes pasivos que hacen falta para la edad del fondo añaden unos 20 000 km de fosa y un 50 % de área: cada uno convierte en fosa todo el margen contiguo, crea una placa y lleva a más choques y suturas.
+- **La convergencia difusa mete basalto bajo los continentes:** 1,1 ± 0,1 km³/año. Lo pide la nota («ambas placas»), pero los levanta, y la erosión se lleva corteza continental por arriba. En un escenario India–Asia dejó 15 km de basalto bajo el borde de Asia.
+- **Los picos de más de 80 km vuelven con la nota:** 3 400–11 700 celdas·paso y un máximo visible de 107–129 km, también con `λ_esp` = 0. Los sube sobre todo el engrosamiento de los choques.
+
+## 26. Referencia de Bird para la nota (2026-11-07)
+
+`bordes_bird.py` da ahora lo que la regla de la nota llama fosa en cada clase de Bird (todas las placas): SUB 37 120 km, OCB 10 006, OTF 3 141, CCB 629 y OSR 197.
+- Las clases en la malla miden SUB 49 275 km y OCB 16 196.
+- Con las 15 mayores, SUB da 25 852 km de fosa.
+- La referencia de la nota, «la de Bird SUB en la malla» (≈51 000 km), corresponde a la clase SUB, 49 275 km, o al total que la regla llama fosa, 51 163.
+
+## 27. Las cuatro medidas de fuerzas (nota de fosas §10)
+
+Con la configuración de §25 (5 semillas; la Tierra, de Bird en la malla):
+
+1. **Oblicuidad** (% de la longitud por clases de 10°, de 0° = desgarre puro a 90° = de frente).
+   - Convergentes: modelo 13,8 / 11,6 / 10,3 / 10,6 / 10,6 / 10,6 / 10,7 / 10,9 / 11,1, casi uniforme; Bird 10,1 / 10,8 / 8,4 / 7,3 / 7,5 / 9,2 / 13,6 / 16,0 / 16,9. En la Tierra, el 46,5 % converge a más de 60° (en el modelo, el 33 %).
+   - Divergentes: modelo casi uniforme (32 % a más de 60°); Bird, 42 %, con el 17,5 % a 80–90°: las dorsales se abren de frente.
+2. **Tamaños de las placas** (% de la esfera, al final).
+   - La mayor del modelo ocupa el 23–53 % (media 41 %) y quedan 8–14 placas.
+   - Bird, las 15 mayores: 21,8 / 11,5 / 11,4 / 10,9 / 10,1 / 9,8 / 9,0 / 3,7 / 3,7 / 2,5 / 1,8 / 1,1 / 1,0 / 1,0 / 0,6.
+   - Con `λ_esp` = 0, la mayor ocupa de media el 25 %, como el Pacífico.
+3. **Potencia de cada fuerza** (`τ·ω` sumado en todas las placas; en equilibrio suman cero).
+   - Motriz: tirón de la losa 74–76 % y empuje de dorsal 24–26 %. Las estimaciones de la Tierra dan la mayor parte a las losas, del orden del 90 % (Lithgow-Bertelloni y Richards 1998), con el empuje de dorsal mucho menor.
+   - Resistente: arrastre basal 81–84 % y choques 16–19 %. Igual con `λ_esp` = 0.
+4. **Área creada y consumida.**
+   - Se crean 4,2–5,5 km²/año y se consumen 3,7–4,9 más 0,3 difusos. La Tierra está en 2,7–3,4: Bird crea 3,01 km²/año en las dorsales oceánicas y 3,51 en total.
+   - Con `λ_esp` = 0: 3,2–3,65 creados y 2,7–3,1 + 0,3 consumidos.
+
+**Lectura** (sin tocar nada).
+- La diferencia de fuerzas con la Tierra es sobre todo de forma: oblicuidad uniforme frente a bordes de frente, y un empuje de dorsal del 25 %.
+- Pero el exceso de fosa y de área de la configuración calibrada viene casi entero de los nacimientos espontáneos en márgenes pasivos. Sin ellos, longitud, área y tamaños son los de la Tierra.
+- Lo que hay que decidir es cómo se consume el fondo viejo sin rodear márgenes enteros de fosa.
+
+## 28. Erosión con la altura (adenda v5 §6.7, 2026-11-07)
+
+**Ley.**
+- `E = E_1·(z/1 km)^n_ero` km/Myr donde la columna asoma (`z > 0` sobre el mar), primero el sedimento y luego la corteza de tipo continental (la base basáltica no se erosiona).
+- Lo retirado en un paso no baja la columna del nivel del mar (con el rebote isostático); en las cuencas cerradas no hay erosión.
+- Se retira `τ_ero` (`tau_orog_myr`) con la ley lineal.
+
+**Relajación** (India–Asia, 50 Myr de choque, tiempo para bajar de 38 km), tras el arreglo de la cuenca cerrada:
+
+| `n_ero` | `E_1` = 0,005 | 0,01 | 0,02 | 0,04 km/Myr |
+|---|---|---|---|---|
+| 2 | 286 Myr | 144 | 80 | 46 |
+| 3 | 71 | 38 | 21 | 10 |
+
+**Valores provisionales:** `n_ero` = 2 (el inicial) y `E_1` = 0,01 km/Myr.
+- La relajación tarda 144 Myr.
+- Las tasas cumplen la comprobación: ~1 m/Myr a 300 m, 10 m/Myr a 1 km, 0,09–0,25 km/Myr a 3–5 km (0,1–1 en cordilleras).
+- **No se calibran con la exportación al mar:** con la base actual (se hunde un 50 % más de fondo y hay 4,5 AU de arcos), ajustarlos a ~1,8 AU sería forzar un parámetro para compensar otra irrealidad (CLAUDE §2.8). Con estos valores, el planeta exporta 4,2 ± 1,0 AU.
+- En la semilla 42 la tierra baja a 921 m de media (antes 1 203; la Tierra 671), la franja de 1–2 km pasa del 64 % al 21 % (la Tierra 16 %) y el nivel del mar queda en el dato (antes, 700 m por debajo).
+
+## 29. Coste (2026-11-07)
+
+- La deriva tarda 112 s por semilla, frente a ~100 sin la nota.
+  - Fosas y nacimientos espontáneos: 5,5–6,2 %.
+  - Convergencia difusa: 0,8 %.
+  - Flujo de las ocultas: el flujo lateral sube del 2,5 al 5,5 %.
+- El escenario del planeta tarda 187,6 s de 200.
+- Con `λ_esp` = 1·10⁻⁶, la deriva llegaba a 117–380 s: la búsqueda del sedimento en el mar recorre cada vez más mar cuando la exportación es grande y las plataformas se llenan.
+
+## 30. Pendientes (2026-11-07 b, en orden)
+
+1. **Decisión del responsable sobre el consumo del fondo viejo** (§25, §27). Los nacimientos en márgenes pasivos que piden la edad del fondo convierten márgenes enteros en fosa y suben fosa y área un 50 %; sin ellos, fosa, área y tamaños son los de la Tierra. Además, el fondo de más de 180 Myr no baja del 4 %.
+2. **Basalto de la convergencia difusa bajo los continentes** (1,1 km³/año): la nota dice «ambas placas». ¿Solo la placa oceánica?
+3. **Picos de más de 80 km con la nota** (máximo visible 107–129 km): sobre todo el engrosamiento de los choques.
+4. **Calibración conjunta de la erosión** (`E_1`, `n_ero`) con la relajación y ~1,8 AU, cuando la base esté corregida.
+5. **Tiempo:** el planeta está en 187,6 s de 200; la etapa mayor es la erosión con el sedimento (~30 %).
+6. Calibrar `τ_del`, `f_acr` y `X_ini` (100–200) tras decidir 1–3, con varias semillas.
+7. Lluvia: reparto por latitudes (nota propia); barlovento con objetivo ~1,2 (CHELSA).
 8. Acortamiento andino, ciclo de Wilson, flexión de la litosfera, microplacas; casquetes polares.

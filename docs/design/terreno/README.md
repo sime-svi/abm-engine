@@ -350,3 +350,38 @@ Detalle técnico en `incremento-4-diseno.md` §9–§11; la adenda, en `adenda_b
 - Las columnas de más de 80 km suelen salir de los trozos de borde que se recolocan y de los choques.
 
 **El tiempo.** La regla de la nota añadiría del 3 al 5 % al cálculo, unos 5 segundos sobre 164 (el límite es 200).
+
+### Fosas con vida propia, una base más limpia y erosión con la altura (07-11-2026, segunda parte)
+
+**Primero, la base.** Se arreglaron cuatro cosas de cómo está dibujado el planeta:
+- **Los extremos de las fosas.** Donde una fosa gira y el borde pasa a deslizarse, lo que se hunde se contaba en el tramo equivocado. Ahora cuenta para la fosa.
+- **Las muestras ocultas.** Son trozos de placa que el mundo no ve en un paso. Ya se reparten hacia los lados como el resto de la corteza gruesa, y no se apilan.
+- **Los dientes del borde.** Son los trozos de placa que, por el dibujo en celdas, se meten en la placa vecina donde las dos solo se deslizan. Antes, si no encontraban sitio, se repartían como engrosamiento: unos 1–3 km³ de corteza continental al año, tanto como los arcos volcánicos, en bordes que en la realidad no engordan. Ahora esperan en su placa al paso siguiente. Los picos de más de 80 km casi desaparecieron y la exportación al mar bajó un 20 %.
+- **Un fallo de la erosión.** Una columna alta junto a una depresión no se erosionaba nunca, porque se miraba la cuenca en la celda equivocada.
+
+**Fosas que nacen, viven y mueren** (la nota del responsable).
+- Ahora un borde donde dos placas se juntan no es una fosa desde el primer momento. Es **convergencia difusa**: el fondo se arruga y se engruesa a los dos lados.
+- Solo cuando se han juntado 150 km nace la fosa, con una **polaridad** que ya no cambia (cuál de las dos placas se hunde).
+- Su **losa** (el trozo de placa ya hundido) tira cada vez más a medida que se alarga.
+- La fosa muere si deja de converger 10 millones de años o si le llega un continente.
+- También pueden nacer fosas solas en los bordes de los continentes donde el fondo es viejo (**nacimiento espontáneo**). Su ritmo se ajustó para que la edad media del fondo oceánico sea la de la Tierra, 64 millones de años.
+
+**Lo que salió.**
+- La convergencia difusa se parece a la de la Tierra: unos 10 000 km de borde, que se acercan unos 2 cm al año.
+- Sin nacimientos espontáneos, la longitud de las fosas, el fondo que se hunde y el tamaño de las placas son los de la Tierra. Pero el fondo envejece demasiado: una cuarta parte pasa de 180 millones de años.
+- Con los nacimientos necesarios para rejuvenecerlo, cada uno convierte en fosa todo el borde de un continente. Las fosas miden 1,55 veces las de la Tierra, se hunde un 50 % más de fondo, quedan placas gigantes y sigue habiendo fondo muy viejo (8 %).
+- Como pidió el responsable, se midieron las fuerzas que mueven las placas antes de tocar nada:
+  - el tirón de las losas da el 75 % del empuje (en la Tierra, del orden del 90 %);
+  - los bordes del modelo están orientados al azar respecto al movimiento, mientras que en la Tierra las dorsales y las fosas tienden a abrirse y cerrarse de frente;
+  - la placa mayor ocupa el 40 % del planeta (el Pacífico, el 22 %).
+- La causa principal del exceso parece estar en cómo nacen las fosas espontáneas, más que en las fuerzas.
+
+**La erosión ahora depende de la altura.** Como en la Tierra, las cordilleras se gastan mucho más deprisa que las llanuras: a 300 m se pierde ~1 m por millón de años; a 4 km, 0,15 km.
+- Con los valores provisionales, una cordillera vieja se gasta en 144 millones de años.
+- La tierra baja: la altura media pasa de 1 200 a 920 m (la Tierra, 670), y ya no sobra tierra entre 1 y 2 km.
+- El ritmo exacto (cuánto sedimento llega al mar) no se ha ajustado todavía: con la base que hunde un 50 % de más, ajustarlo sería tapar un error con otro.
+
+**Lo que queda por decidir.**
+- Cómo se consume el fondo viejo sin rodear de fosa los continentes.
+- Si el basalto de la convergencia difusa debe ir también bajo los continentes, donde los levanta.
+- Por qué vuelven picos de corteza de más de 100 km en los choques.

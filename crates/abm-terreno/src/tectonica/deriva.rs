@@ -20,6 +20,7 @@ use std::collections::{BinaryHeap, HashMap};
 
 use super::historia::{CuentasCorteza, EventoTectonico, MetricaMyr};
 
+mod fosas;
 mod suavizado;
 use super::isostasia;
 use super::malla::{LADOS, Malla, Mat3, NADA, Quat, aplicar, aplicar_t, velocidad};
@@ -27,6 +28,8 @@ use crate::config::TectonicaCfg;
 use crate::geometry::{V3, cross, dot, east_north, lat_lon, normalize};
 use crate::noise::Perlin3;
 use crate::statics::{hash01, splitmix64};
+use fosas::Difusa;
+pub use fosas::{ConteoFosas, EstadoFosa};
 use suavizado::{TipoTramo, Vecindad};
 
 /// Máximo de placas que se apuntan en una celda del mundo (más es rarísimo: se ignoran).
@@ -102,9 +105,6 @@ pub struct Corteza {
     pub edad_orog: f64,
     /// Ritmo de engrosamiento del paso (km/Myr): arcos y choques.
     pub dh_dt: f64,
-    /// La columna recibió corteza de un arco activo en este paso: su raíz se desprende desde
-    /// `h_del,arco` (adenda v4 §6.6). Se apaga al delaminar.
-    pub en_franja_arco: bool,
 }
 
 impl Corteza {
@@ -118,7 +118,6 @@ impl Corteza {
             edad_oc: 0.0,
             edad_orog: 0.0,
             dh_dt: 0.0,
-            en_franja_arco: false,
         }
     }
 
@@ -133,7 +132,6 @@ impl Corteza {
             edad_oc: 0.0,
             edad_orog: 1000.0,
             dh_dt: 0.0,
-            en_franja_arco: false,
         }
     }
 
@@ -222,6 +220,12 @@ pub struct Placa {
     /// Marca de trabajo por celda local (se limpia en cada paso).
     marca: Vec<u8>,
     pub nacida_myr: f64,
+    /// Estado de los tramos convergentes en las celdas de borde de la placa (nota de fosas §3):
+    /// celda local → estado. Viaja con la placa.
+    pub fosas: HashMap<u32, EstadoFosa>,
+    /// Ids de las placas de las que viene (por rifts, saltos de dorsal o suturas): el estado de un
+    /// tramo de otra placa que mire a una de ellas mira a esta.
+    pub ancestros: Vec<u64>,
 }
 
 impl Placa {
@@ -241,6 +245,8 @@ impl Placa {
             cap_cos: -2.0,
             marca: vec![0; num],
             nacida_myr: t,
+            fosas: HashMap::new(),
+            ancestros: Vec::new(),
         }
     }
 
@@ -250,7 +256,20 @@ impl Placa {
         p.q = madre.q;
         p.rot = madre.rot;
         p.omega = madre.omega;
+        p.ancestros = madre.ancestros.clone();
+        p.ancestros.push(madre.id);
+        p.recortar_ancestros();
         p
+    }
+
+    /// Solo hacen falta los antepasados recientes: el estado de un tramo que mira a una placa ya
+    /// partida o fundida se reescribe con el id nuevo en el paso siguiente.
+    fn recortar_ancestros(&mut self) {
+        const MAX: usize = 16;
+        if self.ancestros.len() > MAX {
+            let quitar = self.ancestros.len() - MAX;
+            self.ancestros.drain(..quitar);
+        }
     }
 
     fn insertar(&mut self, l: u32, c: Corteza, mundo: u32) {
@@ -361,6 +380,8 @@ pub enum TipoBorde {
     Subduccion,
     Colision,
     Transformante,
+    /// Convergencia de corteza oceánica sin fosa (nota de fosas §6.2): se absorbe engrosando.
+    Difusa,
 }
 
 impl TipoBorde {
@@ -370,6 +391,7 @@ impl TipoBorde {
             TipoBorde::Subduccion => 2,
             TipoBorde::Colision => 3,
             TipoBorde::Transformante => 4,
+            TipoBorde::Difusa => 5,
         }
     }
 }
@@ -390,6 +412,9 @@ pub struct Borde {
     pub tipo: TipoBorde,
     /// En una subducción: `p` es la placa que se hunde.
     pub p_subduce: bool,
+    /// Fracción del tirón de la losa (`min(1, L_j/L_losa)`, nota de fosas §6.5) en el lado que se
+    /// hunde de una fosa activa; 0 en el resto.
+    pub losa: f64,
 }
 
 /// Historia de un par de placas (ids `a < b`).
@@ -401,9 +426,6 @@ struct Par {
     subduccion: Option<(u64, f64)>,
     /// Choque en curso: (id de la de abajo, id de la de arriba).
     choque: Option<(u64, u64)>,
-    /// Subducción entre cortezas oceánicas en curso: id de la que se hunde (polaridad de todo el
-    /// tramo, decidida en el primer contacto por la edad media de cada lado).
-    polaridad_oo: Option<u64>,
     /// Último Myr con contacto convergente entre las dos.
     contacto_myr: f64,
     choque_visto_myr: f64,
@@ -455,6 +477,9 @@ struct Detalle {
     eta: Option<f64>,
     solapado_km3: Option<f64>,
     perdido_km3: Option<f64>,
+    edad_fondo_myr: Option<f64>,
+    edad_fosa_myr: Option<f64>,
+    losa_km: Option<f64>,
 }
 
 /// Fracción suavizada por debajo de la cual una muestra que reclama una celda es una muestra suelta
@@ -486,6 +511,8 @@ struct Perdida {
     /// En un tramo convergente (se consume); si no, es un diente que se recoloca (nota de bordes
     /// §6.4).
     convergente: bool,
+    /// En un tramo convergente difuso, sin fosa activa: se absorbe engrosando (nota de fosas §6.2).
+    difusa: bool,
 }
 
 /// Campo de distancias por la superficie (Dijkstra) con la fuente más cercana de cada celda.
@@ -608,8 +635,9 @@ pub struct Deriva {
     pub area_subducida_km2: f64,
     pub area_erosiva_km2: f64,
     /// Bordes del último paso (nota de bordes §8): dientes recolocados en un hueco de su placa y
-    /// sin hueco (sumados a una celda de su placa), creación residual en huecos que no son de
-    /// dorsal, área reasignada por el suavizado (km²) y material continental de los dientes (km³).
+    /// sin hueco (esperan ocultos en su placa; adenda v5), creación residual en huecos que no son
+    /// de dorsal, área reasignada por el suavizado (km²) y material continental de los dientes
+    /// (km³).
     pub dientes_recolocados_km2: f64,
     pub dientes_sin_hueco_km2: f64,
     /// Muestras sueltas lejos de su placa cuyo material pasa a la placa donde están (km²).
@@ -619,6 +647,18 @@ pub struct Deriva {
     /// Islas absorbidas por la placa que las rodea en el último paso (km²).
     pub area_islas_km2: f64,
     pub dientes_continentales_km3: f64,
+    /// Material continental de los dientes del último paso por su destino (km³): recolocados a
+    /// menos de `L_borde`, recolocados en la segunda pasada, sumados a su placa y sumados a otra.
+    pub dientes_cont_por_via_km3: [f64; 4],
+    /// Nacimientos, muertes y convergencia difusa del último paso (nota de fosas §8).
+    pub fosas_paso: ConteoFosas,
+    /// Potencia de cada fuerza en cada placa en el último reparto de velocidades (nota de fosas
+    /// §10, medida 3): índice de la placa, su área (km²) y `τ·ω` del tirón de la losa, el empuje de
+    /// dorsal, la resistencia de los choques y el arrastre basal (en equilibrio suman cero).
+    pub potencias: Vec<(u32, f64, [f64; 4])>,
+    /// Espesor continental máximo (km) de las muestras que recibieron, en el último paso, dientes
+    /// sin hueco de su placa y muestras sueltas de otra placa (diagnóstico de los picos).
+    pub max_tras_dientes_km: [f64; 2],
     /// Traza de diagnóstico (pruebas): con `Some`, cada paso añade sus etapas. `None` no cuesta nada.
     pub traza: Option<Vec<EtapaTraza>>,
     traza_reloj: Option<std::time::Instant>,
@@ -825,6 +865,10 @@ impl Deriva {
             area_islas_km2: 0.0,
             dientes_continentales_km3: 0.0,
             fosas_por_convergencia_km: [0.0; 10],
+            max_tras_dientes_km: [0.0; 2],
+            fosas_paso: ConteoFosas::default(),
+            potencias: Vec::new(),
+            dientes_cont_por_via_km3: [0.0; 4],
             traza: None,
             traza_reloj: None,
             consumo_en_borde_paso: Vec::new(),
@@ -863,6 +907,7 @@ impl Deriva {
         if self.traza.is_some() {
             self.traza_reloj = Some(std::time::Instant::now());
         }
+        self.fosas_paso = ConteoFosas::default();
         let v0 = self.inventario_continental();
         let c0 = self.cuentas;
         self.velocidades();
@@ -883,7 +928,7 @@ impl Deriva {
         self.trazar("recolocar_dientes");
         self.rellenar_huecos();
         self.trazar("rellenar_huecos");
-        let (choques, tramos) = self.reconstruir_mapas();
+        let (choques, tramos, difusas) = self.reconstruir_mapas();
         self.trazar("reconstruir_mapas");
         // Suavizado de la pertenencia de los bordes oceánicos y absorción de las islas (nota de
         // bordes §6.5).
@@ -891,6 +936,8 @@ impl Deriva {
         self.trazar("suavizar_pertenencia");
         self.area_islas_km2 = self.absorber_islas();
         self.trazar("absorber_islas");
+        self.absorber_difusa(&difusas);
+        self.trazar("absorber_difusa");
         for p in self.placas.iter_mut().filter(|p| p.viva) {
             p.cort.iter_mut().for_each(|c| c.dh_dt = 0.0);
         }
@@ -921,6 +968,12 @@ impl Deriva {
             self.clasificar_bordes();
         }
         self.trazar("eventos_de_placas");
+        // Nota de fosas §9: el estado de los tramos con los bordes del final del paso, y los
+        // nacimientos espontáneos.
+        self.avanzar_fosas();
+        // Los nacimientos espontáneos dejan puesto en los bordes el estado de los tramos.
+        self.nacimientos_espontaneos();
+        self.trazar("fosas");
         self.paso += 1;
         self.t_myr = self.t0_myr + self.paso as f64 * dt;
         self.metricas_del_paso(v0, &c0);
@@ -1000,7 +1053,8 @@ impl Deriva {
     }
 
     /// Solo la cinemática de un paso, con las velocidades que ya tengan las placas: girar, rasterizar,
-    /// resolver huecos y solapes, y poner al día los mapas (para las pruebas de la malla).
+    /// resolver huecos y solapes, poner al día los mapas y el estado de los tramos convergentes
+    /// (para las pruebas de la malla y de las fosas).
     pub fn paso_cinematico(&mut self) {
         let dt = self.cfg.dt_myr;
         for p in self.placas.iter_mut().filter(|p| p.viva) {
@@ -1014,10 +1068,16 @@ impl Deriva {
         self.resolver_solapes();
         self.recolocar_dientes();
         self.rellenar_huecos();
-        let (_, tramos) = self.reconstruir_mapas();
+        let (_, tramos, difusas) = self.reconstruir_mapas();
         self.area_subducida_km2 = tramos.iter().map(|t| t.a_sub).sum();
         self.area_reasignada_km2 = self.suavizar_pertenencia();
         self.area_islas_km2 = self.absorber_islas();
+        self.fosas_paso = ConteoFosas::default();
+        self.absorber_difusa(&difusas);
+        // Estado de los tramos convergentes (nota de fosas), sin fuerzas.
+        self.clasificar_bordes();
+        self.avanzar_fosas();
+        self.aplicar_estado_fosas();
         self.paso += 1;
         self.t_myr = self.t0_myr + self.paso as f64 * dt;
     }
@@ -1129,7 +1189,6 @@ impl Deriva {
                         b,
                         subduccion: None,
                         choque: None,
-                        polaridad_oo: None,
                         contacto_myr: f64::NEG_INFINITY,
                         choque_visto_myr: f64::NEG_INFINITY,
                         sutura_myr: 0.0,
@@ -1183,16 +1242,19 @@ impl Deriva {
         }
         // Fuerzas de borde (par respecto al centro) y acoplamiento implícito de las colisiones.
         let mut t = vec![[0.0; 3]; n];
+        let mut t_tiron = vec![[0.0; 3]; n];
         let mut acop: Vec<(usize, usize, Mat3)> = Vec::new();
         for b in &self.bordes {
             let x = self.malla.dir[b.k as usize];
             let p = b.p as usize;
             let f = match b.tipo {
-                TipoBorde::Subduccion if b.p_subduce => {
+                // Tirón de la losa (§6.2), que crece con su longitud (nota de fosas §6.5): mientras
+                // la fosa viva, aunque en un paso las placas se deslicen.
+                _ if b.p_subduce && b.losa > 0.0 => {
                     let edad = self.corteza(b.k as usize).map_or(0.0, |c| c.edad_oc);
                     esc(
                         b.normal,
-                        self.cfg.f_sp * (edad / self.cfg.t_sat_myr).sqrt().min(1.0),
+                        self.cfg.f_sp * (edad / self.cfg.t_sat_myr).sqrt().min(1.0) * b.losa,
                     )
                 }
                 TipoBorde::Divergente => esc(b.normal, -self.cfg.f_rp),
@@ -1213,6 +1275,9 @@ impl Deriva {
             };
             let par = esc(cross(x, f), r * b.largo_km);
             t[p] = add(t[p], par);
+            if b.p_subduce && b.losa > 0.0 {
+                t_tiron[p] = add(t_tiron[p], par);
+            }
         }
         // Sistema K ω = T / c_b, con K = R²·M (diagonal por placas) + acoplamientos.
         let vivas: Vec<usize> = (0..n).filter(|&i| self.placas[i].viva).collect();
@@ -1249,6 +1314,28 @@ impl Deriva {
         let mut omega = vec![[0.0; 3]; n];
         for (i, &p) in vivas.iter().enumerate() {
             omega[p] = [sol[3 * i], sol[3 * i + 1], sol[3 * i + 2]];
+        }
+        // Potencias (τ·ω) de cada fuerza en cada placa, antes del marco sin rotación neta: tirón,
+        // empuje (el resto del par de borde), choques (−Σ acoplamientos) y arrastre (−R²·M·ω).
+        self.potencias.clear();
+        let mut t_choque = vec![[0.0; 3]; n];
+        for (p, q, gg) in &acop {
+            let d = sub(omega[*p], omega[*q]);
+            let f = aplicar(gg, d);
+            t_choque[*p] = sub(t_choque[*p], f);
+            t_choque[*q] = add(t_choque[*q], f);
+        }
+        let area_p = self.area_placa();
+        for &p in &vivas {
+            let w = omega[p];
+            let drag = esc(aplicar(&m[p], w), -r * r);
+            let tiron = dot(t_tiron[p], w);
+            let empuje = dot(t[p], w) - tiron;
+            self.potencias.push((
+                p as u32,
+                area_p[p],
+                [tiron, empuje, dot(t_choque[p], w), dot(drag, w)],
+            ));
         }
         // Marco sin rotación neta: ω_net = (Σ M'_p)⁻¹ Σ M'_p ω_p.
         let mut mt = [[0.0; 3]; 3];
@@ -1432,10 +1519,6 @@ impl Deriva {
         for ((x, y), e) in medias {
             let i = self.par_idx(x, y);
             self.pares[i].contacto_myr = t;
-            if e[1] > 0.0 && self.pares[i].polaridad_oo.is_none() {
-                let (ex, ey) = (e[0] / e[1], e[2] / e[3]);
-                self.pares[i].polaridad_oo = Some(if ex >= ey { x } else { y });
-            }
             if e[5] > 0.0 && self.pares[i].choque.is_none() {
                 let abajo = match self.pares[i].subduccion {
                     Some((s, _)) => s,
@@ -1478,6 +1561,7 @@ impl Deriva {
                         l,
                         choque: false,
                         convergente: false,
+                        difusa: false,
                     });
                 }
                 self.dueno[k] = self.cov[k][gana].0;
@@ -1516,16 +1600,21 @@ impl Deriva {
                     l: gana.1,
                     choque: false,
                     convergente: false,
+                    difusa: false,
                 });
                 gana = b;
             }
             for (p, l, choque) in perd {
+                // Nota de fosas §6.2: sin una fosa activa entre las dos placas, el tramo es difuso y
+                // lo que converge se absorbe engrosando; con ella, se consume (un choque, siempre).
+                let difusa = !choque && self.hunde_en_fosa(gana, (p, l)).is_none();
                 self.perdidas.push(Perdida {
                     k: k as u32,
                     p,
                     l,
                     choque,
                     convergente: true,
+                    difusa,
                 });
             }
             self.dueno[k] = gana.0;
@@ -1582,11 +1671,22 @@ impl Deriva {
             (false, true) => subduce(a, b, self),
             (true, false) => subduce(b, a, self),
             (false, false) => {
-                let i = self.par_idx(ida, idb);
-                let hunde = self.pares[i]
-                    .polaridad_oo
-                    .unwrap_or(if ca.edad_oc >= cb.edad_oc { ida } else { idb });
-                if hunde == ida {
+                // Nota de fosas: en una fosa activa, la polaridad fijada al nacer; si no (tramo
+                // difuso), la que tendría al nacer (6.3): entre dos fondos que no flotan, el más
+                // viejo.
+                let hunde = match self.hunde_en_fosa(a, b) {
+                    Some(h) => h,
+                    None => {
+                        if ca.edad_oc != cb.edad_oc {
+                            if ca.edad_oc > cb.edad_oc { a.0 } else { b.0 }
+                        } else if ida > idb {
+                            a.0
+                        } else {
+                            b.0
+                        }
+                    }
+                };
+                if hunde == a.0 {
                     subduce(a, b, self)
                 } else {
                     subduce(b, a, self)
@@ -1598,12 +1698,14 @@ impl Deriva {
     /// Dientes de tramos transformantes o divergentes (nota de bordes §6.4): la muestra que solo
     /// perdió celdas en solapes que no convergen no se consume; va al hueco de su propia placa (uno
     /// que toca su placa, de cualquier tipo) más cercano a menos de `r_busca = L_borde`, con su
-    /// volumen. Desempate sembrado. Va antes de repartir los huecos, para que un diente llene el hueco
-    /// que su placa deja detrás al deslizarse.
+    /// volumen. Los que no lo encuentran buscan, a menos de 3·L_borde, un hueco de tramo
+    /// transformante o convergente que toque su placa (adenda v5: el reparto de los dientes era lo que
+    /// más subía los picos). Desempate sembrado. Va antes de repartir los huecos, para que un diente
+    /// llene el hueco que su placa deja detrás al deslizarse.
     fn recolocar_dientes(&mut self) {
-        let (rs, rc) = (self.cfg.rho_s, self.cfg.rho_c);
         self.dientes_recolocados_km2 = 0.0;
         self.dientes_continentales_km3 = 0.0;
+        self.dientes_cont_por_via_km3 = [0.0; 4];
         // Muestras que aún representan una celda propia o que perdieron alguna en un tramo
         // convergente (esas se consumen): no son dientes.
         let mut queda: std::collections::HashSet<(u32, u32)> = std::collections::HashSet::new();
@@ -1626,6 +1728,24 @@ impl Deriva {
             .collect();
         dientes.sort_unstable();
         dientes.dedup_by_key(|x| (x.0, x.1));
+        // Hueco libre que toca la placa `pi` (el que deja detrás al deslizarse).
+        let libre_junto = |d: &Deriva, g: u32, pi: u32| {
+            d.hueco[g as usize]
+                && d.dueno[g as usize] == NADA
+                && d.malla.vec[g as usize]
+                    .iter()
+                    .any(|&v| v != NADA && d.dueno[v as usize] == pi)
+        };
+        let mas_cerca = |d: &Deriva, xd: V3, l: u32, g1: u32, g2: u32| {
+            dot(xd, d.malla.dir[g1 as usize])
+                .total_cmp(&dot(xd, d.malla.dir[g2 as usize]))
+                .then(
+                    d.sorteo(g1 as u64, l as u64)
+                        .cmp(&d.sorteo(g2 as u64, l as u64)),
+                )
+        };
+        // Primera pasada: un hueco de cualquier tipo a menos de L_borde.
+        let mut sin_hueco: Vec<(u32, u32, u32)> = Vec::new();
         for (pi, l, kd) in dientes {
             let xd = self.malla.dir[kd as usize];
             let hueco = self
@@ -1633,54 +1753,96 @@ impl Deriva {
                 .de(kd as usize)
                 .iter()
                 .copied()
-                .filter(|&g| {
-                    // Hueco que toca su placa: el que deja detrás al deslizarse.
-                    self.hueco[g as usize]
-                        && self.dueno[g as usize] == NADA
-                        && self.malla.vec[g as usize]
-                            .iter()
-                            .any(|&v| v != NADA && self.dueno[v as usize] == pi)
-                })
-                .max_by(|&g1, &g2| {
-                    dot(xd, self.malla.dir[g1 as usize])
-                        .total_cmp(&dot(xd, self.malla.dir[g2 as usize]))
-                        .then(
-                            self.sorteo(g1 as u64, l as u64)
-                                .cmp(&self.sorteo(g2 as u64, l as u64)),
-                        )
-                });
-            let Some(g) = hueco else {
-                continue;
-            };
-            let gu = g as usize;
-            let a = self.malla.area[l as usize];
-            let p = &mut self.placas[pi as usize];
-            let lg = self.malla.localizar(aplicar_t(&p.rot, self.malla.dir[gu])) as u32;
-            if p.mapa[lg as usize] != NADA {
-                continue;
+                .filter(|&g| libre_junto(self, g, pi))
+                .max_by(|&g1, &g2| mas_cerca(self, xd, l, g1, g2));
+            if !hueco.is_some_and(|g| self.poner_diente(pi, l, g, 0)) {
+                sin_hueco.push((pi, l, kd));
             }
-            let Some(c) = p.quitar(l) else {
-                continue;
-            };
-            // Mismo volumen en una celda de otra área: se ajusta el espesor.
-            let f = a / self.malla.area[lg as usize];
-            let c2 = Corteza {
-                h: if c.cont {
-                    c.h * f
-                } else {
-                    c.h - c.hc + c.hc * f
-                },
-                hc: c.hc * f,
-                sed: c.sed * f,
-                ..c
-            };
-            p.insertar(lg, c2, g);
-            self.dueno[gu] = pi;
-            self.rep[gu] = lg;
-            self.hueco[gu] = false;
-            self.dientes_recolocados_km2 += a;
-            self.dientes_continentales_km3 += c.v_cont(rs, rc) * a;
         }
+        // Segunda pasada: los huecos de tramos transformantes o convergentes, que esperan dientes y
+        // si no reciben ninguno se llenan con fondo nuevo, a menos de 3·L_borde. Un diente sin hueco
+        // y un hueco sin diente son las dos caras del mismo borde en escalera; los de dorsal no, para
+        // no poner corteza continental en una dorsal.
+        if sin_hueco.is_empty() {
+            return;
+        }
+        let tipados: Vec<u32> = (0..self.malla.num as u32)
+            .filter(|&g| {
+                self.hueco[g as usize]
+                    && self.dueno[g as usize] == NADA
+                    && matches!(
+                        self.tipo_k.get(g as usize),
+                        Some(TipoTramo::Transformante | TipoTramo::Convergente)
+                    )
+            })
+            .collect();
+        let cos_max = (3.0 * self.cfg.l_borde_km / self.malla.r_km).cos();
+        for (pi, l, kd) in sin_hueco {
+            let xd = self.malla.dir[kd as usize];
+            let hueco = tipados
+                .iter()
+                .copied()
+                .filter(|&g| {
+                    dot(xd, self.malla.dir[g as usize]) >= cos_max && libre_junto(self, g, pi)
+                })
+                .max_by(|&g1, &g2| mas_cerca(self, xd, l, g1, g2));
+            if let Some(g) = hueco {
+                self.poner_diente(pi, l, g, 1);
+            }
+        }
+    }
+
+    /// Un diente sin hueco con su placa alrededor: al menos un cuarto de las celdas con placa a menos
+    /// de `r_busca` de donde perdió su celda son de su placa.
+    fn diente_con_su_placa(&self, pi: u32, kd: u32) -> bool {
+        let (mut propias, mut vecinas) = (0usize, 0usize);
+        for &j in self.vecindad.de(kd as usize) {
+            let p = self.dueno[j as usize];
+            if p != NADA && self.rep[j as usize] != NADA {
+                vecinas += 1;
+                if p == pi {
+                    propias += 1;
+                }
+            }
+        }
+        propias > 0 && 4 * propias >= vecinas
+    }
+
+    /// Lleva el diente (muestra `l` de la placa `pi`) al hueco `g` con su volumen. Devuelve si lo
+    /// puso (la celda local del hueco puede estar ocupada).
+    fn poner_diente(&mut self, pi: u32, l: u32, g: u32, via: usize) -> bool {
+        let (rs, rc) = (self.cfg.rho_s, self.cfg.rho_c);
+        let gu = g as usize;
+        let a = self.malla.area[l as usize];
+        let p = &mut self.placas[pi as usize];
+        let lg = self.malla.localizar(aplicar_t(&p.rot, self.malla.dir[gu])) as u32;
+        if p.mapa[lg as usize] != NADA {
+            return false;
+        }
+        let Some(c) = p.quitar(l) else {
+            return false;
+        };
+        // Mismo volumen en una celda de otra área: se ajusta el espesor.
+        let f = a / self.malla.area[lg as usize];
+        let c2 = Corteza {
+            h: if c.cont {
+                c.h * f
+            } else {
+                c.h - c.hc + c.hc * f
+            },
+            hc: c.hc * f,
+            sed: c.sed * f,
+            ..c
+        };
+        p.insertar(lg, c2, g);
+        self.dueno[gu] = pi;
+        self.rep[gu] = lg;
+        self.hueco[gu] = false;
+        self.dientes_recolocados_km2 += a;
+        let v = c.v_cont(rs, rc) * a;
+        self.dientes_continentales_km3 += v;
+        self.dientes_cont_por_via_km3[via] += v;
+        true
     }
 
     /// Huecos (§6.3): cada celda sin placa pasa a la placa cubierta más cercana (empate: id menor);
@@ -1748,11 +1910,14 @@ impl Deriva {
     ///
     /// Devuelve la corteza continental que la placa de abajo mete bajo la de arriba (choques) y los
     /// tramos de fosa con el fondo oceánico consumido en el paso (adenda de balance §6.0).
-    fn reconstruir_mapas(&mut self) -> (Vec<Choque>, Vec<Tramo>) {
+    fn reconstruir_mapas(&mut self) -> (Vec<Choque>, Vec<Tramo>, Vec<Difusa>) {
         let num = self.malla.num;
 
         let cfg = self.cfg.clone();
         let (rs, rc) = (cfg.rho_s, cfg.rho_c);
+        self.dientes_sin_hueco_km2 = 0.0;
+        self.dientes_a_otra_placa_km2 = 0.0;
+        self.max_tras_dientes_km = [0.0; 2];
         // Marcas: 1 = representa una celda propia; 2 = solo perdidas por subducción; 3 = por choque.
         for k in 0..num {
             for i in 0..self.ncov[k] as usize {
@@ -1784,6 +1949,17 @@ impl Deriva {
             .map(|x| (x.p, x.l, x.k))
             .collect();
         frente_de.sort_unstable();
+        // Muestras con alguna pérdida en una fosa activa (las demás convergentes son de tramos
+        // difusos: se absorben, nota de fosas §6.2).
+        let mut en_fosa: Vec<(u32, u32)> = self
+            .perdidas
+            .iter()
+            .filter(|x| x.convergente && !x.difusa)
+            .map(|x| (x.p, x.l))
+            .collect();
+        en_fosa.sort_unstable();
+        en_fosa.dedup();
+        let mut difusas: Vec<Difusa> = Vec::new();
         let mut diente_de: Vec<(u32, u32, u32)> = self
             .perdidas
             .iter()
@@ -1815,10 +1991,6 @@ impl Deriva {
             }
             quitar.sort_unstable();
             for (l, _) in quitar {
-                let Some(c) = self.placas[pi].quitar(l) else {
-                    continue;
-                };
-                let a = self.malla.area[l as usize];
                 let buscar = |lista: &[(u32, u32, u32)]| {
                     let i = lista.partition_point(|x| (x.0, x.1) < (pi as u32, l));
                     lista
@@ -1827,8 +1999,27 @@ impl Deriva {
                         .map(|x| x.2)
                 };
                 let frente = buscar(&frente_de);
+                let diente = buscar(&diente_de);
+                // Un diente sin hueco con su placa alrededor no se reparte (adenda v5): se queda en
+                // ella como muestra oculta, con su volumen, y el paso siguiente vuelve a intentarlo.
+                // Repartido, engrosaba los bordes que se deslizan y subía los picos.
+                if frente.is_none()
+                    && let Some(kd) = diente
+                    && self.diente_con_su_placa(pi as u32, kd)
+                {
+                    let a = self.malla.area[l as usize];
+                    if let Some(c) = self.placas[pi].get(l) {
+                        self.dientes_cont_por_via_km3[2] += c.v_cont(rs, rc) * a;
+                    }
+                    self.dientes_sin_hueco_km2 += a;
+                    continue;
+                }
+                let Some(c) = self.placas[pi].quitar(l) else {
+                    continue;
+                };
+                let a = self.malla.area[l as usize];
                 let Some(k) = frente else {
-                    match buscar(&diente_de) {
+                    match diente {
                         // Solo perdió celdas en tramos que no convergen: es un diente.
                         Some(kd) => dientes.push((pi as u32, l, kd, c)),
                         // Toda muestra consumida perdió alguna celda en un solape: no pasa.
@@ -1836,6 +2027,16 @@ impl Deriva {
                     }
                     continue;
                 };
+                if en_fosa.binary_search(&(pi as u32, l)).is_err() {
+                    difusas.push(Difusa {
+                        k,
+                        ganadora: self.dueno[k as usize],
+                        perdedora: pi as u32,
+                        c,
+                        a,
+                    });
+                    continue;
+                }
                 // Corteza de tipo continental de la placa de abajo (§6.5): la de un continente con
                 // su sedimento, o la que un arco o la acreción pusieron sobre el fondo oceánico.
                 let v_sol = if c.cont {
@@ -1869,37 +2070,23 @@ impl Deriva {
             }
         }
 
-        // Dientes que no encontraron hueco en `recolocar_dientes` (§6.4): su material se suma a la
-        // celda más cercana de su placa; su fondo oceánico desaparece sin contar como consumo.
-        self.dientes_sin_hueco_km2 = 0.0;
-        self.dientes_a_otra_placa_km2 = 0.0;
+        // Muestras sueltas (dientes sin hueco y sin su placa alrededor: menos de un cuarto de las
+        // celdas a menos de r_busca): su material pasa a las celdas de alrededor, de cualquier placa,
+        // por área; su fondo oceánico desaparece sin contar como consumo.
         let h_cont_min = cfg.h_cont_min_km;
-        for (pi, l, kd, c) in dientes {
+        for (_pi, l, kd, c) in dientes {
             let a = self.malla.area[l as usize];
             self.dientes_continentales_km3 += c.v_cont(rs, rc) * a;
-            // Se reparte por las celdas de su placa a menos de r_busca, por área: se engruesan un
-            // poco. Si su placa apenas está alrededor (menos de un cuarto de esas celdas), por todas
-            // ellas, de cualquier placa: repartido en dos o tres celdas, el «poco» apila corteza
-            // paso a paso (los dientes continentales no se suavizan).
-            let vecinas: Vec<u32> = self
+            let destino: Vec<u32> = self
                 .vecindad
                 .de(kd as usize)
                 .iter()
                 .copied()
                 .filter(|&j| self.dueno[j as usize] != NADA && self.rep[j as usize] != NADA)
                 .collect();
-            let propias: Vec<u32> = vecinas
-                .iter()
-                .copied()
-                .filter(|&j| self.dueno[j as usize] == pi)
-                .collect();
-            let destino = if 4 * propias.len() >= vecinas.len() && !propias.is_empty() {
-                self.dientes_sin_hueco_km2 += a;
-                propias
-            } else {
-                self.dientes_a_otra_placa_km2 += a;
-                vecinas
-            };
+            let cual = 1;
+            self.dientes_a_otra_placa_km2 += a;
+            self.dientes_cont_por_via_km3[3] += c.v_cont(rs, rc) * a;
             let a_tot: f64 = destino.iter().map(|&j| self.malla.area[j as usize]).sum();
             if a_tot <= 0.0 {
                 self.cuentas.choque_sin_sitio_km3 += c.v_cont(rs, rc) * a;
@@ -1914,6 +2101,9 @@ impl Deriva {
                     let r = a * w / aj;
                     d.sumar_hc(c.hc * r, c.arco, rs, rc, h_cont_min);
                     d.sed += c.sed * r;
+                    if d.cont {
+                        self.max_tras_dientes_km[cual] = self.max_tras_dientes_km[cual].max(d.h);
+                    }
                 }
             }
         }
@@ -2009,7 +2199,7 @@ impl Deriva {
             p.actualizar_cap(&self.malla);
         }
         self.consumo_paso = por_celda.iter().map(|t| (t.k, t.a_sub)).collect();
-        (choques, por_celda)
+        (choques, por_celda, difusas)
     }
 
     /// Lleva la cuenta de un choque entre la placa `abajo` (índice) y la dueña de la celda `k`, y
@@ -2282,20 +2472,12 @@ impl Deriva {
                     (false, true) => (TipoBorde::Subduccion, true),
                     (true, false) => (TipoBorde::Subduccion, false),
                     (false, false) => {
+                        // Provisional: el estado del tramo (fosa activa con su polaridad o
+                        // convergencia difusa) lo pone `aplicar_estado_fosas`.
                         let idp = self.placas[p as usize].id;
                         let idq = self.placas[q as usize].id;
-                        let (a, b) = if idp < idq { (idp, idq) } else { (idq, idp) };
-                        let pol = self
-                            .pares
-                            .binary_search_by(|x| (x.a, x.b).cmp(&(a, b)))
-                            .ok()
-                            .and_then(|i| self.pares[i].polaridad_oo);
-                        let hunde_p = match pol {
-                            Some(h) => h == idp,
-                            None => {
-                                cp.edad_oc > cq.edad_oc || (cp.edad_oc == cq.edad_oc && idp > idq)
-                            }
-                        };
+                        let hunde_p =
+                            cp.edad_oc > cq.edad_oc || (cp.edad_oc == cq.edad_oc && idp > idq);
                         (TipoBorde::Subduccion, hunde_p)
                     }
                 }
@@ -2310,8 +2492,10 @@ impl Deriva {
                 v_n,
                 tipo,
                 p_subduce,
+                losa: 0.0,
             });
         }
+        self.aplicar_estado_fosas();
     }
 
     // --- d. Fosas: régimen, arcos, erosión por subducción y sedimento (adenda de balance §6) ------
@@ -2505,7 +2689,6 @@ impl Deriva {
                 }
                 c.dh_dt += dh / cfg.dt_myr;
                 c.edad_orog = 0.0;
-                c.en_franja_arco = true;
             });
             self.cuentas.arcos_km3 += puesto;
             pasa_a_cont += a_cont;
@@ -2589,6 +2772,10 @@ impl Deriva {
     /// arriba (sin salir de ella): cuando la placa de abajo pierde más de una fila en un paso, las
     /// filas de dentro son de la misma fosa. Cada tramo queda así en el borde, con su franja de
     /// arco detrás (orden fijo por celda).
+    ///
+    /// Un frente a menos de `L_borde` de una fosa del mismo par de placas es de esa fosa (adenda
+    /// v5): donde la fosa gira y el borde pasa a deslizarse, la celda de borde más cercana ya es de
+    /// la transformante, pero lo que se hunde entra por la fosa.
     fn tramos_en_el_borde(&mut self, frentes: &[Tramo], borde_en: &[u32]) -> Vec<Tramo> {
         let fuentes: Vec<(u32, f64, u32)> = self.bordes.iter().map(|b| (b.k, 0.0, b.k)).collect();
         let dueno = &self.dueno;
@@ -2599,6 +2786,13 @@ impl Deriva {
             |u, v| dueno[u] == dueno[v],
             3.0 * self.malla.lado_km,
         );
+        let es_fosa = |j: u32, arriba: u32, abajo: u32| {
+            let i = borde_en[j as usize];
+            i != NADA && {
+                let b = &self.bordes[i as usize];
+                b.tipo == TipoBorde::Subduccion && b.p == arriba && b.q == abajo
+            }
+        };
         let mut tramos: Vec<Tramo> = frentes
             .iter()
             .map(|t| {
@@ -2608,7 +2802,26 @@ impl Deriva {
                 } else {
                     t.k
                 };
-                Tramo { k, ..*t }
+                let arriba = self.dueno[t.k as usize];
+                if es_fosa(k, arriba, t.placa) {
+                    return Tramo { k, ..*t };
+                }
+                let x = self.malla.dir[t.k as usize];
+                let fosa = self
+                    .vecindad
+                    .de(t.k as usize)
+                    .iter()
+                    .copied()
+                    .filter(|&j| self.dueno[j as usize] == arriba && es_fosa(j, arriba, t.placa))
+                    .max_by(|&a, &b| {
+                        dot(x, self.malla.dir[a as usize])
+                            .total_cmp(&dot(x, self.malla.dir[b as usize]))
+                            .then(b.cmp(&a))
+                    });
+                Tramo {
+                    k: fosa.unwrap_or(k),
+                    ..*t
+                }
             })
             .collect();
         self.campo = campo;
@@ -2906,38 +3119,25 @@ impl Deriva {
         }
     }
 
-    /// Delaminación (adenda de balance v4 §6.6): por encima de `h_del` la base de la corteza pasa a
-    /// eclogita, más densa que el manto, y se desprende; en los arcos, la raíz de cumulados densos
-    /// cae desde `h_del,arco`. El exceso decae con la forma exponencial
+    /// Delaminación (adenda de balance v5 §6.6): por encima de `h_del` la base de la corteza pasa a
+    /// eclogita, más densa que el manto, y se desprende. La caída de la raíz de los arcos no va
+    /// aparte: ya está en las tasas netas de los arcos. El exceso decae con la forma exponencial
     /// exacta, estable con cualquier `Δt`: `h_c ← h_del + (h_c − h_del)·e^(−Δt/τ_del)`.
     fn delaminar(&mut self) {
         let cfg = &self.cfg;
-        let (mut total, mut arcos) = (0.0, 0.0);
+        let mut total = 0.0;
         for p in self.placas.iter_mut().filter(|p| p.viva) {
             for s in 0..p.cort.len() {
                 let c = &mut p.cort[s];
-                // Adenda v4 §6.6: en un arco (franja activa o corteza de arco) la raíz de
-                // cumulados densos se desprende desde h_del,arco; en el resto, desde h_del.
-                let en_arco = std::mem::take(&mut c.en_franja_arco) || c.arco;
-                let umbral = if en_arco {
-                    cfg.h_del_arco_km
-                } else {
-                    cfg.h_del_km
-                };
-                if c.hc > umbral {
-                    let dh = c.hc - tras_delaminar(c.hc, umbral, cfg.dt_myr, cfg.tau_del_myr);
+                if c.hc > cfg.h_del_km {
+                    let dh = c.hc - tras_delaminar(c.hc, cfg.h_del_km, cfg.dt_myr, cfg.tau_del_myr);
                     c.hc -= dh;
                     c.h -= dh;
-                    let v = dh * self.malla.area[p.celda[s] as usize];
-                    total += v;
-                    if en_arco {
-                        arcos += v;
-                    }
+                    total += dh * self.malla.area[p.celda[s] as usize];
                 }
             }
         }
         self.cuentas.delaminacion_km3 += total;
-        self.cuentas.delaminacion_arcos_km3 += arcos;
     }
 
     /// Flujo lateral de la corteza engrosada (adenda de balance v3 §6.6b): la corteza inferior de
@@ -2948,10 +3148,16 @@ impl Deriva {
     /// Va por la malla del mundo, entre celdas vecinas de la misma placa y con la muestra que ve cada
     /// una: la rejilla propia de una placa está girada respecto a la del mundo, y la corteza nueva o
     /// recolocada queda en celdas sueltas de esa rejilla, sin vecinas con las que fluir. En un borde
-    /// de choque continente–continente también fluye a la otra placa (el orógeno abarca las dos). Cada subpaso
-    /// calcula todos los `V_ik` con los espesores de su inicio y los aplica a la vez (función pura del
-    /// estado; conserva el volumen por construcción). Subpasos con `D·Δt_sub/d² ≤ 1/16` (una muestra
-    /// puede verla más de una celda).
+    /// de choque continente–continente también fluye a la otra placa (el orógeno abarca las dos).
+    ///
+    /// Las muestras ocultas (las de la placa que ninguna celda del mundo ve este paso) también
+    /// fluyen (adenda v5): la corteza es corteza, se vea o no. Cada una intercambia con la muestra
+    /// visible de la celda donde cae su centro, con la misma ley y el acoplamiento de un lado de
+    /// celda (`ℓ = lado`, `d = d_min`).
+    ///
+    /// Cada subpaso calcula todos los `V_ik` con los espesores de su inicio y los aplica a la vez
+    /// (función pura del estado; conserva el volumen por construcción). Subpasos con
+    /// `D·Δt_sub/d² ≤ 1/16` (una muestra puede verla más de una celda).
     fn flujo_lateral(&mut self) {
         let cfg = &self.cfg;
         if cfg.d_flujo_km2_myr <= 0.0 {
@@ -2975,9 +3181,34 @@ impl Deriva {
                 hc_de(&self.placas, k as usize, &self.dueno, &self.rep).is_some_and(|h| h > h_flujo)
             })
             .collect();
-        if fuente.is_empty() {
+        // Parejas (placa, celda local de la visible, celda local de una oculta en la misma celda del
+        // mundo) con corteza de tipo continental en alguna de las dos.
+        let (off, lista) = self.indice_inverso();
+        let mut ocultas: Vec<(u32, u32, u32)> = Vec::new();
+        for k in 0..malla.num {
+            let (p, lr) = (self.dueno[k], self.rep[k]);
+            if p == NADA || lr == NADA {
+                continue;
+            }
+            let pl = &self.placas[p as usize];
+            let Some(cr) = pl.get(lr) else {
+                continue;
+            };
+            for &sm in &lista[off[k] as usize..off[k + 1] as usize] {
+                let lh = pl.celda[sm as usize];
+                if lh != lr && (cr.hc > 0.0 || pl.cort[sm as usize].hc > 0.0) {
+                    ocultas.push((p, lr, lh));
+                }
+            }
+        }
+        let alguna_oculta = ocultas.iter().any(|&(p, lr, lh)| {
+            let pl = &self.placas[p as usize];
+            pl.get(lr).is_some_and(|c| c.hc > h_flujo) || pl.get(lh).is_some_and(|c| c.hc > h_flujo)
+        });
+        if fuente.is_empty() && !alguna_oculta {
             return;
         }
+        let (d_min, lado) = (malla.dist_lado_min_km, malla.lado_km);
         // Celdas de un borde de choque continente–continente: ahí el orógeno abarca las dos placas
         // y la corteza inferior también fluye a través de la sutura (si no, una astilla de la placa
         // de arriba, rodeada de otras placas, se queda con toda la corteza que se mete debajo).
@@ -3025,6 +3256,24 @@ impl Deriva {
                     recibe.push(k2);
                 }
             }
+            // Entre la muestra visible de cada celda y sus ocultas.
+            for &(p, lr, lh) in &ocultas {
+                let pl = &self.placas[p as usize];
+                let (Some(cr), Some(ch)) = (pl.get(lr), pl.get(lh)) else {
+                    continue;
+                };
+                let ((hi, li), (hk, lk)) = if cr.hc >= ch.hc {
+                    ((cr.hc, lr), (ch.hc, lh))
+                } else {
+                    ((ch.hc, lh), (cr.hc, lr))
+                };
+                if hi <= h_flujo || hk <= 0.0 || hk >= hi {
+                    continue;
+                }
+                let v = d * (hi - hk) / d_min * lado * dt_sub;
+                *delta.entry((p, li)).or_insert(0.0) -= v;
+                *delta.entry((p, lk)).or_insert(0.0) += v;
+            }
             let mut cambios: Vec<((u32, u32), f64)> = delta.drain().collect();
             cambios.sort_unstable_by_key(|x| x.0);
             for ((p, l), dv) in cambios {
@@ -3065,9 +3314,13 @@ impl Deriva {
 
     // --- e. Erosión tectónica, envejecimiento y sedimento (§6.6; adenda de balance §6.7) -------
 
-    /// Envejece la corteza y gasta las cordilleras: el exceso del espesor equivalente sobre `H_0`
-    /// decae con `τ_orog` (`τ_ero` de la adenda). Se lleva primero el sedimento y luego la corteza
-    /// (adenda §6.7). Devuelve la roca erosionada en cada celda del mundo (km³).
+    /// Envejece la corteza y gasta la tierra emergida (adenda de balance v5 §6.7): donde la columna
+    /// asoma (`z > 0` sobre el mar) se retira `E = E_1·(z/1 km)^n_ero` km/Myr de roca, primero el
+    /// sedimento y luego la corteza de tipo continental (la base basáltica no se erosiona). En la
+    /// Tierra la erosión crece mucho más que proporcional con el relieve en las cordilleras activas y
+    /// es de metros por Myr en llanuras y escudos (Montgomery y Brandon 2002); la altura sobre el mar
+    /// hace de relieve local. Lo retirado en un paso no baja la columna del nivel del mar (con su
+    /// rebote isostático). Devuelve la roca erosionada en cada celda del mundo (km³).
     fn erosion_y_envejecimiento(&mut self) -> Vec<(u32, f64)> {
         // El fondo de una cuenca cerrada (por debajo de su cota de desagüe) no se erosiona: allí se
         // deposita. Si no, se lleva su propio sedimento, que vuelve a la cuenca, y la corteza de
@@ -3077,19 +3330,41 @@ impl Deriva {
         let cuenca: Vec<bool> = (0..self.malla.num)
             .map(|k| zf[k].is_finite() && zf[k] > z[k] + 1.0)
             .collect();
+        // La celda del mundo que ve cada muestra (la que la tiene de representante; si no la ve
+        // ninguna, la de su centro): la cuenca cerrada es la de esa celda, no la de su centro, que a
+        // menudo es la vecina (una muestra alta junto a una depresión no se erosionaba nunca).
+        let mut ve: Vec<Vec<u32>> = self
+            .placas
+            .iter()
+            .map(|p| if p.viva { p.mundo.clone() } else { Vec::new() })
+            .collect();
+        for k in 0..self.malla.num {
+            let (pi, l) = (self.dueno[k], self.rep[k]);
+            if pi == NADA || l == NADA {
+                continue;
+            }
+            let s = self.placas[pi as usize].mapa[l as usize];
+            if s != NADA {
+                ve[pi as usize][s as usize] = k as u32;
+            }
+        }
         let cfg = &self.cfg;
         let (rs, rc) = (cfg.rho_s, cfg.rho_c);
-        let f = 1.0 - (-cfg.dt_myr / cfg.tau_orog_myr).exp();
+        let zeta = self.zeta_m;
+        // Lo que baja la superficie por km de roca retirada, con el rebote isostático.
+        let baja = (cfg.rho_m - cfg.rho_c) / cfg.rho_m;
         let mut ero: Vec<(u32, f64)> = Vec::new();
         let mut total = 0.0;
-        for p in self.placas.iter_mut().filter(|p| p.viva) {
-            for s in 0..p.cort.len() {
+        for (pi, p) in self.placas.iter_mut().enumerate().filter(|(_, p)| p.viva) {
+            for (s, &k_ve) in ve[pi].iter().enumerate() {
+                let k_ve = k_ve as usize;
                 let c = &mut p.cort[s];
-                if c.cont {
-                    let heq = c.h_eq(rs, rc);
-                    if heq > cfg.h0_km && !cuenca[p.mundo[s] as usize] {
-                        let roca = (heq - cfg.h0_km) * f;
-                        let sed_roca = c.sed * rs / rc;
+                let zi = (isostasia::altura(cfg, c) - zeta) / 1000.0;
+                if zi > 0.0 && !cuenca[k_ve] {
+                    let e = cfg.e1_km_myr * zi.powf(cfg.n_ero) * cfg.dt_myr;
+                    let sed_roca = c.sed * rs / rc;
+                    let roca = e.min(zi / baja).min(sed_roca + c.hc);
+                    if roca > 0.0 {
                         if sed_roca >= roca {
                             c.sed -= roca * rc / rs;
                         } else {
@@ -3099,10 +3374,11 @@ impl Deriva {
                             c.hc -= dh;
                         }
                         let v = roca * self.malla.area[p.celda[s] as usize];
-                        ero.push((p.mundo[s], v));
+                        ero.push((k_ve as u32, v));
                         total += v;
                     }
-                } else {
+                }
+                if !c.cont {
                     c.edad_oc += cfg.dt_myr;
                 }
                 c.edad_orog += cfg.dt_myr;
@@ -3358,6 +3634,9 @@ impl Deriva {
             eta: det.eta,
             solapado_km3: det.solapado_km3,
             perdido_km3: det.perdido_km3,
+            edad_fondo_myr: det.edad_fondo_myr,
+            edad_fosa_myr: det.edad_fosa_myr,
+            losa_km: det.losa_km,
         });
     }
 
@@ -3433,6 +3712,13 @@ impl Deriva {
                         ..c
                     };
                     self.placas[a].insertar(l, c2, mundo);
+                    // El estado de su tramo convergente pasa con ella (nota de fosas), salvo el del
+                    // borde entre las dos, que ya no existe.
+                    if let Some(e) = self.placas[b].fosas.get(&lb).copied()
+                        && !self.es_placa(e.otra, a as u32)
+                    {
+                        self.placas[a].fosas.insert(l, e);
+                    }
                 }
                 None => {
                     // Sin sitio cerca: su material continental se suma a la muestra más delgada de
@@ -3474,6 +3760,12 @@ impl Deriva {
                     as u32;
             }
         }
+        // La placa fundida es ya parte de `a`: el estado de los tramos de otras placas que la
+        // miraba mira ahora a `a`.
+        let mut anc = std::mem::take(&mut self.placas[b].ancestros);
+        anc.push(self.placas[b].id);
+        self.placas[a].ancestros.extend(anc);
+        self.placas[a].recortar_ancestros();
         self.placas[b].morir();
         self.placas[a].actualizar_cap(&self.malla);
     }
@@ -3585,10 +3877,10 @@ impl Deriva {
                 c.h *= cfg.f_rift;
                 c.hc *= cfg.f_rift;
             }
-            if lado_s >= 0.0 {
-                h1.insertar(l, c, madre.mundo[s]);
-            } else {
-                h2.insertar(l, c, madre.mundo[s]);
+            let h = if lado_s >= 0.0 { &mut h1 } else { &mut h2 };
+            h.insertar(l, c, madre.mundo[s]);
+            if let Some(e) = madre.fosas.get(&l) {
+                h.fosas.insert(l, *e);
             }
         }
         self.cuentas.rift_km3 += adelg;
@@ -3770,6 +4062,7 @@ impl Deriva {
         let v_rms = self.v_rms_de(&omegas) / CM_ANIO;
         self.ultima_v_rms = v_rms;
         let (mut dors, mut fosas, mut col, mut trans, mut perimetro) = (0.0, 0.0, 0.0, 0.0, 0.0);
+        let (mut difusas, mut edad_fosas, mut losa_fosas) = (0.0, 0.0, 0.0);
         let (mut conv_fosa, mut fosa_lenta) = (0.0, 0.0);
         for b in &self.bordes {
             if b.tipo == TipoBorde::Subduccion && b.p_subduce {
@@ -3788,9 +4081,18 @@ impl Deriva {
                 TipoBorde::Subduccion if b.p_subduce => fosas += b.largo_km,
                 TipoBorde::Colision => col += 0.5 * b.largo_km,
                 TipoBorde::Transformante => trans += 0.5 * b.largo_km,
+                TipoBorde::Difusa => difusas += 0.5 * b.largo_km,
                 _ => {}
             }
             perimetro += 0.5 * b.largo_km;
+            // Edad de las fosas activas y fracción del tirón de su losa, en el lado que se hunde.
+            if b.tipo == TipoBorde::Subduccion
+                && b.p_subduce
+                && let Some(e) = self.estado_fosa(b.p, self.rep[b.k as usize], b.q)
+            {
+                edad_fosas += e.edad_myr * b.largo_km;
+                losa_fosas += b.losa * b.largo_km;
+            }
         }
         let (mut a_oc, mut edad_a, mut edad_max, mut a_cont) = (0.0, 0.0, 0.0f64, 0.0);
         let (mut h_max, mut h_cont, mut sed_tot, mut sed_oc) = (0.0f64, 0.0, 0.0, 0.0);
@@ -3857,7 +4159,6 @@ impl Deriva {
                 - c0.choque_sin_sitio_km3)
                 * au,
             f_del_au: (c.delaminacion_km3 - c0.delaminacion_km3) * au,
-            f_del_arcos_au: (c.delaminacion_arcos_km3 - c0.delaminacion_arcos_km3) * au,
             f_den_au: (c.sedimento_al_mar_km3 - c0.sedimento_al_mar_km3) * au,
             f_rift_au: (c.rift_km3 - c0.rift_km3) * au,
             f_acr_au: (c.sedimento_acrecionado_km3 - c0.sedimento_acrecionado_km3) * au,
@@ -3885,6 +4186,12 @@ impl Deriva {
             dientes_continentales_au: self.dientes_continentales_km3 * au,
             convergencia_media_fosas_cm_anio: if fosas > 0.0 { conv_fosa / fosas } else { 0.0 },
             fosa_lenta_frac: if fosas > 0.0 { fosa_lenta / fosas } else { 0.0 },
+            difusas_km: difusas,
+            area_difusa_km2_anio: self.fosas_paso.area_difusa_km2 * au,
+            edad_media_fosas_myr: if fosas > 0.0 { edad_fosas / fosas } else { 0.0 },
+            losa_media_frac: if fosas > 0.0 { losa_fosas / fosas } else { 0.0 },
+            nacimientos: self.fosas_paso.nacen,
+            muertes: self.fosas_paso.mueren,
         });
     }
 
@@ -3926,9 +4233,6 @@ impl Deriva {
             }
             if c.is_none() && self.t_myr - self.pares[i].choque_visto_myr > 20.0 {
                 self.pares[i].choque = None;
-            }
-            if s.is_none() && self.t_myr - self.pares[i].contacto_myr > 20.0 {
-                self.pares[i].polaridad_oo = None;
             }
         }
         // Pares nuevos que aún no tienen registro.
@@ -3994,6 +4298,7 @@ impl Deriva {
                 eta: (sol > 0.0).then(|| 1.0 - perd / sol),
                 solapado_km3: Some(sol),
                 perdido_km3: Some(perd),
+                ..Detalle::default()
             },
         );
     }

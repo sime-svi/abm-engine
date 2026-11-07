@@ -5,7 +5,7 @@
 
 use abm_terreno::config::TectonicaCfg;
 use abm_terreno::geometry::lat_lon;
-use abm_terreno::tectonica::deriva::Deriva;
+use abm_terreno::tectonica::deriva::{Deriva, TipoBorde};
 use abm_terreno::tectonica::malla::{Malla, NADA};
 
 /// Adenda de balance v3 §6.6b: `H_max = 80 km` ya no es una regla, solo una alarma. Ninguna celda
@@ -356,6 +356,10 @@ fn choque_india_asia(cfg: &TectonicaCfg, nivel: u32, n0: u32) -> Deriva {
     let lo = (80.0f64 - 90.0).to_radians();
     let w = 100.0 / 6371.0;
     d.arrancar_con(&[[w * lo.cos(), w * lo.sin(), 0.0], [0.0; 3], [0.0; 3]]);
+    // El Tetis ya subduce bajo Asia con su losa madura (nota de fosas: el escenario empieza con la
+    // fosa en marcha).
+    let l = d.cfg.l_losa_km;
+    d.activar_fosas(l);
     d
 }
 
@@ -770,7 +774,8 @@ fn mover_las_placas_conserva_exactamente_la_corteza() {
 #[test]
 fn la_relajacion_de_un_orogeno_tarda_entre_100_y_200_myr() {
     // Adenda de balance §10, prueba 2: tras el choque India–Asia se detiene la convergencia y el
-    // espesor máximo vuelve a menos de 38 km en 100–200 Myr (con τ_ero calibrado así: ~148 Myr).
+    // espesor máximo vuelve a menos de 38 km en 100–200 Myr (con E_1 y n_ero calibrados así,
+    // adenda v5).
     let (h0, t) = relajacion(&cfg_india_asia(), 1, 48, 50);
     assert!(h0 > 60.0, "el choque debe engrosar la corteza: {h0:.1} km");
     assert!((100.0..=200.0).contains(&t), "relajación en {t} Myr");
@@ -855,6 +860,9 @@ fn area_consumida(borde: impl Fn(f64) -> f64, v: f64, pasos: u64) -> f64 {
         }
     });
     d.placas[0].omega = [0.0, 0.0, v * 10.0 / 6371.0];
+    // Una fosa ya en marcha: se compara la geometría del consumo, no su nacimiento.
+    let l = d.cfg.l_losa_km;
+    d.activar_fosas(l);
     let mut total = 0.0;
     for _ in 0..pasos {
         d.paso_cinematico();
@@ -894,24 +902,43 @@ fn un_borde_dentado_consume_la_misma_area_que_uno_recto() {
 }
 
 #[test]
-#[ignore = "exploratoria: calibración de tau_orog (τ_ero) con la relajación de la adenda de balance"]
+#[ignore = "exploratoria: calibración de la erosión (E_1, n_ero; listas E1 y N_ERO) con la relajación de la adenda de balance"]
 fn calibracion_relajacion() {
-    let lista: Vec<f64> = std::env::var("TAU_ERO")
-        .ok()
-        .map(|x| x.split(',').filter_map(|v| v.parse().ok()).collect())
-        .unwrap_or(vec![150.0]);
+    let lista = |var: &str, def: f64| -> Vec<f64> {
+        std::env::var(var)
+            .ok()
+            .map(|x| x.split(',').filter_map(|v| v.trim().parse().ok()).collect())
+            .unwrap_or(vec![def])
+    };
+    let (e1s, ns) = (lista("E1", 0.02), lista("N_ERO", 2.0));
     let t_choque: u64 = std::env::var("T_CHOQUE")
         .ok()
         .and_then(|x| x.parse().ok())
         .unwrap_or(50);
-    for &tau in &lista {
-        let cfg = TectonicaCfg {
-            tau_orog_myr: tau,
-            ..cfg_india_asia()
-        };
-        let (h0, t) = relajacion(&cfg, 1, 48, t_choque);
+    let casos: Vec<(f64, f64)> = ns
+        .iter()
+        .flat_map(|&n| e1s.iter().map(move |&e| (n, e)))
+        .collect();
+    let res: Vec<(f64, f64, f64, f64)> = std::thread::scope(|sc| {
+        let hilos: Vec<_> = casos
+            .iter()
+            .map(|&(n, e1)| {
+                sc.spawn(move || {
+                    let cfg = TectonicaCfg {
+                        e1_km_myr: e1,
+                        n_ero: n,
+                        ..cfg_india_asia()
+                    };
+                    let (h0, t) = relajacion(&cfg, 1, 48, t_choque);
+                    (n, e1, h0, t)
+                })
+            })
+            .collect();
+        hilos.into_iter().map(|h| h.join().expect("hilo")).collect()
+    });
+    for (n, e1, h0, t) in res {
         println!(
-            "tau_ero = {tau:>5}: espesor máximo al detener {h0:.1} km, baja de 38 km en {t:.0} Myr"
+            "n_ero = {n}, E_1 = {e1} km/Myr: espesor máximo al detener {h0:.1} km, baja de 38 km en {t:.0} Myr"
         );
     }
 }
@@ -1152,15 +1179,17 @@ fn placas_cerca(d: &Deriva, k: usize, radio_km: f64) -> usize {
 #[derive(Default)]
 struct InformeDeriva {
     semilla: u64,
-    h_del_arco: f64,
-    tau_ero: f64,
-    /// Reparto de la erosión potencial `Σ (h_eq − h0)·A` (sin descontar las cuencas cerradas) por
-    /// exceso sobre `h0`: 0–2, 2–5, 5–10, 10–20 y más de 20 km, tras el rodaje.
+    /// Ajustes de la config de esta deriva (`clave=valor` separados por comas; vacío: la config).
+    variante: String,
+    /// Reparto de la erosión de la ley con la altura `Σ E_1·(z/1 km)^n·A` (sin descontar las cuencas
+    /// cerradas) y de la tierra emergida por altura sobre el mar: 0–0,5, 0,5–1, 1–2, 2–3 y más de
+    /// 3 km, tras el rodaje.
     erosion_por_exceso: [f64; 5],
+    tierra_por_altura: [f64; 5],
     /// Consumo (km²) y solape continental (km³) tras el rodaje, por código de borde (0 sin borde,
     /// 1 dorsal, 2 fosa, 3 choque, 4 transformante) y por si la celda está en una unión triple.
-    consumo: [[f64; 2]; 5],
-    solape: [[f64; 2]; 5],
+    consumo: [[f64; 2]; 6],
+    solape: [[f64; 2]; 6],
     /// Longitud de borde (km·paso) en uniones triples y en total, tras el rodaje.
     borde_triple_km: f64,
     borde_total_km: f64,
@@ -1179,6 +1208,14 @@ struct InformeDeriva {
     picos_seguian: u64,
     picos_reaparecen: u64,
     picos_otros: u64,
+    /// Material continental de los dientes por destino (AU, tras el rodaje): recolocados a menos de
+    /// L_borde, recolocados en la segunda pasada, sumados a su placa, sumados a otra; y la creación
+    /// residual (km²/año).
+    dientes_via_au: [f64; 4],
+    creacion_residual: f64,
+    /// Pasos con picos en los que una muestra que recibió dientes sin hueco (0) o muestras sueltas
+    /// de otra placa (1) pasó de 80 km.
+    picos_por_dientes: [u64; 2],
     /// Espesor máximo de una muestra continental oculta y de una visible (km), tras el rodaje.
     max_oculta: f64,
     max_visible: f64,
@@ -1197,7 +1234,6 @@ struct InformeDeriva {
     arcos: f64,
     choques: f64,
     delam: f64,
-    delam_arcos: f64,
     al_mar: f64,
     v_cont: f64,
     f_cont: f64,
@@ -1205,14 +1241,43 @@ struct InformeDeriva {
     a_sub: f64,
     fosas_km: f64,
     conv_fosas: f64,
+    /// Nota de fosas: convergencia difusa (km, cm/año y km²/año absorbidos), edad media de las fosas,
+    /// fracción del tirón, nacimientos y muertes por 100 Myr, edad del fondo (media de los pasos y,
+    /// al final, mediana y fracciones por encima de 180 y de 200 Myr), v_rms y Forsyth–Uyeda.
+    difusas_km: f64,
+    conv_difusas: f64,
+    area_difusa: f64,
+    edad_fosas: f64,
+    losa: f64,
+    nacen_100: [f64; 3],
+    mueren_100: [f64; 2],
+    edad_oc_media: f64,
+    edad_oc_mediana: f64,
+    edad_oc_180: f64,
+    edad_oc_200: f64,
+    v_rms: f64,
+    fu_fosa: f64,
+    /// Medidas de fuerzas de la nota de fosas §10: longitud de borde por oblicuidad (10° por clase;
+    /// km·paso, convergente y divergente), áreas de las placas al final (fracción, de mayor a
+    /// menor), potencia de cada fuerza sumada en todas las placas (tirón, empuje, choques, arrastre)
+    /// y área creada y consumida (km²/año).
+    oblicuidad: [[f64; 9]; 2],
+    /// Basalto de la convergencia difusa que acaba bajo corteza continental (km³/año).
+    basalto_bajo_cont: f64,
+    tamanos: Vec<f64>,
+    potencia: [f64; 4],
+    creada: f64,
 }
 
-fn diagnosticar_deriva(semilla: u64, h_del_arco: f64, tau_ero: f64) -> InformeDeriva {
-    let cfg =
-        abm_terreno::config::TerrenoConfig::load("../../config/terreno.toml").expect("config");
-    let mut tc = cfg.tectonica.clone();
-    tc.h_del_arco_km = h_del_arco;
-    tc.tau_orog_myr = tau_ero;
+fn diagnosticar_deriva(semilla: u64, variante: &str) -> InformeDeriva {
+    let ajustes: Vec<String> = variante
+        .split(',')
+        .map(|x| x.trim().to_string())
+        .filter(|x| !x.is_empty())
+        .collect();
+    let cfg = abm_terreno::config::TerrenoConfig::load_con("../../config/terreno.toml", &ajustes)
+        .expect("config");
+    let tc = cfg.tectonica.clone();
     let malla = Malla::new(cfg.planet.n0, tc.nivel_malla, cfg.planet.r_km);
     let mut d = Deriva::nueva(&tc, semilla, malla);
     d.traza = Some(Vec::new());
@@ -1220,8 +1285,7 @@ fn diagnosticar_deriva(semilla: u64, h_del_arco: f64, tau_ero: f64) -> InformeDe
     let rodaje = (tc.t_rodaje_myr / tc.dt_myr).round() as u64;
     let mut inf = InformeDeriva {
         semilla,
-        h_del_arco,
-        tau_ero,
+        variante: variante.to_string(),
         ..Default::default()
     };
     let mut h_prev = 0.0;
@@ -1306,20 +1370,25 @@ fn diagnosticar_deriva(semilla: u64, h_del_arco: f64, tau_ero: f64) -> InformeDe
         vis_ant = vis;
         ocultas_ant = ocultas;
         if !en_rodaje {
-            for p in d.placas.iter().filter(|p| p.viva) {
-                for (s, c) in p.cort.iter().enumerate() {
-                    if !c.cont {
-                        continue;
-                    }
-                    let x = c.h_eq(tc.rho_s, tc.rho_c) - tc.h0_km;
-                    if x > 0.0 {
-                        let i = [2.0, 5.0, 10.0, 20.0].partition_point(|&l| l <= x);
-                        inf.erosion_por_exceso[i] += x * d.malla.area[p.celda[s] as usize];
-                    }
+            for k in 0..d.malla.num {
+                let Some(c) = d.corteza(k) else {
+                    continue;
+                };
+                let z = (abm_terreno::tectonica::isostasia::altura(&d.cfg, c) - d.zeta_m) / 1000.0;
+                if z > 0.0 {
+                    let i = [0.5, 1.0, 2.0, 3.0].partition_point(|&l| l <= z);
+                    let a = d.malla.area[k];
+                    inf.erosion_por_exceso[i] += tc.e1_km_myr * z.powf(tc.n_ero) * a;
+                    inf.tierra_por_altura[i] += a;
                 }
             }
         }
         if picos_paso > 0 {
+            for (i, &h) in d.max_tras_dientes_km.iter().enumerate() {
+                if h > ALARMA_ESPESOR_KM {
+                    inf.picos_por_dientes[i] += 1;
+                }
+            }
             if en_rodaje {
                 inf.pasos_con_picos_rodaje += 1;
             } else {
@@ -1330,6 +1399,40 @@ fn diagnosticar_deriva(semilla: u64, h_del_arco: f64, tau_ero: f64) -> InformeDe
         if en_rodaje {
             continue;
         }
+        for (i, v) in d.dientes_cont_por_via_km3.iter().enumerate() {
+            inf.dientes_via_au[i] += v;
+        }
+        let (mut cd, mut ld) = (0.0, 0.0);
+        for b in d.bordes.iter().filter(|b| b.tipo == TipoBorde::Difusa) {
+            cd += b.v_n.max(0.0) * b.largo_km;
+            ld += b.largo_km;
+        }
+        for b in &d.bordes {
+            let x = d.malla.dir[b.k as usize];
+            let (wp, wq) = (d.placas[b.p as usize].omega, d.placas[b.q as usize].omega);
+            let w = [wp[0] - wq[0], wp[1] - wq[1], wp[2] - wq[2]];
+            let v = [
+                w[1] * x[2] - w[2] * x[1],
+                w[2] * x[0] - w[0] * x[2],
+                w[0] * x[1] - w[1] * x[0],
+            ]
+            .map(|c| c * d.malla.r_km);
+            let vm = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+            if vm < 0.05 * 10.0 {
+                continue;
+            }
+            let ang = (b.v_n.abs() / vm).min(1.0).asin().to_degrees();
+            let lado = if b.v_n > 0.0 { 0 } else { 1 };
+            inf.oblicuidad[lado][((ang / 10.0) as usize).min(8)] += 0.5 * b.largo_km;
+        }
+        inf.basalto_bajo_cont += d.fosas_paso.basalto_bajo_continente_km3;
+        for &(_, _, pw) in &d.potencias {
+            for (a, b) in inf.potencia.iter_mut().zip(pw) {
+                *a += b;
+            }
+        }
+        inf.conv_difusas += cd;
+        inf.difusas_km += ld;
         let mut borde_en = std::collections::HashMap::new();
         let mut fosas_par: std::collections::HashMap<(u32, u32), Vec<usize>> = Default::default();
         for b in &d.bordes {
@@ -1400,9 +1503,81 @@ fn diagnosticar_deriva(semilla: u64, h_del_arco: f64, tau_ero: f64) -> InformeDe
     inf.arcos = media(|m| m.f_arc_au);
     inf.choques = media(|m| m.f_col_au);
     inf.delam = media(|m| m.f_del_au);
-    inf.delam_arcos = media(|m| m.f_del_arcos_au);
     inf.al_mar = media(|m| m.f_den_au);
     inf.a_sub = media(|m| m.area_subducida_km2_anio);
+    inf.creacion_residual = media(|m| m.creacion_residual_km2_anio);
+    inf.conv_difusas = if inf.difusas_km > 0.0 {
+        inf.conv_difusas / inf.difusas_km / 10.0
+    } else {
+        0.0
+    };
+    inf.difusas_km = media(|m| m.difusas_km);
+    inf.area_difusa = media(|m| m.area_difusa_km2_anio);
+    inf.edad_fosas = val
+        .iter()
+        .map(|m| m.edad_media_fosas_myr * m.fosas_km)
+        .sum::<f64>()
+        / val.iter().map(|m| m.fosas_km).sum::<f64>().max(1e-12);
+    inf.losa = media(|m| m.losa_media_frac);
+    for m in &val {
+        for (a, &v) in inf.nacen_100.iter_mut().zip(&m.nacimientos) {
+            *a += v as f64 * 100.0 / n;
+        }
+        for (a, &v) in inf.mueren_100.iter_mut().zip(&m.muertes) {
+            *a += v as f64 * 100.0 / n;
+        }
+    }
+    inf.edad_oc_media = media(|m| m.edad_media_oceano_myr);
+    let mut edades: Vec<(f64, f64)> = (0..d.malla.num)
+        .filter_map(|k| {
+            d.corteza(k)
+                .filter(|c| !c.cont)
+                .map(|c| (c.edad_oc, d.malla.area[k]))
+        })
+        .collect();
+    edades.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let a_oc: f64 = edades.iter().map(|x| x.1).sum();
+    let mut acum = 0.0;
+    for &(e, a) in &edades {
+        acum += a;
+        if acum >= 0.5 * a_oc {
+            inf.edad_oc_mediana = e;
+            break;
+        }
+    }
+    inf.edad_oc_180 = edades
+        .iter()
+        .filter(|x| x.0 > 180.0)
+        .map(|x| x.1)
+        .sum::<f64>()
+        / a_oc;
+    inf.edad_oc_200 = edades
+        .iter()
+        .filter(|x| x.0 > 200.0)
+        .map(|x| x.1)
+        .sum::<f64>()
+        / a_oc;
+    inf.v_rms = d.v_rms_acum.0 / (d.v_rms_acum.1.max(1) as f64);
+    inf.creada = media(|m| m.area_creada_km2_anio);
+    inf.basalto_bajo_cont /= n * tc.dt_myr * 1e6;
+    let mut areas = vec![0.0; d.placas.len()];
+    for k in 0..d.malla.num {
+        if d.dueno[k] != NADA {
+            areas[d.dueno[k] as usize] += d.malla.area[k];
+        }
+    }
+    let total: f64 = areas.iter().sum();
+    inf.tamanos = areas
+        .into_iter()
+        .filter(|&a| a > 0.0)
+        .map(|a| a / total)
+        .collect();
+    inf.tamanos.sort_by(|a, b| b.total_cmp(a));
+    inf.fu_fosa = d.fu_fosa.0 / (d.fu_fosa.1.max(1) as f64);
+    let anios = n * tc.dt_myr * 1e6;
+    for v in inf.dientes_via_au.iter_mut() {
+        *v /= anios;
+    }
     inf.fosas_km = media(|m| m.fosas_km);
     inf.conv_fosas = val
         .iter()
@@ -1423,50 +1598,48 @@ fn diagnosticar_deriva(semilla: u64, h_del_arco: f64, tau_ero: f64) -> InformeDe
 }
 
 #[test]
-#[ignore = "exploratoria: la deriva del planeta en varias semillas a la vez (SEMILLAS=42,1,2,3,4; H_DEL_ARCO y TAU_ERO, listas): balance, uniones triples, picos de espesor, finales de fosa y coste por etapa (~4 min con 10 derivas en paralelo)"]
+#[ignore = "exploratoria: la deriva del planeta en varias semillas a la vez (SEMILLAS=42,1,2,3,4; VARIANTES=\"clave=valor,…;…\", como --set): balance, uniones triples, picos de espesor, finales de fosa y coste por etapa (~4 min con 10 derivas en paralelo)"]
 fn deriva_en_varias_semillas() {
     let semillas: Vec<u64> = std::env::var("SEMILLAS")
         .unwrap_or_else(|_| "42".into())
         .split(',')
         .map(|x| x.trim().parse().expect("semilla"))
         .collect();
-    let umbrales: Vec<f64> = std::env::var("H_DEL_ARCO")
-        .unwrap_or_else(|_| "40".into())
-        .split(',')
-        .map(|x| x.trim().parse().expect("h_del_arco"))
+    // Variantes de la config separadas por «;» (cada una, ajustes «clave=valor» separados por comas).
+    let variantes: Vec<String> = std::env::var("VARIANTES")
+        .unwrap_or_default()
+        .split(';')
+        .map(|x| x.trim().to_string())
         .collect();
-    let taus: Vec<f64> = std::env::var("TAU_ERO")
-        .unwrap_or_else(|_| "63".into())
-        .split(',')
-        .map(|x| x.trim().parse().expect("tau_ero"))
-        .collect();
-    let trabajos: Vec<(u64, f64, f64)> = semillas
+    let trabajos: Vec<(u64, &str)> = semillas
         .iter()
-        .flat_map(|&s| {
-            let taus = &taus;
-            umbrales
-                .iter()
-                .flat_map(move |&h| taus.iter().map(move |&t| (s, h, t)))
-        })
+        .flat_map(|&s| variantes.iter().map(move |v| (s, v.as_str())))
         .collect();
     let informes: Vec<InformeDeriva> = std::thread::scope(|sc| {
         let hilos: Vec<_> = trabajos
             .iter()
-            .map(|&(s, h, t)| sc.spawn(move || diagnosticar_deriva(s, h, t)))
+            .map(|&(s, v)| sc.spawn(move || diagnosticar_deriva(s, v)))
             .collect();
         hilos.into_iter().map(|h| h.join().expect("hilo")).collect()
     });
-    let nombres = ["sin borde", "dorsal", "fosa", "choque", "transformante"];
+    let nombres = [
+        "sin borde",
+        "dorsal",
+        "fosa",
+        "choque",
+        "transformante",
+        "difusa",
+    ];
     for inf in &informes {
-        println!(
-            "\n=== semilla {} h_del,arco {} km tau_ero {} Myr ===",
-            inf.semilla, inf.h_del_arco, inf.tau_ero
-        );
+        println!("\n=== semilla {} [{}] ===", inf.semilla, inf.variante);
         let te: f64 = inf.erosion_por_exceso.iter().sum();
+        let tt: f64 = inf.tierra_por_altura.iter().sum();
         println!(
-            "erosión potencial por exceso sobre h0 (0–2, 2–5, 5–10, 10–20, >20 km): {:?} %",
+            "erosión por altura sobre el mar (0–0,5, 0,5–1, 1–2, 2–3, >3 km): {:?} % de la erosión, {:?} % de la tierra",
             inf.erosion_por_exceso
-                .map(|x| (1000.0 * x / te).round() / 10.0)
+                .map(|x| (1000.0 * x / te).round() / 10.0),
+            inf.tierra_por_altura
+                .map(|x| (1000.0 * x / tt).round() / 10.0)
         );
         let tc: f64 = inf.consumo.iter().flatten().sum();
         let ts: f64 = inf.solape.iter().flatten().sum();
@@ -1480,8 +1653,8 @@ fn deriva_en_varias_semillas() {
                 100.0 * inf.solape[i][1] / ts
             );
         }
-        let nc = |x: &[[f64; 2]; 5], t: usize| x[1][t] + x[4][t];
-        let tot = |x: &[[f64; 2]; 5]| x.iter().flatten().sum::<f64>();
+        let nc = |x: &[[f64; 2]; 6], t: usize| x[1][t] + x[4][t];
+        let tot = |x: &[[f64; 2]; 6]| x.iter().flatten().sum::<f64>();
         println!(
             "  no convergente: consumo {:.2} % (en uniones triples {:.2}), solape {:.2} % (en uniones triples {:.2}); borde en uniones triples {:.1} % de la longitud",
             100.0 * (nc(&inf.consumo, 0) + nc(&inf.consumo, 1)) / tot(&inf.consumo),
@@ -1491,12 +1664,14 @@ fn deriva_en_varias_semillas() {
             100.0 * inf.borde_triple_km / inf.borde_total_km
         );
         println!(
-            "picos de más de 80 km: {} celdas·paso ({} en uniones triples), en {} pasos tras el rodaje y {} del rodaje; etapa que más sube el máximo en esos pasos: {:?}",
+            "picos de más de 80 km: {} celdas·paso ({} en uniones triples), en {} pasos tras el rodaje y {} del rodaje; etapa que más sube el máximo en esos pasos: {:?}; pasos en que pasa de 80 una muestra que recibió dientes sin hueco {} o sueltas de otra placa {}",
             inf.picos,
             inf.picos_triples,
             inf.pasos_con_picos,
             inf.pasos_con_picos_rodaje,
-            inf.etapa_de_los_picos
+            inf.etapa_de_los_picos,
+            inf.picos_por_dientes[0],
+            inf.picos_por_dientes[1]
         );
         println!(
             "espesor máximo de las muestras {:.1} km en el paso {} (sube sobre todo en {}); pasos con la más gruesa oculta: {}",
@@ -1510,6 +1685,14 @@ fn deriva_en_varias_semillas() {
             inf.picos_reaparecen,
             inf.picos_otros
         );
+        println!(
+            "dientes continentales (AU): recolocados {:.2}, en la segunda pasada {:.2}, sumados a su placa {:.2}, a otra placa {:.2}; creación residual {:.3} km²/año",
+            inf.dientes_via_au[0],
+            inf.dientes_via_au[1],
+            inf.dientes_via_au[2],
+            inf.dientes_via_au[3],
+            inf.creacion_residual
+        );
         let to: f64 = inf.oblicuidad_transf.iter().sum();
         println!(
             "consumo en celdas transformantes por oblicuidad (0–5, 5–10, 10–15, 15–20, >20°): {:?} %; a menos de L_borde de una fosa del mismo par: {:.1} %",
@@ -1518,11 +1701,10 @@ fn deriva_en_varias_semillas() {
             100.0 * inf.transf_junto_a_fosa / inf.transf_total.max(1e-12)
         );
         println!(
-            "balance (AU): arcos {:.2} choques {:.2} delaminación {:.3} (arcos {:.3}) al mar {:.2}; V_cont {:+.1} %; f_cont {:.3}; placas {}; A_sub {:.2} km²/año; fosas {:.0} km a {:.2} cm/año",
+            "balance (AU): arcos {:.2} choques {:.2} delaminación {:.3} al mar {:.2}; V_cont {:+.1} %; f_cont {:.3}; placas {}; A_sub {:.2} km²/año; fosas {:.0} km a {:.2} cm/año",
             inf.arcos,
             inf.choques,
             inf.delam,
-            inf.delam_arcos,
             inf.al_mar,
             100.0 * inf.v_cont,
             inf.f_cont,
@@ -1530,6 +1712,45 @@ fn deriva_en_varias_semillas() {
             inf.a_sub,
             inf.fosas_km,
             inf.conv_fosas
+        );
+        println!(
+            "fosas (nota): activas {:.0} km a {:.2} cm/año, edad media {:.1} Myr, tirón {:.2}; difusas {:.0} km a {:.2} cm/año, absorben {:.3} km²/año; nacen por 100 Myr {:?} (inducidas, margen, transformante); mueren {:?} (sin convergencia, choque); fondo: media de los pasos {:.1} Myr, final mediana {:.1}, >180 {:.3}, >200 {:.3}; v_rms {:.2} cm/año; Forsyth–Uyeda fosa {:.2}",
+            inf.fosas_km,
+            inf.conv_fosas,
+            inf.edad_fosas,
+            inf.losa,
+            inf.difusas_km,
+            inf.conv_difusas,
+            inf.area_difusa,
+            inf.nacen_100.map(|x| (10.0 * x).round() / 10.0),
+            inf.mueren_100.map(|x| (10.0 * x).round() / 10.0),
+            inf.edad_oc_media,
+            inf.edad_oc_mediana,
+            inf.edad_oc_180,
+            inf.edad_oc_200,
+            inf.v_rms,
+            inf.fu_fosa
+        );
+        let (oc, os) = (
+            inf.oblicuidad[0].iter().sum::<f64>(),
+            inf.oblicuidad[1].iter().sum::<f64>(),
+        );
+        let pot_motor = inf.potencia[0] + inf.potencia[1];
+        println!(
+            "fuerzas: oblicuidad (10° por clase, % que converge / que se separa) {:?} / {:?}; placas al final (% de la esfera) {:?}; potencia: tirón {:.0} % y empuje {:.0} % de la motriz, choques {:.0} % y arrastre {:.0} % de la resistente; creada {:.2} km²/año, consumida {:.2} + difusa {:.2}",
+            inf.oblicuidad[0].map(|x| (1000.0 * x / oc).round() / 10.0),
+            inf.oblicuidad[1].map(|x| (1000.0 * x / os).round() / 10.0),
+            inf.tamanos
+                .iter()
+                .map(|x| (1000.0 * x).round() / 10.0)
+                .collect::<Vec<_>>(),
+            100.0 * inf.potencia[0] / pot_motor,
+            100.0 * inf.potencia[1] / pot_motor,
+            -100.0 * inf.potencia[2] / pot_motor,
+            -100.0 * inf.potencia[3] / pot_motor,
+            inf.creada,
+            inf.a_sub,
+            inf.area_difusa
         );
         let total: f64 = inf.segundos.values().sum();
         let mut etapas: Vec<_> = inf.segundos.iter().collect();
@@ -1543,38 +1764,289 @@ fn deriva_en_varias_semillas() {
                 .join(", ")
         );
     }
-    // Resumen por umbral y τ_ero: media y extremos entre semillas.
-    for (h, t) in umbrales
-        .iter()
-        .flat_map(|&h| taus.iter().map(move |&t| (h, t)))
-    {
-        let g: Vec<_> = informes
-            .iter()
-            .filter(|i| i.h_del_arco == h && i.tau_ero == t)
-            .collect();
+    // Resumen por variante: media ± desviación típica [extremos] entre semillas.
+    for var in &variantes {
+        let g: Vec<_> = informes.iter().filter(|i| &i.variante == var).collect();
         let r = |f: fn(&InformeDeriva) -> f64| {
             let v: Vec<f64> = g.iter().map(|i| f(i)).collect();
-            let m = v.iter().sum::<f64>() / v.len() as f64;
+            let n = v.len() as f64;
+            let m = v.iter().sum::<f64>() / n;
+            let sd = (v.iter().map(|x| (x - m) * (x - m)).sum::<f64>() / (n - 1.0).max(1.0)).sqrt();
             let (lo, hi) = v
                 .iter()
                 .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &x| {
                     (a.min(x), b.max(x))
                 });
-            format!("{m:.3} [{lo:.3}–{hi:.3}]")
+            format!("{m:.3} ± {sd:.3} [{lo:.3}–{hi:.3}]")
         };
         println!(
-            "\n### h_del,arco {h} km, tau_ero {t} Myr, {} semillas: al mar {} AU; delaminación {} (arcos {}); choques {}; arcos {}; V_cont {}; f_cont {}; A_sub {}; fosas {} km; h_max {}",
+            "\n### [{var}], {} semillas: al mar {} AU; delaminación {}; choques {}; arcos {}; V_cont {}; f_cont {}; A_sub {}; fosas {} km a {} cm/año; h_max {}",
             g.len(),
             r(|i| i.al_mar),
             r(|i| i.delam),
-            r(|i| i.delam_arcos),
             r(|i| i.choques),
             r(|i| i.arcos),
             r(|i| i.v_cont),
             r(|i| i.f_cont),
             r(|i| i.a_sub),
             r(|i| i.fosas_km),
+            r(|i| i.conv_fosas),
             r(|i| i.h_max)
         );
+        println!(
+            "### basalto difuso bajo continentes {} km³/año\n### fosas: edad {} Myr; tirón {}; difusas {} km a {} cm/año, {} km²/año; nacen/100 Myr inducidas {} margen {} transformante {}; mueren sin convergencia {} choque {}; fondo media {} mediana {} >180 {} >200 {}; v_rms {}; F–U fosa {}; picos (celdas·paso) {}; máx. visible {}",
+            r(|i| i.basalto_bajo_cont),
+            r(|i| i.edad_fosas),
+            r(|i| i.losa),
+            r(|i| i.difusas_km),
+            r(|i| i.conv_difusas),
+            r(|i| i.area_difusa),
+            r(|i| i.nacen_100[0]),
+            r(|i| i.nacen_100[1]),
+            r(|i| i.nacen_100[2]),
+            r(|i| i.mueren_100[0]),
+            r(|i| i.mueren_100[1]),
+            r(|i| i.edad_oc_media),
+            r(|i| i.edad_oc_mediana),
+            r(|i| i.edad_oc_180),
+            r(|i| i.edad_oc_200),
+            r(|i| i.v_rms),
+            r(|i| i.fu_fosa),
+            r(|i| i.picos as f64),
+            r(|i| i.max_visible)
+        );
+        let tiempo: Vec<f64> = g.iter().map(|i| i.segundos.values().sum::<f64>()).collect();
+        println!(
+            "### tiempo de la deriva {:.0} s de media",
+            tiempo.iter().sum::<f64>() / tiempo.len() as f64
+        );
     }
+}
+
+// --- Ciclo de vida de las fosas (nota_ciclo_fosas.md §10) ---------------------------------------
+
+/// Dos placas oceánicas: la del oeste (más vieja, 120 Myr), una franja ecuatorial (|lat| < 10°,
+/// −60° < lon < 0°), va al este a `v` cm/año en el ecuador contra la del resto (40 Myr), quieta. El
+/// borde convergente es el meridiano 0 entre ±10°, con convergencia casi uniforme: la perpendicular
+/// media, con la normal del borde suavizado, es ~0,93·v. Solo cinemática.
+fn dos_oceanos_que_convergen(v: f64) -> Deriva {
+    let cfg = TectonicaCfg::default();
+    let malla = Malla::new(48, 1, 6371.0);
+    let dirs = malla.dir.clone();
+    let mut d = Deriva::desde(&cfg, 5, malla, 0.0, &[1, 2], |k| {
+        let (la, lo) = lat_lon(dirs[k]);
+        let (la, lo) = (la.to_degrees(), lo.to_degrees());
+        if la.abs() < 10.0 && lo > -60.0 && lo < 0.0 {
+            (0, corteza(false, 7.0, 120.0))
+        } else {
+            (1, corteza(false, 7.0, 40.0))
+        }
+    });
+    d.placas[0].omega = [0.0, 0.0, v * 10.0 / 6371.0];
+    d
+}
+
+/// Corteza total de las placas (km³, cristalina y sedimento).
+fn volumen_de_corteza(d: &Deriva) -> f64 {
+    d.placas
+        .iter()
+        .filter(|p| p.viva)
+        .flat_map(|p| {
+            p.celda
+                .iter()
+                .zip(&p.cort)
+                .map(|(&l, c)| (c.h + c.sed) * d.malla.area[l as usize])
+        })
+        .sum()
+}
+
+fn nacimientos(d: &Deriva) -> Vec<&abm_terreno::tectonica::historia::EventoTectonico> {
+    d.eventos
+        .iter()
+        .filter(|e| e.tipo == "nacimiento_fosa")
+        .collect()
+}
+
+#[test]
+fn una_convergencia_lenta_y_corta_no_hace_fosa_y_engruesa_conservando() {
+    // Nota de fosas §10, prueba 1: a ~1 cm/año durante 10 Myr (~95 km < X_ini) no nace fosa; lo que
+    // converge se absorbe engrosando y la corteza solo cambia por la que nace en la dorsal.
+    let mut d = dos_oceanos_que_convergen(1.0);
+    let h_oc = d.cfg.h_oc_km;
+    for _ in 0..10 {
+        let v0 = volumen_de_corteza(&d);
+        d.paso_cinematico();
+        let nueva = d.area_nueva_km2 * h_oc;
+        let dv = volumen_de_corteza(&d) - v0;
+        // La base basáltica de un diente recolocado en una celda de otra área no se reescala, así
+        // que el volumen total no cuadra a redondeo: se pide el 2 % de la corteza nueva (si lo que
+        // converge se hundiera, faltaría un 8 %).
+        assert!(
+            (dv - nueva).abs() <= (0.02 * nueva).max(1e-9 * v0),
+            "la convergencia difusa conserva: ΔV {dv:.6e} frente a la corteza nueva {nueva:.6e} km³"
+        );
+        assert_eq!(d.area_subducida_km2, 0.0, "sin fosa no se hunde nada");
+    }
+    assert!(nacimientos(&d).is_empty(), "no nace ninguna fosa");
+    assert!(
+        d.bordes.iter().any(|b| b.tipo == TipoBorde::Difusa),
+        "el borde convergente es difuso"
+    );
+    let h_max = (0..d.malla.num)
+        .filter_map(|k| d.corteza(k))
+        .map(|c| c.h)
+        .fold(0.0, f64::max);
+    assert!(
+        h_max > 7.5,
+        "la franja del borde se engruesa: {h_max:.2} km"
+    );
+}
+
+#[test]
+fn una_convergencia_suficiente_hace_nacer_la_fosa_con_el_lado_viejo_abajo() {
+    // Prueba 2: a ~5 cm/año de convergencia perpendicular (5,5 en el ecuador) la fosa nace a los
+    // 3 Myr (150 km) y se hunde el lado más viejo.
+    let mut d = dos_oceanos_que_convergen(5.5);
+    for paso in 1..=3 {
+        d.paso_cinematico();
+        let n = nacimientos(&d);
+        if paso < 3 {
+            assert!(n.is_empty(), "aún no nace a los {paso} Myr");
+        } else {
+            assert_eq!(n.len(), 1, "nace a los 3 Myr: {n:?}");
+            assert_eq!(n[0].clase.as_deref(), Some("inducido"));
+            assert_eq!(
+                n[0].placas[0], 1,
+                "se hunde la placa vieja (id 1): {:?}",
+                n[0]
+            );
+        }
+    }
+    d.paso_cinematico();
+    d.paso_cinematico();
+    assert!(d.area_subducida_km2 > 0.0, "la fosa activa consume placa");
+    assert!(
+        d.bordes
+            .iter()
+            .any(|b| b.tipo == TipoBorde::Subduccion && b.p_subduce && b.p == 0),
+        "la placa vieja es la que se hunde"
+    );
+}
+
+#[test]
+fn la_polaridad_de_una_fosa_no_cambia_con_las_edades() {
+    // Prueba 3: tras nacer, la polaridad se mantiene aunque el otro lado pase a ser más viejo.
+    let mut d = dos_oceanos_que_convergen(5.5);
+    for _ in 0..4 {
+        d.paso_cinematico();
+    }
+    for c in d.placas[1].cort.iter_mut() {
+        c.edad_oc = 300.0;
+    }
+    for _ in 0..3 {
+        d.paso_cinematico();
+    }
+    let fosa: Vec<_> = d
+        .bordes
+        .iter()
+        .filter(|b| b.tipo == TipoBorde::Subduccion && b.p_subduce)
+        .collect();
+    assert!(!fosa.is_empty(), "sigue habiendo fosa");
+    assert!(
+        fosa.iter().all(|b| b.p == 0),
+        "se sigue hundiendo la placa del oeste"
+    );
+}
+
+#[test]
+fn una_fosa_cuyas_placas_se_separan_muere_tras_tau_muerte() {
+    // Prueba 4: si las placas pasan a separarse, la fosa muere a los τ_muerte (10 Myr) y el tramo
+    // pasa a divergente.
+    let mut d = dos_oceanos_que_convergen(5.5);
+    for _ in 0..4 {
+        d.paso_cinematico();
+    }
+    assert_eq!(nacimientos(&d).len(), 1);
+    d.placas[0].omega = [0.0, 0.0, -5.5 * 10.0 / 6371.0];
+    let muertes = |d: &Deriva| {
+        d.eventos
+            .iter()
+            .filter(|e| e.tipo == "muerte_fosa" && e.clase.as_deref() == Some("sin_convergencia"))
+            .count()
+    };
+    let tau = d.cfg.tau_muerte_myr as usize;
+    for paso in 1..=tau + 1 {
+        d.paso_cinematico();
+        if paso < tau {
+            assert_eq!(muertes(&d), 0, "aún viva tras {paso} Myr sin converger");
+        }
+    }
+    assert!(
+        muertes(&d) >= 1,
+        "la fosa muere tras {tau} Myr sin converger"
+    );
+    // En el meridiano 0 (al invertir el giro, el borde del oeste pasa a converger y allí puede nacer
+    // otra fosa).
+    let en_el_meridiano: Vec<_> = d
+        .bordes
+        .iter()
+        .filter(|b| lat_lon(d.malla.dir[b.k as usize]).1.to_degrees().abs() < 8.0)
+        .collect();
+    assert!(
+        !en_el_meridiano
+            .iter()
+            .any(|b| b.tipo == TipoBorde::Subduccion),
+        "no queda fosa en el meridiano 0"
+    );
+    assert!(
+        en_el_meridiano
+            .iter()
+            .any(|b| b.tipo == TipoBorde::Divergente),
+        "el tramo es divergente"
+    );
+}
+
+#[test]
+fn un_margen_pasivo_viejo_se_parte_con_su_fosa_y_conserva_la_corteza() {
+    // Prueba 5: con λ_esp alto, el margen pasivo de un continente rodeado de fondo viejo se separa
+    // como placa oceánica nueva con su fosa, y la corteza se conserva.
+    let cfg = TectonicaCfg {
+        lambda_esp: 1.0,
+        tau_rift_myr: 1e12,
+        ..TectonicaCfg::default()
+    };
+    let malla = Malla::new(12, 2, 6371.0);
+    let dirs = malla.dir.clone();
+    let mut d = Deriva::desde(&cfg, 3, malla, 0.0, &[10, 20], |k| {
+        let x = dirs[k];
+        if x[0] > 0.0 {
+            let cont = x[0] > 30f64.to_radians().cos();
+            (0, corteza(cont, if cont { 35.0 } else { 7.0 }, 150.0))
+        } else {
+            (1, corteza(false, 7.0, 150.0))
+        }
+    });
+    d.arrancar_con(&[[0.0; 3], [0.0; 3]]);
+    d.dar_paso();
+    let nace = nacimientos(&d);
+    assert!(
+        nace.iter()
+            .any(|e| e.clase.as_deref() == Some("espontaneo_margen")),
+        "nace una fosa en el margen pasivo: {:?}",
+        d.eventos
+    );
+    assert!(
+        d.eventos.iter().any(|e| e.tipo == "placa_nueva"),
+        "la parte oceánica es una placa nueva"
+    );
+    assert!(
+        d.cuentas.error_balance_max_rel < 1e-9,
+        "la corteza se conserva: error {:.2e}",
+        d.cuentas.error_balance_max_rel
+    );
+    // El borde nuevo es una fosa: tira de la placa oceánica hacia el continente.
+    assert!(
+        d.bordes.iter().any(|b| b.p_subduce && b.losa > 0.0),
+        "la fosa nueva tira"
+    );
 }

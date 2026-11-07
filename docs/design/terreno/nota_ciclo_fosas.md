@@ -1,29 +1,34 @@
 # Nota de diseño: ciclo de vida de las fosas (nacimiento, vida y muerte de la subducción)
 
-Documento de diseño. Complementa a diseno_relieve_tectonico.md (incremento 4 del terreno), a nota_bordes_placa.md y a adenda_balance_corteza.md (versión 4).
+Documento de diseño. Complementa a diseno_relieve_tectonico.md (incremento 4 del terreno), a nota_bordes_placa.md y a adenda_balance_corteza.md (versión 5).
 
-Estado: diseño cerrado salvo las preguntas del §11. Antes de implementarla hay que hacer el diagnóstico del §0.
+Estado: versión 2. Diagnóstico del §0 hecho y preguntas del §11 respondidas; lista para implementar.
 
 ---
 
-## 0. Diagnóstico previo (antes de implementar)
+## 0. Diagnóstico previo (hecho)
 
-Hipótesis: el modelo convierte en fosa cualquier tramo convergente desde el primer paso, incluidos los que convergen muy despacio. En la Tierra, esos tramos absorben la convergencia engrosándose, sin fosa.
+La hipótesis era que el exceso de fosa del modelo estaba en tramos que convergen muy despacio. El diagnóstico la descarta:
 
-Los números la apoyan:
-- **En la Tierra**, 2,7–3,4 km²/año de fondo se hunden en ~37 300 km de fosa (medidos con la misma regla). La convergencia media en las fosas es de unos 7–9 cm/año.
-- **En el modelo**, 3,6 km²/año se hunden en ~74 000 km. La media es de unos 4,9 cm/año.
+| | Fosa (km) | Convergencia media (cm/año) | Por debajo de 2 cm/año | Se hunden (km²/año) |
+|---|---|---|---|---|
+| Modelo (semilla 42) | 74 000 | 5,1 | 18,6 % | 3,6 |
+| Bird SUB, tramo a tramo | 51 300 | 5,3 | 21 % | 2,73 |
+| Bird OCB, tramo a tramo | 17 400 | 1,3 | 81 % | 0,23 |
+| La Tierra en la malla, 15 placas mayores | 37 300 | 4,0 | 36 % | 1,48 |
 
-El modelo tiene, por tanto, el doble de fosa yendo a la mitad de velocidad.
+Conclusiones:
+- **El exceso está en fosas rápidas.** La fosa lenta del modelo (13 800 km) es como la de la Tierra.
+- **El objetivo de 7–9 cm/año de la versión 1 era un error.** Repartía el área que se hunde en toda la Tierra entre las fosas de las 15 placas mayores, que no incluyen las fosas de las microplacas de arco (Tonga, Marianas…).
+- **La referencia coherente es la fosa total de Bird.** Como el modelo no tiene microplacas, hay que comparar con unos 51 000 km a 5,3 cm/año.
+- **Frente a esa referencia, el modelo tiene 1,45 veces la longitud.** Casi todo se explica porque hunde más área: 3,6 km²/año frente a 2,7–3,0.
 
-Medida pedida:
-- Distribución de la convergencia perpendicular a lo largo de las fosas del modelo.
-- La misma distribución en las fosas de Bird (clase SUB) y en sus bordes convergentes sin fosa (clase OCB).
-- Fracción de longitud de fosa por debajo de 2 cm/año en cada caso.
+La nota se implementa igualmente, por tres motivos:
+- resuelve el fondo oceánico demasiado viejo;
+- añade el crecimiento del tirón con la longitud de la losa, que hoy es pleno desde el primer paso y es una causa posible del exceso de fosas rápidas;
+- convierte en convergencia difusa los tramos que no llegan a X_ini, como los bordes OCB de la Tierra.
 
-Si el exceso del modelo está en tramos lentos, la hipótesis se confirma. Si el exceso está en tramos rápidos, la causa está en las fuerzas que mueven las placas, y se trae aquí antes de seguir.
-
-La nota se implementa en ambos casos, porque además resuelve el fondo oceánico demasiado viejo (§1).
+Si tras implementarla la fosa sigue más de 1,25 veces por encima de la referencia, se estudian las fuerzas con las medidas del §10.
 
 ---
 
@@ -61,7 +66,7 @@ Lo que manda es esa convergencia acumulada, no la velocidad. Hasta entonces, la 
 ### Qué pasa hoy en el modelo
 
 - Todo tramo convergente es fosa desde el primer paso, y la polaridad se decide por par de placas en cada paso.
-- La longitud de fosa es el doble de la terrestre, con la mitad de velocidad media (§0).
+- La longitud de fosa es 1,45 veces la terrestre, con una velocidad media parecida: el modelo hunde más área que la Tierra (§0).
 - El 24 % del fondo oceánico tiene más de 200 Myr. No nacen fosas nuevas que cierren los océanos viejos.
 
 ### Objetivo
@@ -84,7 +89,7 @@ Sí se modela:
 - Polaridad fijada al nacer. Sustituye a la decisión por par de placas que figura como provisional en TREE.md.
 - Nacimiento espontáneo en márgenes pasivos viejos y en fallas transformantes con fuerte contraste de edad, con una probabilidad que crece con la edad del fondo.
 - Muerte por falta de convergencia sostenida. La muerte por choque ya existe.
-- Tirón de la losa creciente desde el nacimiento, si el documento principal no lo tiene ya (§11, pregunta 1).
+- Tirón de la losa creciente desde el nacimiento. El documento principal no lo tiene.
 
 Se abstrae o se deja para más adelante:
 - **Retroceso de la fosa y apertura de cuencas tras el arco (back-arc).** Son reales e importantes; ampliación futura.
@@ -182,7 +187,7 @@ p = 1 − exp(−λ_esp · (a / 100 Myr) · L_borde · Δt)
 Con el generador sembrado se decide si nace una fosa en ese segmento.
 
 Si nace en un margen pasivo:
-- La parte oceánica se separa de la placa como placa nueva, con la misma maquinaria que usen los rifts.
+- La parte oceánica se separa de la placa como placa nueva. Se reutiliza la maquinaria de división de los rifts, pero el corte sigue el límite entre corteza oceánica y continental, no un círculo.
 - La fosa ocupa todo el tramo candidato contiguo de esa placa, hasta los bordes existentes, que se cierran con fallas transformantes.
 - Su polaridad es la del océano bajo el continente.
 
@@ -259,16 +264,25 @@ Las tolerancias son propuestas.
 
 | Magnitud | Objetivo | Hoy |
 |---|---|---|
-| Longitud de fosa activa (Bird, 15 placas, misma regla) | 37 300 km ± 25 % | 74 000 |
-| Convergencia media en las fosas | 7–9 cm/año (derivado de Bird y del área subducida) | ~4,9 |
-| Fondo que se hunde | 2,7–3,4 km²/año | 3,6 |
+| Longitud de fosa activa | La de Bird SUB proyectada en la malla con la misma regla (≈51 000 km tramo a tramo), ± 25 % | 74 000 |
+| Convergencia media en las fosas | ≈5,3 cm/año (Bird SUB) | 5,1 |
+| Longitud de convergencia difusa | La de Bird OCB en la malla (≈17 400 km tramo a tramo), a ≈1,3 cm/año | 0 |
+| Fondo que se hunde en fosas | ≈2,7 km²/año (Bird SUB), más ≈0,2 absorbidos en convergencia difusa | 3,6 |
 | Edad media del fondo oceánico | 64,2 Myr (Seton et al. 2020) | — (mediana 59) |
 | Fondo con más de 180 Myr | menos del 1 % del área oceánica | 24 % con más de 200 |
 | Velocidad media de las placas | 4,39 cm/año, sin reajustar fuerzas | 4,36 |
 | Placas rápidas = las de mucha fosa (Forsyth y Uyeda) | se mantiene | sí |
 | Ciclos de supercontinente | del orden de 1,5 en 630 Myr (criterio blando) | — |
 
-λ_esp se calibra con la distribución de edades del fondo: la media y la fracción por encima de 180 Myr. X_ini solo puede moverse dentro de 100–200 km, para acercar la longitud de fosa.
+λ_esp se calibra con la distribución de edades del fondo: la media y la fracción por encima de 180 Myr. X_ini solo puede moverse dentro de 100–200 km, para acercar la longitud de fosa. Todo se mide con la media de al menos 5 semillas.
+
+### Si la fosa sigue demasiado larga
+
+Si tras implementar la nota la fosa sigue más de 1,25 veces por encima de la referencia, la causa está en las fuerzas. Se miden y se traen aquí antes de tocar nada:
+1. La distribución de la longitud de borde por oblicuidad (de choque frontal a deslizamiento puro), frente a la de Bird.
+2. La distribución de tamaños de las placas, frente a las 15 mayores de Bird.
+3. Para cada placa, cuánto aporta cada fuerza a su movimiento: tirón de la losa, empuje de dorsal, resistencia de choque y arrastre en la base.
+4. El área creada y consumida en total, frente a 2,7–3,4 km²/año.
 
 ### Pruebas
 
@@ -285,12 +299,12 @@ Todas las reglas son funciones puras del estado. El nacimiento espontáneo usa e
 
 ---
 
-## 11. Preguntas abiertas
+## 11. Preguntas abiertas (respondidas)
 
-1. **Tirón de la losa.** ¿Cómo calcula hoy el documento principal (§6.2) el tirón de la losa? ¿Crece con la longitud de la losa? Si no, se añade el factor de 6.5.
-2. **División de placas.** ¿Existe ya maquinaria para dividir placas, la de los rifts? El nacimiento espontáneo en márgenes pasivos la necesita.
-3. **Zonas de fractura.** ¿Guarda el modelo las trazas de antiguas fallas transformantes dentro de las placas? Si no, los candidatos espontáneos son solo los márgenes pasivos y las transformantes actuales entre placas, que es suficiente para empezar.
-4. **Resultado del diagnóstico del §0.**
+1. **Tirón de la losa.** Depende de la edad del fondo, no de la longitud de la losa. Se añade el factor de 6.5.
+2. **División de placas.** Existe (la usan los rifts y los saltos de dorsal), pero corta por un círculo. Para los márgenes pasivos se corta por el tipo de corteza (6.4); el resto se reutiliza.
+3. **Zonas de fractura.** No se guardan. Los candidatos espontáneos son los márgenes pasivos y las transformantes actuales entre placas.
+4. **Diagnóstico del §0.** Hecho: el exceso está en fosas rápidas. Objetivos del §10 corregidos.
 
 ---
 

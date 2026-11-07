@@ -146,7 +146,6 @@ f_acr        = 0.3         # fracción del sedimento de fosa que se pega al marg
 eta_col      = 0.5         # choque continente–continente: queda arriba (medido: India–Asia, ~50 %)
 eta_arco     = 0.9         # choque arco–continente: queda arriba (medido: Luzón en Taiwán, ~90 %)
 h_del_km     = 50.0        # la base de la corteza pasa a eclogita (físico: 1,2–1,5 GPa)
-h_del_arco_km = 40.0       # raíz densa de los arcos (adenda v4; Jagoutz y Behn 2013: más densa que el manto desde 40 km, discontinuidad a 38–42 km)
 tau_del_myr  = 50.0        # delaminación del exceso (calibrado: ≈1,1 AU y espesor máximo 70–80 km)
 h_flujo_km   = 50.0        # por encima, la corteza inferior caliente fluye hacia los lados (adenda v3 §6.6b; físico, 45–60)
 d_flujo_km2_myr = 3000.0   # difusividad del flujo lateral (calibrado con India–Asia: espesor máximo 72–77 km sin tope; ~viscosidad 1e20 Pa·s)
@@ -166,6 +165,11 @@ v_inicial_max_cm_anio = 10.0
 # Bordes de placa (nota_bordes_placa.md §5)
 theta_tr_grados = 20.0     # transformante a menos de 20° del desgarre puro (medido: separa las clases de Bird 2003)
 l_borde_km   = 150.0       # radio del borde suavizado (calibrado contra los bordes de Bird; escala de flexión 100–300 km)
+# Ciclo de vida de las fosas (nota_ciclo_fosas.md v2). W_dif, la franja de la convergencia difusa, es L_borde.
+x_ini_km     = 150.0       # convergencia acumulada para que nazca una fosa (Gurnis et al. 2004: 100–150 km; Li y Gurnis 2023: ~200)
+tau_muerte_myr = 10.0      # sin convergencia durante este tiempo, la fosa muere (supuesto)
+lambda_esp   = 1.7e-7      # nacimiento espontáneo por km de candidato y Myr con fondo de 100 Myr (calibrado, 5 semillas: edad media del fondo 64 Myr, Seton 2020)
+l_losa_km    = 800.0       # losa con la que el tirón es pleno (llega a 660 km con 45–60°; 660–1000)
 # Eventos de placas (§5.6)
 n_p0         = 12
 n_cratones   = 8
@@ -175,7 +179,8 @@ tau_rift_myr = 150.0
 v_rift_cm_anio = 2.0
 v_sutura_cm_anio = 0.5
 t_sutura_myr = 10.0
-tau_orog_myr = 63.0        # τ_ero: calibrado con la relajación de un orógeno a menos de 38 km en ~150 Myr (centro de 100–200)
+e1_km_myr    = 0.01        # erosión a 1 km sobre el mar (km/Myr; adenda v5 §6.7: E = E_1·(z/1 km)^n_ero). PROVISIONAL: da la relajación (144 Myr); la exportación espera a la base (fosas ×1,5)
+n_ero        = 2.0         # exponente de la erosión con la altura (rango 1,5–3; Montgomery y Brandon 2002)
 deformacion  = 0.06        # deformación de bordes de Voronoi, cratones y líneas de rift (fracción del radio)
 # Malla, tiempo y detalle (§5.7)
 nivel_malla  = 2           # nivel del cubo del terreno (~52 km con n0 = 48; decisión del responsable)

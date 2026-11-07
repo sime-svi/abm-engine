@@ -1102,3 +1102,50 @@ Formato de entrada:
   - batería: el planeta de la semilla 42 es otra realización con la v4, así que 25 márgenes se mueven con nota; 3 métricas nuevas (delaminación de los arcos, convergencia media y fracción lenta de las fosas); 56 en total;
   - no regresión de los agentes byte a byte; terreno igual a `main` con `h_del_arco_km` = 50, salvo los campos nuevos.
 - **Pendiente (`incremento-4-diseno.md` §22):** decisión sobre la nota de fosas y las fuerzas (área ×1,3); la ley de erosión; el volumen continental (−9,5 %); los picos; después, calibrar con varias semillas.
+
+## [2026-11-07] Adenda v5 (base), nota de fosas v2 implementada, medidas de fuerzas y erosión con la altura
+
+- **Qué pidió el responsable.**
+  - Nota de fosas v2: implementarla, con el tirón que crece con la losa. Si la fosa sigue más de 1,25 veces la referencia (Bird SUB, ~51 000 km), las cuatro medidas de fuerzas del §10, antes de tocar nada.
+  - Adenda v5: retirar la raíz de los arcos; erosión `E = E_1·(z/1 km)^n_ero` (calibrar con relajación y ~1,8 AU); toda calibración con 5 semillas; finales de fosa a su fosa; muestras ocultas en el flujo; revisar el reparto de dientes y sueltas.
+  - Orden: base, nota y erosión al final.
+- **Base.**
+  - Raíz de los arcos retirada.
+  - Finales de fosa: consumo no convergente del 3,2 % al 0,4–0,6 %.
+  - Ocultas en el flujo: máximo de una oculta de 86–180 a 69–92 km.
+  - Dientes:
+    - segunda pasada a 3·L_borde hacia huecos de tramo transformante o convergente;
+    - los que siguen sin hueco esperan ocultos en su placa en vez de repartirse (movían ~5,8 AU de corteza continental y la mitad engrosaba bordes que se deslizan);
+    - picos de 605 a 27 celdas·paso y exportación de 3,22 a 2,55 AU.
+  - La erosión miraba la cuenca cerrada en la celda del centro de la muestra, no en la que la ve: una columna alta junto a una depresión no se erosionaba.
+- **Nota de fosas** (`deriva/fosas.rs`).
+  - Estado por celda de borde en un mapa de cada placa, rehecho cada paso y heredado a dos anillos; tramos = componentes conexas del par.
+  - Difuso con absorción en `W_dif` = `L_borde`; nacimiento con `X_ini`; polaridad fija (sustituye a la polaridad por par); tirón × `min(1, L/L_losa)`; muerte por `τ_muerte` y por choque.
+  - Espontáneos en márgenes pasivos (`partir_por_corteza`) y en transformantes.
+  - `activar_fosas` para los escenarios con subducción en marcha; 5 pruebas nuevas e India–Asia igual.
+  - Decisiones mías:
+    - flota = continental (> 20 km): con «`hc > 0`», el sedimento convertido en roca mataba las fosas cada 2 Myr;
+    - una fosa espontánea nace con `L = X_ini`;
+    - el tirón sigue mientras la fosa vive.
+- **Calibrado `λ_esp` = 1,7·10⁻⁷** (edad media del fondo 64 Myr; más de 180 Myr no baja del 4 % con ningún valor).
+- **Resultado** (5 semillas):
+  - fosa 79 300 km a 5,7 cm/año, ×1,55 la referencia;
+  - difusa 10 300 km a 1,9 cm/año (OCB 16 200 a 1,3);
+  - se hunden 4,4 km²/año.
+  - Con `λ_esp` = 0, fosa 58 700 km (×1,15), se hunden 2,92 + 0,28 km²/año y la placa mayor ocupa el 25 %, pero el fondo es demasiado viejo (media 103 Myr). El exceso viene casi entero de los nacimientos en márgenes pasivos, que convierten márgenes enteros en fosa.
+- **Las cuatro medidas de fuerzas** (incremento-4-diseno.md §27):
+  - oblicuidad casi uniforme, frente a la Tierra con bordes de frente;
+  - placa mayor del 41 % (Pacífico 22 %);
+  - tirón 75 % y empuje de dorsal 25 % de la potencia motriz (Tierra ~90/10);
+  - área creada 4,9 km²/año (2,7–3,4).
+- **Erosión con la altura:** `τ_ero` retirado; `n_ero` = 2 y `E_1` = 0,01 provisionales (relajación 144 Myr, tasas de m/Myr a 0,1–0,25 km/Myr); al mar 4,2 ± 1,0 AU. La calibración conjunta espera a la base, para no compensar el exceso de subducción. La tierra baja a 921 m de media y el mar queda en el dato.
+- **Hallazgos:**
+  - la convergencia difusa mete 1,1 km³/año de basalto bajo los continentes (la nota dice «ambas placas»), que los levanta y la erosión gasta;
+  - los picos de más de 80 km vuelven con la nota (máximo visible 107–129 km), sobre todo en los choques.
+- **Herramientas:**
+  - `deriva_en_varias_semillas` con `VARIANTES` (como `--set`) y las medidas de fuerzas;
+  - `calibracion_relajacion` con `E1` y `N_ERO`;
+  - `bordes_bird.py`: clase de Bird → fosa con la regla de la nota, oblicuidad y tamaños.
+- **Tiempo:** deriva 112 s (antes ~100); planeta 187,6 s de 200.
+- **Batería:** 34 márgenes movidos con nota y 4 métricas nuevas de fosas (59 en el planeta).
+- **Pendiente (incremento-4-diseno.md §30):** cómo consumir el fondo viejo sin rodear márgenes de fosa; el basalto bajo los continentes; los picos; luego, la calibración conjunta de la erosión.

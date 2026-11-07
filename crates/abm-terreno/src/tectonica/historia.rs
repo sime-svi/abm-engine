@@ -33,6 +33,14 @@ pub struct EventoTectonico {
     pub solapado_km3: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub perdido_km3: Option<f64>,
+    /// Fosas (nota de fosas §7): edad del fondo que se hunde al nacer, y edad de la fosa y longitud
+    /// de su losa al morir.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edad_fondo_myr: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edad_fosa_myr: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub losa_km: Option<f64>,
 }
 
 /// Métricas agregadas de un paso de la deriva (§8, «cada Myr»).
@@ -66,8 +74,6 @@ pub struct MetricaMyr {
     pub f_sed_au: f64,
     pub f_col_au: f64,
     pub f_del_au: f64,
-    /// La parte de `f_del_au` que cae de las raíces de los arcos (adenda v4).
-    pub f_del_arcos_au: f64,
     pub f_den_au: f64,
     /// Adelgazamiento de los rifts (AU): sumidero provisional, hasta la nota de rifts.
     pub f_rift_au: f64,
@@ -95,8 +101,8 @@ pub struct MetricaMyr {
     /// Perímetro total de los bordes (km), medido como `tierra_bordes.toml`.
     pub perimetro_km: f64,
     /// Dientes de tramos transformantes o divergentes recolocados en un hueco de su placa y sin
-    /// hueco (sumados a una celda de su placa), creación residual en huecos que no son de dorsal y
-    /// área reasignada por el suavizado (km²/año).
+    /// hueco (esperan, ocultos en su placa, al paso siguiente; adenda v5), creación residual en
+    /// huecos que no son de dorsal y área reasignada por el suavizado (km²/año).
     pub dientes_recolocados_km2_anio: f64,
     pub dientes_sin_hueco_km2_anio: f64,
     /// Muestras sueltas lejos de su placa: su material pasa a la placa donde están (km²/año).
@@ -113,6 +119,17 @@ pub struct MetricaMyr {
     /// de la longitud de fosa por debajo de 2 cm/año.
     pub convergencia_media_fosas_cm_anio: f64,
     pub fosa_lenta_frac: f64,
+    /// Nota de fosas §8: longitud de convergencia difusa (km, la mitad de cada lado), fondo
+    /// absorbido por ella (km²/año), edad media de las fosas activas (Myr) y fracción media del
+    /// tirón de su losa, ponderadas por longitud.
+    pub difusas_km: f64,
+    pub area_difusa_km2_anio: f64,
+    pub edad_media_fosas_myr: f64,
+    pub losa_media_frac: f64,
+    /// Nacimientos (inducidos, espontáneos en margen pasivo y en transformante) y muertes (sin
+    /// convergencia y por choque) del paso.
+    pub nacimientos: [u32; 3],
+    pub muertes: [u32; 2],
 }
 
 /// Cuentas del material continental (km³) a lo largo de la deriva (adenda de balance §6 y §8).
@@ -141,9 +158,8 @@ pub struct CuentasCorteza {
     pub choque_engrosamiento_km3: f64,
     pub choque_perdida_km3: f64,
     pub choque_sin_sitio_km3: f64,
-    /// Delaminación (`F_del`, §6.6), y la parte que cae de las raíces de los arcos (adenda v4).
+    /// Delaminación (`F_del`, §6.6).
     pub delaminacion_km3: f64,
-    pub delaminacion_arcos_km3: f64,
     /// Corteza que el flujo lateral pasa de una columna gruesa a sus vecinas (§6.6b; traslado).
     pub flujo_lateral_km3: f64,
     /// Adelgazamiento de los rifts (`H ← f_rift·H`): sumidero provisional. En la Tierra estirar
@@ -169,8 +185,8 @@ pub struct CuentasCorteza {
     /// Diagnóstico de la forma de los bordes: fondo oceánico consumido (km²) y corteza continental
     /// solapada en choques (km³) según el tipo del borde donde ocurre: 0 sin borde, 1 divergente,
     /// 2 subducción, 3 colisión, 4 transformante.
-    pub area_subducida_por_borde_km2: [f64; 5],
-    pub choque_solapado_por_borde_km3: [f64; 5],
+    pub area_subducida_por_borde_km2: [f64; 6],
+    pub choque_solapado_por_borde_km3: [f64; 6],
 }
 
 impl CuentasCorteza {
@@ -249,8 +265,6 @@ pub struct BalanceMedio {
     pub sedimento_acrecionado_au: f64,
     pub choques_au: f64,
     pub delaminacion_au: f64,
-    /// La parte de la delaminación que cae de las raíces de los arcos (adenda v4).
-    pub delaminacion_arcos_au: f64,
     pub sedimento_al_mar_au: f64,
     pub rift_au: f64,
     /// Fondo oceánico que se hunde y que se crea (km²/año).
@@ -288,4 +302,13 @@ pub struct BalanceMedio {
     pub convergencia_media_fosas_cm_anio: f64,
     pub fosa_lenta_frac: f64,
     pub fosas_por_convergencia_frac: Vec<f64>,
+    /// Nota de fosas §8 (medias tras el rodaje): convergencia difusa (km y km²/año), edad media de
+    /// las fosas (Myr), fracción media del tirón, y nacimientos (inducidos, en margen pasivo, en
+    /// transformante) y muertes (sin convergencia, por choque) por cada 100 Myr.
+    pub difusas_km: f64,
+    pub area_difusa_km2_anio: f64,
+    pub edad_media_fosas_myr: f64,
+    pub losa_media_frac: f64,
+    pub nacimientos_100myr: [f64; 3],
+    pub muertes_100myr: [f64; 2],
 }

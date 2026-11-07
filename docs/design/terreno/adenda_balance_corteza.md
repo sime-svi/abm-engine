@@ -2,9 +2,14 @@
 
 Documento de diseño. Complementa a diseno_relieve_tectonico.md (incremento 4 del terreno).
 
-Estado: versión 4. Diseño cerrado.
+Estado: versión 5. Diseño cerrado.
 
-Cambios de la versión 4:
+Cambios de la versión 5:
+- Se retira la caída de la raíz de los arcos de la versión 4. Las tasas medidas de los arcos ya descuentan esa caída, así que sumarla aparte la contaba dos veces.
+- La erosión de la génesis pasa a una ley no lineal con la altura (6.7), porque un único τ_ero no cumple a la vez la relajación y la exportación al mar.
+- Las calibraciones y las comparaciones con la Tierra se hacen con la media de varias semillas.
+
+Cambios de la versión 4 (la raíz de los arcos se retira en la versión 5):
 - La delaminación incluye la caída de la raíz densa de los arcos, con un umbral propio más bajo (6.6).
 - El objetivo de delaminación pasa a ser débil: mandan la exportación de sedimento al mar y el cambio de volumen continental.
 - No se calibra nada hasta implementar nota_ciclo_fosas.md.
@@ -71,7 +76,7 @@ Sí se modela:
 - Erosión por subducción por km² de placa que se hunde.
 - Sedimento en la fosa: una parte se pega al margen y el resto se hunde.
 - Choques con dos eficacias distintas: arco contra continente y continente contra continente.
-- Delaminación de la corteza engrosada y caída de la raíz densa de los arcos.
+- Delaminación de la corteza engrosada.
 - Flujo lateral de la corteza engrosada: las mesetas altas se desparraman hacia los lados. Sustituye al tope H_max.
 - Destino del sedimento de la erosión que ya existe durante la deriva: acaba en el mar, en una capa mínima de sedimento. Hoy se pierde.
 - Contabilidad del balance por proceso en cada paso.
@@ -82,6 +87,7 @@ Se abstrae o se deja para más adelante:
 - **Levantamiento al desprenderse la raíz densa.** En la realidad, al caerse la raíz de eclogita la superficie sube. Aquí la corteza tiene una sola densidad y eso no se reproduce. Ampliación futura.
 - **Reparto fino del sedimento en el mar** (plataforma, talud, llanura abisal), su compactación, las mesetas oceánicas y los montes submarinos. Van en la nota del fondo oceánico; aquí la capa de sedimento es la mínima necesaria para cerrar el balance.
 - **Reciclaje del sedimento subducido a través del magma del arco.** No se modela por separado; la tasa medida de los arcos ya es la producción neta observada.
+- **Caída de la raíz densa de los arcos.** Es real (Jagoutz y Behn 2013), pero en la mayoría de los arcos actuales la corteza inferior inestable casi no se observa: se hunde deprisa o no llega a quedarse (Behn y Kelemen 2006). Las tasas medidas de los arcos ya la descuentan, así que queda implícita en p_arc.
 - **Forma de los bordes de placa.** Se trata en la nota siguiente. Esta adenda no depende de ella.
 
 ---
@@ -138,11 +144,11 @@ Todo el sedimento cuenta como material continental, porque en este modelo su ún
 | η_col | Fracción de la corteza solapada que se conserva en un choque continente–continente | 0,5 | adimensional | Medido: en India–Asia falta en torno al 50 % (40–50 % según otro estudio; dato discutido) |
 | η_arco | Fracción conservada en un choque arco–continente | 0,9 | adimensional | Medido: el arco de Luzón se acreciona casi un 90 % en Taiwán |
 | h_del | Espesor a partir del cual la base de la corteza se vuelve eclogita y se desprende | 50 | km | Físico (presiones de 1,2–1,5 GPa); rango 45–55 |
-| h_del,arco | Ídem en la franja de arco: la raíz de cumulados densos pesa más que el manto a menos profundidad | 40 | km | Físico; rango 35–45 (Jagoutz y Behn 2013; quien implemente debe citar la fuente concreta del rango) |
 | τ_del | Tiempo característico de la delaminación del exceso | 50 (inicial) | Myr | Calibrado: delaminación global ≈1,1 AU y espesor máximo de 70–80 km |
 | h_flujo | Espesor a partir del cual la corteza inferior, caliente y débil, fluye hacia los lados | 50 | km | Físico, del mismo orden que h_del; rango 45–60 |
 | D_flujo | Difusividad del flujo lateral | calibrar | km²/Myr | Calibrado: espesor máximo de 70–80 km sin tope, mesetas de cientos a ~1 000 km de ancho, y relajación junto con τ_del y τ_ero |
-| τ_ero | Tiempo de la erosión de la génesis (ya existe en el documento principal) | 63 (calibrado con la prueba de relajación) | Myr | Calibrado junto con τ_del: relajación a 35–38 km en 100–200 Myr y exportación al mar ≈1,8 AU |
+| E_1 | Erosión de la génesis a 1 km de altura sobre el mar (6.7) | calibrar | km/Myr | Calibrado: relajación a 35–38 km en 100–200 Myr y exportación al mar ≈1,8 AU, con la media de varias semillas |
+| n_ero | Exponente de la erosión con la altura | 2 (inicial); rango 1,5–3 | adimensional | Calibrado con los mismos objetivos. Comprobación: metros por Myr en llanuras y escudos estables; 0,1–1 km/Myr en cordilleras activas |
 | ε_cons | Error relativo de conservación admitido por paso | igual que la malla del terreno | adimensional | Numérico |
 
 ---
@@ -209,15 +215,11 @@ Tras un choque arco–continente, la corteza acrecionada pasa a a_i = 0: ya es c
 
 ### 6.6 Delaminación
 
-La base de la corteza se desprende cuando se vuelve más densa que el manto. En la realidad ocurre de dos formas:
-- **En la corteza engrosada por choques**, cuando su base pasa a eclogita (umbral h_del).
-- **En los arcos volcánicos**, cuya raíz de cumulados densos se hunde a menos profundidad (umbral h_del,arco). Es lo que convierte la corteza basáltica de los arcos en corteza continental, y sigue un tiempo después de que el arco se apague.
+Cuando la base de la corteza engrosada pasa a eclogita, se vuelve más densa que el manto y se desprende. En toda celda con h_c,i > h_del:
 
-El umbral h* de cada celda es h_del,arco si la celda está en una franja de arco activa o tiene a_i = 1, y h_del en el resto. En toda celda con h_c,i > h*:
+h_c,i ← h_del + (h_c,i − h_del) · exp(−Δt / τ_del)
 
-h_c,i ← h* + (h_c,i − h*) · exp(−Δt / τ_del)
-
-Se usa un único τ_del para las dos formas, para que la calibración tenga sentido con los objetivos disponibles.
+La caída de la raíz de los arcos no se modela aparte, porque está incluida en las tasas netas de los arcos (§2).
 
 Lo retirado pasa al manto y forma F_del. Se usa la forma exponencial exacta porque es estable para cualquier Δt.
 
@@ -235,11 +237,17 @@ Todos los V_ik de un subpaso se calculan con los espesores del inicio del subpas
 
 H_max = 80 km deja de ser una regla. Queda solo como comprobación en los tests: ninguna celda debe superarlo. Si alguna muestra se acerca a valores como los 150 km vistos antes del tope, es síntoma de que algún proceso apila corteza en un punto, y hay que buscarlo.
 
-### 6.7 Destino del sedimento de la erosión existente
+### 6.7 Erosión de la génesis y destino del sedimento
 
-La génesis ya erosiona durante la deriva con la regla del documento principal (tiempo τ_ero). No se añade otra ley de erosión. Lo que cambia es adónde va el material. Hoy solo cabe en los márgenes continentales y el resto se pierde (≈1,28 AU), lo que rompe la conservación.
+**Ley de erosión.** Sustituye a la relajación lineal del documento principal (tiempo τ_ero). En cada celda con tierra emergida (z_i > 0), la roca retirada es:
 
-Nueva regla:
+E_i = E_1 · (z_i / 1 km)^n_ero   (km/Myr)
+
+Motivo: en la Tierra, la erosión crece mucho más que proporcional con el relieve en las cordilleras activas, mientras que en llanuras y escudos estables es de metros por millón de años (Montgomery y Brandon 2002). Con la ley lineal, las llanuras de menos de 5 km de exceso aportaban el 27 % de la erosión, y un único τ_ero no cumplía a la vez la relajación y la exportación al mar.
+
+La altura sobre el mar se usa como sustituto del relieve local, que la malla de 52 km no resuelve.
+
+**Destino del sedimento** (ya implementado):
 - Si la erosión actúa sobre una celda con sedimento, lo retira primero de S_i y, cuando no queda, de h_c,i.
 - El volumen erosionado baja por la pendiente máxima de la malla tectónica hasta la primera celda marina y se suma a su S.
 - Si el camino acaba en una cuenca cerrada (un mínimo local en tierra), el sedimento se queda allí, como ocurre en las cuencas sin salida al mar reales.
@@ -293,7 +301,7 @@ Orden dentro del paso:
 6. Sedimento en la fosa (6.4).
 7. Choques (6.5).
 8. Delaminación (6.6) y flujo lateral (6.6b).
-9. Erosión del documento principal, con el destino del sedimento de 6.7.
+9. Erosión con la ley de 6.7, y destino del sedimento.
 10. Isostasia y nivel del mar (6.8).
 11. Comprobación del balance y métricas (6.9 y §8).
 
@@ -312,7 +320,7 @@ Relación con otros trabajos:
 | Producción de los arcos | 2,7–5 AU | Scholl y von Huene 2009; Stern y Scholl 2010 |
 | Sedimento subducido | 1,0–1,65 AU | von Huene y Scholl 1991; Clift et al. 2009 |
 | Erosión por subducción | 1,3–1,7 AU | Clift et al. 2009; Stern 2011 |
-| Delaminación | ≈1,1 AU en el Cenozoico (dominado por el Tíbet), más la caída de las raíces de los arcos, sin cifra global fiable. Objetivo débil: mandan la exportación al mar y el cambio de volumen | Clift et al. 2009; Stern y Scholl 2010; Jagoutz y Behn 2013 |
+| Delaminación | ≈1,1 AU en el Cenozoico, dominado por el Tíbet. Objetivo débil: mandan la exportación al mar y el cambio de volumen | Clift et al. 2009; Stern y Scholl 2010 |
 | Pérdida en choques continentales | 0,4–0,7 AU de media. Durante un gran choque, hasta ~3 AU: en India–Asia, unos 15 % del flujo de corteza oceánica subducida (dato discutido) | Clift et al. 2009; Stern y Scholl 2010; Ingalls et al. 2016 |
 | Sedimento acrecionado | ≈0,3 AU | Clift et al. 2009 |
 | Sedimento exportado al mar | ≈1,8 AU (media del Cenozoico) | Clift et al. 2009 |
@@ -333,7 +341,7 @@ Comprobación de orden de magnitud para la erosión de la génesis: en las cordi
 ### Pruebas
 
 1. **Conservación.** Hecha: la fuga es error de redondeo.
-2. **Relajación.** Se usa el escenario India–Asia ya calibrado. Se detiene la convergencia y se mide cuánto tarda el espesor máximo en bajar de 38 km. Objetivo: 100–200 Myr. Hoy, solo con erosión, tarda ~345 Myr.
+2. **Relajación.** Se usa el escenario India–Asia ya calibrado. Se detiene la convergencia y se mide cuánto tarda el espesor máximo en bajar de 38 km. Objetivo: 100–200 Myr y, a la vez, exportación al mar ≈1,8 AU. Con la ley lineal y τ_ero = 63 Myr la relajación tardaba ~135 Myr, pero la exportación salía en ~3,1 AU.
 3. **Balance completo.** Corrida de 500 Myr. Cada flujo debe caer en su rango, el área subducida en 2,7–3,4 km²/año, V_cont dentro de ±10 % y f_cont dentro del criterio.
 4. **Casos límite:**
    - planeta sin fosas: no hay arcos ni sumideros de fosa, y solo actúan la delaminación y la erosión;
@@ -342,13 +350,15 @@ Comprobación de orden de magnitud para la erosión de la génesis: en las cordi
    - paso tectónico grande: la delaminación sigue siendo estable gracias a la forma exponencial;
    - borde muy dentado frente a borde recto entre las mismas placas: A_sub total prácticamente igual.
 
-### Determinismo
+### Determinismo y varias semillas
+
+El planeta es caótico: entre semillas, la exportación al mar varía en ±0,5 AU. Por eso toda calibración y toda comparación con la Tierra se hace con la media de al menos 5 semillas, dando también la dispersión. La batería con una sola semilla sigue sirviendo para detectar regresiones, no para calibrar.
 
 Esta adenda no usa azar. Todas las reglas son funciones puras del estado. Los repartos entre celdas (6.3 y 6.4) siguen un orden geométrico fijo con desempate por índice.
 
 ### Si un objetivo no se cumple
 
-Primero se revisa la base: un mecanismo que falte o un valor medido mal aplicado. Solo los parámetros calibrados (f_acr, τ_del, D_flujo, τ_ero) se ajustan, y no antes de implementar nota_ciclo_fosas.md.
+Primero se revisa la base: un mecanismo que falte o un valor medido mal aplicado. Solo los parámetros calibrados (f_acr, τ_del, D_flujo, E_1, n_ero) se ajustan, siempre con la media de varias semillas y no antes de implementar nota_ciclo_fosas.md.
 
 Los parámetros medidos pueden moverse dentro de su rango publicado, porque estas tasas tienen incertidumbres de hasta el doble. Fuera de ese rango, no.
 
@@ -362,14 +372,15 @@ Los parámetros medidos pueden moverse dentro de su rango publicado, porque esta
 
 Queda abierta una cuestión que no bloquea esta adenda: las fosas y las dorsales del modelo miden más que las de la Tierra (unos 100 000 y 101 500 km). Con las tasas por área de la versión 2, los flujos no dependen de esa longitud. La forma de los bordes se trata en nota_bordes_placa.md.
 
-4. **Ley de erosión (comprobación pendiente).** Con τ_ero = 63 Myr se cumple la relajación, pero el sedimento que llega al mar sale 4,9 AU frente a ≈1,8. Parte se debe a la base: se hunde el doble de placa, así que hay el doble de arcos y de montañas que gastar. Tras corregir los bordes se vuelve a medir. Si un solo τ_ero no cumple a la vez la relajación y la exportación al mar, se pasa a una ley no lineal, porque la erosión real crece mucho más que proporcional con la altura: las cordilleras altas se gastan muy rápido y las llanuras casi nada.
+4. **Ley de erosión (resuelto en la versión 5).** Medido con 5 semillas, la exportación sí depende de τ_ero (3,06 AU con 63 Myr y 2,38 con 110), pero un único τ_ero no cumple a la vez la relajación y ≈1,8 AU. Se pasa a la ley no lineal de 6.7.
 
-5. **La exportación no depende de τ_ero (medido).** En equilibrio, la erosión se lleva lo que añaden los arcos y los choques; τ_ero solo cambia la altura de las montañas. Con τ_ero = 63 Myr llegan al mar 3,07 AU, y lo que sobra frente a ≈1,8 coincide con lo que falta de delaminación (0,05 AU frente a ≈1,1). De ahí la caída de las raíces de los arcos de la versión 4. τ_ero se queda en 63 Myr, fijado por la prueba de relajación, y la ley no lineal deja de ser prioritaria.
+5. **Raíz de los arcos (retirada en la versión 5).** Con el umbral a 40 km, la delaminación subió de 0,07 a 0,31 AU, la exportación no cambió y el volumen continental cayó más (−9,5 % de media; una semilla, −14,6 %). Las tasas medidas de los arcos ya son netas, así que sumar la caída aparte la contaba dos veces.
 
 ---
 
 ## Referencias
 
+- Behn, M. D. y Kelemen, P. B. (2006). Stability of arc lower crust: insights from the Talkeetna arc section, south central Alaska, and the seismic structure of modern arcs. Journal of Geophysical Research 111.
 - Bird, P. (2003). An updated digital model of plate boundaries. Geochemistry, Geophysics, Geosystems 4.
 - Clift, P. y Vannucchi, P. (2004). Controls on tectonic accretion versus erosion in subduction zones. Reviews of Geophysics 42, RG2001.
 - Clift, P. D., Vannucchi, P. y Phipps Morgan, J. (2009). Crustal redistribution, crust–mantle recycling and Phanerozoic evolution of the continental crust. Earth-Science Reviews 97, 80–104.
@@ -378,6 +389,7 @@ Queda abierta una cuestión que no bloquea esta adenda: las fosas y las dorsales
 - Cogné, J.-P. y Humler, E. (2006). Trends and rhythms in global seafloor generation rate. Geochemistry, Geophysics, Geosystems 7.
 - Ingalls, M., Rowley, D. B., Currie, B. y Colman, A. S. (2016). Large-scale subduction of continental crust implied by India–Asia mass-balance calculation. Nature Geoscience 9.
 - Jagoutz, O. y Behn, M. D. (2013). Foundering of lower island-arc crust as an explanation for the origin of the continental Moho. Nature 504.
+- Montgomery, D. R. y Brandon, M. T. (2002). Topographic controls on erosion rates in tectonically active mountain ranges. Earth and Planetary Science Letters 201.
 - Replumaz, A. et al. (2010). Crustal mass budget and recycling during the India/Asia collision. Tectonophysics 492.
 - Rowley, D. B. (2002). Rate of plate creation and destruction: 180 Ma to present. GSA Bulletin 114.
 - Scholl, D. W. y von Huene, R. (2009). Implications of estimated magmatic additions and recycling losses at the subduction zones of accretionary and collisional orogens. Geological Society Special Publication 318.
