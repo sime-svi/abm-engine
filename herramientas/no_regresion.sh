@@ -7,14 +7,14 @@
 #
 # Uso:
 #   herramientas/no_regresion.sh REF BINARIO CONFIG_REF CONFIG_ACTUAL
-#     REF            commit, rama o etiqueta de referencia (p. ej. ece0868)
+#     REF            commit, rama o etiqueta de referencia (p. ej. f6e34e6)
 #     BINARIO        agentes | terreno | abm
 #     CONFIG_REF     config para el binario de referencia, como ruta dentro del repo en REF
 #     CONFIG_ACTUAL  config para el binario actual (la misma, o una con los interruptores nuevos apagados)
 #
 # Ejemplos:
 #   herramientas/no_regresion.sh main agentes config/agentes.toml config/agentes.toml
-#   herramientas/no_regresion.sh bb6a8c0 terreno config/terreno.toml config/experiments/terreno_sin_sombra.toml
+#   herramientas/no_regresion.sh 6031705 terreno config/terreno.toml config/experiments/terreno_sin_sombra.toml
 #
 # Sale con 0 si las salidas son idénticas y con 1 si no. Cada binario corre en su propia carpeta temporal
 # (sus `output/` y sus cachés no se mezclan con las del repositorio).

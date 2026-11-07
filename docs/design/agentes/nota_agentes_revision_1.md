@@ -3,7 +3,7 @@
 **Modifica:** `docs/design/agentes/diseno_biologia_agentes.md` (v1.0 → v1.1)
 **Estado:** Las cuatro decisiones están aprobadas por el director. Lista para implementar.
 **Naturaleza:** Plano teórico. Sin código.
-**Origen:** Hallazgos de la implementación del incremento 1 de agentes (commit ece0868).
+**Origen:** Hallazgos de la implementación del incremento 1 de agentes (commit f6e34e6).
 
 Resumen de lo que cambia:
 | # | Cambio | Sección afectada del diseño |
@@ -219,7 +219,7 @@ F_disp = max( 0 , Σ_k N_F,k · fert_k − Σ Gq − Σ madres(Lq) )
 
 ## 6. Pruebas generales tras la revisión
 - Las pruebas existentes de la v1.0 se mantienen: balance energético, independencia del orden de proceso, determinismo bit a bit y calibración de Kleiber y del ayuno.
-- **Con los cuatro cambios apagados**, la salida debe ser idéntica a la del commit ece0868.
+- **Con los cuatro cambios apagados**, la salida debe ser idéntica a la del commit f6e34e6.
 - La prueba de coherencia entre modos (individuos frente a poblaciones) debe incluir el escenario de sequía, porque el destete forzoso y la esterilidad tienen versión en los dos modos.
 
 ## 7. Preguntas abiertas
@@ -265,7 +265,7 @@ Implementado para **individuos**. La versión de poblaciones de cada cambio qued
 
 ### 8.2 No regresión y pruebas
 
-**No regresión.** Con todos los interruptores apagados (`agentes_incremento1.toml`), los 30 años por defecto dan una salida **idéntica byte a byte** a la del binario de ece0868, compilado en un worktree. Se repite con `herramientas/no_regresion.sh ece0868 agentes config/agentes.toml config/experiments/agentes_incremento1.toml`. Tras la optimización de R6, la salida con todo encendido es idéntica a la de antes.
+**No regresión.** Con todos los interruptores apagados (`agentes_incremento1.toml`), los 30 años por defecto dan una salida **idéntica byte a byte** a la del binario de f6e34e6, compilado en un worktree. Se repite con `herramientas/no_regresion.sh f6e34e6 agentes config/agentes.toml config/experiments/agentes_incremento1.toml`. Tras la optimización de R6, la salida con todo encendido es idéntica a la de antes.
 
 **Tests unitarios nuevos:**
 - `el_dimorfismo_da_las_cifras_de_la_nota`: 1 433 / 2 579 / 126 000 kcal y 48,8 días de ayuno en las mujeres; 1 584 / 2 851 / 86 400 kcal y 30,3 días en los hombres. Sin dimorfismo, las tablas por sexo son las de la especie, bit a bit.
@@ -472,7 +472,7 @@ Criterio del responsable: **lo que más se parezca al comportamiento real** (CLA
 | A4 | La que cumpla todo lo más cerca de la realidad | `μ_est` = **40** años y `p_conc` = **0,005**/día (fecundabilidad de 0,13 por ciclo, dentro de lo observado en cazadoras-recolectoras): cumple los tres objetivos (§9.3) |
 | A5 | (a) ahora y (c) apuntada | Se acepta el hambre sincronizada por ahora. **Pendiente obligatorio:** competencia con jerarquía (§9.4) |
 | A6 | La (c), aunque sea más adelante | **Pendiente obligatorio:** otras causas de muerte (§9.4) |
-| A7 | Como vea Claude | La variante "proporcional" queda retirada. Era la propuesta D16 del incremento 1 (comer en proporción al forraje que queda), y la respuesta funcional de Holling, más realista, la sustituye. Se puede reproducir con el commit ece0868 |
+| A7 | Como vea Claude | La variante "proporcional" queda retirada. Era la propuesta D16 del incremento 1 (comer en proporción al forraje que queda), y la respuesta funcional de Holling, más realista, la sustituye. Se puede reproducir con el commit f6e34e6 |
 
 **Interruptores retirados** (CLAUDE §5): los seis cambios quedan siempre encendidos y las métricas de demografía se escriben siempre. La salida por defecto quedó idéntica byte a byte a la de antes de retirarlos.
 

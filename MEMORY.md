@@ -297,7 +297,7 @@ Formato de entrada:
 
 - **Qué:** Al retomar la sesión (casi 4 meses después) se contrastó el diseño v1.0 del LOD dinámico con
   el código real del incremento 1, y aparecieron seis huecos. Se commiteó el borrador v1.0 tal cual
-  (`d0e100c`), se fusionó `terreno` en `main` (fast-forward: incremento 1 + borrador) y se reescribió el
+  (`505ff11`), se fusionó `terreno` en `main` (fast-forward: incremento 1 + borrador) y se reescribió el
   diseño como **v1.1** (`docs/design/terreno/incremento-2-diseno.md`, con tabla "cambios respecto a la
   v1.0"). El responsable aprobó todas las propuestas ("sí a todo").
 - **Por qué:** La v1.0 suponía cosas que el código no cumplía: (1) la altura se normalizaba con el
@@ -318,7 +318,7 @@ Formato de entrada:
   visible desde esta instancia; probablemente otra instancia WSL, que comparte red). Arrancar la BD
   del proyecto chocaría. El usuario ya está en el grupo `docker`. **Cuidado:** con `sink=postgres` el
   motor intentaría conectar a ese otro Postgres.
-- **Estado tras el cambio:** Diseño v1.1 cerrado y aprobado; `main` = `terreno` en `d0e100c`.
+- **Estado tras el cambio:** Diseño v1.1 cerrado y aprobado; `main` = `terreno` en `505ff11`.
 
 ## [2026-11-04] Implementación de la fase «terreno» — incremento 2 (LOD dinámico)
 
@@ -364,7 +364,7 @@ Formato de entrada:
   configurables en `infra/.env` (`PGPORT`, `GRAFANA_PORT`; plantilla en `.env.example`). El motor ya
   leía `PGPORT` (su valor por defecto pasa a 25432) y el test de BD también lo lee ahora. La red de
   compose tiene una **subred fija `10.88.42.0/24`**. Además, `Cargo.toml` declara `default-run = "abm"`.
-  Commits: `94bc0d0` (terreno incr. 2) y el de esta entrada.
+  Commits: `4e42afa` (terreno incr. 2) y el de esta entrada.
 - **Por qué:** El responsable tiene varios puertos ocupados (5432, 5433, 5435, 55432, 55433, por
   otros proyectos o instancias) y pidió un puerto "random": se eligieron 25432/23000, libres y por
   debajo del rango efímero del sistema (32768–60999). Al levantar los contenedores salió un segundo
@@ -571,7 +571,7 @@ Formato de entrada:
   - Coste: la génesis por defecto pasa de 36 a 42 s, una sola vez gracias a la caché.
 - **Verificación:**
   - **No regresión:** con `d_oro_km = 0` y `moisture_from_coast = false`, salida **idéntica byte a
-    byte** al binario de `d7bd4a3`, con erosión y sin ella.
+    byte** al binario de `a7e4ba0`, con erosión y sin ella.
   - **Tests nuevos:** `el_relieve_orografico_no_depende_de_la_malla` (invariancia < 1e-9) y
     `la_lluvia_no_depende_de_la_resolucion` (+0,03 %, antes +3,86 %).
   - La prueba de independencia del camino mide ahora la lluvia de la zona: (b)/(c) 6,2 → 1,4 %;
@@ -672,7 +672,7 @@ Formato de entrada:
   - **Hallazgo: el fondo marino contaba como relieve.** Con `k_oro` grande movía más de un 10 % la lluvia del 86 % del océano (+2,7 % en total) y la de las costas. `mar_plano` lo arregla; sobre la tierra cambia +0,1 %. Decisión S4.
   - **La lluvia al afinar** (208 → 104 km) cambia +0,58 % con todo encendido (antes +0,03 %), pero `w` es invariante (−2·10⁻⁵ en el interior): el cambio sale de la costa. De 52 a 26 km (la escala del Foco), 0,00 %. En la prueba de independencia del camino (celdas de 834/417 km) la lluvia difiere hasta un 6,7 %, porque esas celdas usan su propia pendiente. Tolerancias de los tests ajustadas y documentadas.
 - **Verificación:**
-  - **No regresión:** con los cuatro interruptores apagados, salida **idéntica byte a byte** al binario de ece0868 (JSON con erosión y sin ella, y volcado por celda), compilado en un worktree del scratchpad.
+  - **No regresión:** con los cuatro interruptores apagados, salida **idéntica byte a byte** al binario de f6e34e6 (JSON con erosión y sin ella, y volcado por celda), compilado en un worktree del scratchpad.
   - **Tests nuevos:** `la_suma_se_corta_en_el_mar_y_cuenta_la_costa`, `escenario_de_juguete_de_la_nota`, `en_un_mundo_plano_la_sombra_pluviometrica_no_cambia_nada`; `la_lluvia_no_depende_de_la_resolucion` comprueba también `w`; el de la caché compara `w` y `c_P`.
   - **Comprobaciones:** `fmt`, `clippy --workspace --all-targets -D warnings` y `cargo test --workspace` en verde (terreno 14 + 15 + 15).
   - **Planeta frente a la referencia:**
@@ -707,7 +707,7 @@ Formato de entrada:
   - **Optimización:** sortear `a_est` cada día costaba un 35 %; se fija al nacer (`Repro.a_fin`) y la salida sale idéntica byte a byte.
   - **Decisiones pendientes del responsable:** A1–A7 (nota §8.9).
 - **Verificación:**
-  - **No regresión:** con todo apagado, salida **idéntica byte a byte** al binario de ece0868 (30 años por defecto).
+  - **No regresión:** con todo apagado, salida **idéntica byte a byte** al binario de f6e34e6 (30 años por defecto).
   - **Tests:** 2 unitarios nuevos y 7 de simulación nuevos o reescritos. `fmt`, `clippy --workspace --all-targets -D warnings` y `cargo test --workspace` en verde (biología: 8 unitarios + 15 de simulación, 45 s en debug).
   - **Medidas:** campaña de 30 corridas (cada cambio solo, todos, todos menos uno, sequías, biomas, equivalencia, liquen, barrido de `μ_est`), en la nota §8.
 - **Estado tras el cambio:** biología con la revisión 1. Siguiente: decisiones A1–A7; después, el incremento 2 (poblaciones).
@@ -719,7 +719,7 @@ Formato de entrada:
   - ejecuta cada binario en su propia carpeta (sin mezclar `output/` ni cachés);
   - compara los JSON byte a byte, salvo el nombre de la corrida, y sale con 0 si coinciden y con 1 si no.
 
-  Probada con las dos notas del día (`ece0868` agentes, `bb6a8c0` terreno): idénticas. Con la config encendida, detecta la diferencia.
+  Probada con las dos notas del día (`f6e34e6` agentes, `6031705` terreno): idénticas. Con la config encendida, detecta la diferencia.
 - **Por qué:** el responsable preguntó si el método escalará con ~100 sistemas y pidió soluciones para los cinco puntos que salieron: interruptores permanentes, no regresión, interacciones entre sistemas, herramientas de medida y rendimiento. Esta es la parte que no necesita decisión suya: la comprobación manual de hoy, ya repetible en un solo comando.
 - **Estado:** el resto de los cinco puntos queda propuesto al responsable. Retirar los interruptores tras cada decisión y crear una batería de escenarios de referencia tocan las convenciones de CLAUDE.md y necesitan su confirmación.
 
@@ -736,7 +736,7 @@ Formato de entrada:
     - agentes: `apetito_gasto_total`, `respuesta_funcional`, `leche_por_condicion`, `destete_forzoso`, `dimorfismo`, `esterilidad_individual` y `metricas.demografia`.
   - Los campos nuevos de la salida pasan a ser normales (siempre presentes). Se borran las configs "todo apagado" de `config/experiments/`.
 - **Por qué:** el responsable no quiere mantener ni decidir interruptores ("si no es imprescindible y molesta, se va fuera"). La referencia del pasado es el commit anterior, con `herramientas/no_regresion.sh`.
-- **Verificación:** la salida por defecto es **idéntica byte a byte** a la de `5be42fa` (agentes y terreno). `fmt`, `clippy --workspace --all-targets -D warnings` y `cargo test --workspace` en verde; el test de biología del diseño v1.0, que ya no tiene camino, se retira (14 de simulación).
+- **Verificación:** la salida por defecto es **idéntica byte a byte** a la de `b15dfee` (agentes y terreno). `fmt`, `clippy --workspace --all-targets -D warnings` y `cargo test --workspace` en verde; el test de biología del diseño v1.0, que ya no tiene camino, se retira (14 de simulación).
 
 ## [2026-11-05] Decisiones del responsable sobre la sombra pluviométrica (S1–S5) y la revisión 1 de agentes (A1–A7)
 
@@ -808,7 +808,7 @@ Formato de entrada:
   - **`herramientas/verificar.sh`:** CLAUDE §10 en un comando: fmt, clippy, tests, escenarios y, con `--no-regresion REF`, la no regresión. `herramientas/README.md` lo explica todo.
 - **Por qué:** el responsable quiere que el método escale a ~100 sistemas y que "se pueda consultar todo".
 - **Decisiones / problemas:**
-  - **Programa frente a `.chain()`:** correr cada sistema en su propio `Schedule` equivale a encadenarlos. La salida de `agentes` y de `terreno` es **idéntica byte a byte** a la de `main` (`475b3c9`), antes de añadir el diagnóstico.
+  - **Programa frente a `.chain()`:** correr cada sistema en su propio `Schedule` equivale a encadenarlos. La salida de `agentes` y de `terreno` es **idéntica byte a byte** a la de `main` (`04cad03`), antes de añadir el diagnóstico.
   - **Los márgenes rodean el valor actual,** no son objetivos de realismo. Cada nota dice el valor real cuando se conoce, y los irreales quedan marcados como pendientes: tierra emergida, altura media, barlovento.
   - **Hallazgo:**
     - con la config real, una sequía de un año al 50 % deja al herbívoro en el **2,7 %** de su población, y 29 años después está en el 37 %. En las mortandades reales muere un 20–60 %;
@@ -827,7 +827,7 @@ Formato de entrada:
 ## [2026-11-05] Traspaso a la siguiente sesión: el relieve realista
 
 - **Estado:**
-  - main en `61fabdd` (más este traspaso). `herramientas/verificar.sh` en verde: fmt, clippy, 76 tests y la batería de escenarios (37/37 métricas).
+  - main en `733262f` (más este traspaso). `herramientas/verificar.sh` en verde: fmt, clippy, 76 tests y la batería de escenarios (37/37 métricas).
   - Las decisiones S1–S5 y A1–A7 están aplicadas. Las herramientas de escalabilidad, hechas (`herramientas/README.md`).
 - **Decisión del responsable:** el relieve va primero. Está escribiendo su documento de diseño del relieve y lo dejará en `docs/temp/`.
 - **Qué hacer al empezar:**
@@ -1277,7 +1277,7 @@ Formato de entrada:
   - Una placa ajustada a la mediana (`d_∞` 5 310 m, `τ` 31 Myr) da −150 m; ajustada a la media, −25 m. La diferencia son las mesetas, los montes submarinos y los puntos calientes.
 - **Adenda v7** (§47).
   - `eta_col` pasa a `eta_min`, `h1_choque_km` y `h2_choque_km` (`TectonicaCfg::eta_choque`).
-  - Con `h_1 = h_2 = 10⁹` el planeta sale idéntico byte a byte a 5c8ef1c.
+  - Con `h_1 = h_2 = 10⁹` el planeta sale idéntico byte a byte a 524153b.
   - Falla `un_gran_choque_no_apila_corteza_por_encima_de_80_km`: 89 km, porque la India uniforme de 35 km se queda entera. Se deja así hasta que decida el responsable.
 - **Nota v5** (§48).
   - Detección, sorteo y nacimiento con partición de la placa por la zona de fractura (`partir_por_zona_fractura`: la fuente más cercana por el océano, continentes enteros). Decisión mía: el corte sigue la dirección del escalón hasta los bordes.
@@ -1295,7 +1295,7 @@ Formato de entrada:
   - `diagnostico_zonas_fractura`;
   - el reparto de lo que choca por grosor en `deriva_en_varias_semillas`;
   - filas nuevas en `planeta_semillas.py`: nivel del mar, profundidad media, pérdida total en choques y nacimientos en zonas de fractura.
-- **No se ha calibrado nada,** como pidió el responsable. `main` sigue en 5c8ef1c porque la rama tiene una prueba que falla a propósito.
+- **No se ha calibrado nada,** como pidió el responsable. `main` sigue en 524153b porque la rama tiene una prueba que falla a propósito.
 - **Pendiente (§50), en orden, antes de calibrar:**
   1. la curva de profundidad;
   2. la regla de la v5;
@@ -1314,7 +1314,7 @@ Formato de entrada:
 - **Hecho** (incremento-4-diseno.md §51–§58).
   - Curva nueva, con su prueba.
   - v5 retirada: código, `da_fz_myr`, métricas y pruebas.
-  - Procedencia de cada muestra (`Corteza.proc`: `nace`, `lote` y `vias`, que nada lee). Sin la v5 y con la procedencia, el planeta es igual al de bd45fa6, sin contar las claves retiradas.
+  - Procedencia de cada muestra (`Corteza.proc`: `nace`, `lote` y `vias`, que nada lee). Sin la v5 y con la procedencia, el planeta es igual al de 17b9ce2, sin contar las claves retiradas.
   - v8 en `deriva/rifts.rs`, con prueba de conservación. Se retira `f_rift` y su sumidero `F_rift`; `w_margen_km` pasa a ser `W_m` y entra `h_rot_km`.
   - India con su margen estirado.
 - **Escenarios India–Asia** (§52).
@@ -1341,7 +1341,7 @@ Formato de entrada:
   - `diagnostico_procedencia_del_fondo`;
   - en el informe de varias semillas, el reparto de la pérdida por vía y el perfil de los márgenes pasivos con la anchura de la franja estirada;
   - en `planeta_semillas.py`, las filas de nivel del mar, profundidad media y pérdida total.
-- **`main` sigue en 5c8ef1c:** en la rama fallan a propósito las dos pruebas de escenario, hasta que decida el responsable.
+- **`main` sigue en 524153b:** en la rama fallan a propósito las dos pruebas de escenario, hasta que decida el responsable.
 - **Pendiente (§58), en orden:**
   1. las dos pruebas y el tiempo;
   2. el origen de arco por fracción;
@@ -1355,7 +1355,18 @@ Formato de entrada:
 - **Hecho.**
   - `LICENSE` con «todos los derechos reservados», en español y con traducción al inglés: no se concede ningún permiso de uso, copia ni distribución sin autorización escrita.
   - Los datos de terceros de los que derivan las tablas de referencia (ETOPO, Paxman et al., Seton et al., GlobSed, Bird, CHELSA, WorldClim) conservan sus licencias.
-  - Commit en `main` (2a15c2b), sobre 5c8ef1c, y fusionado en la rama `terreno-cierre-tectonica` sin reescribir su historia.
+  - Commit en `main` (a5b6583), sobre 524153b, y fusionado en la rama `terreno-cierre-tectonica` sin reescribir su historia.
   - Antes de subir se comprobó que el historial no tiene secretos: solo `infra/.env.example`, con marcadores; el `.env` real está ignorado y nunca se commiteó.
   - Se suben `main` y la rama de trabajo; las ramas antiguas ya están dentro de ellas.
 - **A tener en cuenta:** si el repositorio de GitHub es público, sus condiciones de servicio dejan a otros verlo y bifurcarlo dentro de GitHub, diga lo que diga la licencia. Para que nadie lo vea, hay que hacerlo privado.
+
+## [2026-11-07] Historia reescrita: los commits, solo a nombre del responsable
+
+- **Qué pidió el responsable:** que en git no quede rastro de la herramienta como contribuidora, subirlo forzando y apuntar en CLAUDE.md que nunca se añada a los commits.
+- **Hecho.**
+  - Se quitaron de todos los commits de todas las ramas las líneas de coautoría y de enlace de sesión (29 de 38 commits).
+  - Árboles, autores y fechas quedan idénticos: se comprobó commit a commit.
+  - Cambian los identificadores de esos 29 commits. Las referencias de los documentos se actualizaron: por ejemplo, 5c8ef1c → 524153b, bd45fa6 → 17b9ce2 y la licencia 2a15c2b → a5b6583.
+  - Se borró la historia vieja del almacén local y se subieron `main` y `terreno-cierre-tectonica` forzando.
+  - CLAUDE.md §9: la herramienta nunca se añade a los commits (ni autor, ni coautor, ni enlaces de sesión, ni firmas), y el remoto `origin` va por SSH.
+- **A tener en cuenta:** GitHub puede seguir mostrando un tiempo los commits viejos si alguien tiene su identificador exacto, hasta su limpieza interna. Su gráfico de contribuidores tarda en actualizarse.

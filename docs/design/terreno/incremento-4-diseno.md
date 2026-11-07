@@ -1109,7 +1109,7 @@ Zócalo (el fondo descargado de su sedimento) por edad, en m:
 - Los arcos siguen con `η_arco` = 0,9.
 - La `η` de cada choque viaja con él (`Choque.eta`) para la cuenta del engrosamiento.
 
-**No regresión.** Con `h_1 = h_2 = 10⁹`, la regla es la vieja (η = 0,5 siempre). Así, el planeta de `config/terreno.toml` sale idéntico byte a byte al de 5c8ef1c (5,57 MB).
+**No regresión.** Con `h_1 = h_2 = 10⁹`, la regla es la vieja (η = 0,5 siempre). Así, el planeta de `config/terreno.toml` sale idéntico byte a byte al de 524153b (5,57 MB).
 
 **Prueba nueva.** `en_un_choque_se_pierde_la_corteza_fina_y_se_queda_la_gruesa`.
 
@@ -1168,7 +1168,7 @@ Zócalo (el fondo descargado de su sedimento) por edad, en m:
 - Las zonas de fractura reales del fondo viejo separan fondos con decenas de Myr de diferencia, no con más de la mitad de su edad.
 - Además, con el aplanamiento real (§46), dos fondos de más de 80 Myr apenas difieren en profundidad (ni en densidad).
 
-**No regresión.** Con `Δa_fz` = 10⁹ (sin zonas de fractura) y la v7 apagada, la salida del planeta es igual a la de 5c8ef1c, sin contar las claves nuevas de las métricas. Se comprobó leyendo los dos JSON.
+**No regresión.** Con `Δa_fz` = 10⁹ (sin zonas de fractura) y la v7 apagada, la salida del planeta es igual a la de 524153b, sin contar las claves nuevas de las métricas. Se comprobó leyendo los dos JSON.
 
 ## 49. Lo que hacen la v7 y la v5 en el planeta (5 semillas, sin calibrar)
 
@@ -1270,7 +1270,7 @@ Valores iniciales: `η_min` 0,5, `λ_esp` 4·10⁻⁶ y `Δa_fz` 10. «Las dos a
   - Se reparte en proporción cuando se quita corteza y se escala cuando una muestra cambia de celda.
   - En los choques se cuenta lo solapado y lo perdido por clase y por vía (`Deriva::diag_choque_km3`).
 - Diagnóstico nuevo: `diagnostico_procedencia_del_fondo`.
-- **No regresión:** sin la v5 y con la procedencia, el planeta (curva vieja y `f_rift`) es igual al de bd45fa6 con `Δa_fz` = 10⁹, sin contar las claves retiradas de la v5. Se comprobó leyendo los dos JSON.
+- **No regresión:** sin la v5 y con la procedencia, el planeta (curva vieja y `f_rift`) es igual al de 17b9ce2 con `Δa_fz` = 10⁹, sin contar las claves retiradas de la v5. Se comprobó leyendo los dos JSON.
 
 **Adenda v8 §6.10: rifts que estiran los bordes** (`deriva/rifts.rs`).
 - Al partirse una placa por un rift, cada lado con corteza continental junto al corte apunta su franja de partida.

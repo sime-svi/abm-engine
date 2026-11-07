@@ -3,7 +3,7 @@
 **Sistema:** Terreno, clima (visión madre §6.2; nota de lluvia orográfica)
 **Estado:** Decisión aprobada por el director. Lista para implementar.
 **Naturaleza:** Plano teórico. Sin código.
-**Origen:** Hallazgos del commit bb6a8c0. Con `k_oro = 0,5`, el factor orográfico queda entre 0,99 y 1,01 en el 98 % de la tierra: no hay sombra de lluvia.
+**Origen:** Hallazgos del commit 6031705. Con `k_oro = 0,5`, el factor orográfico queda entre 0,99 y 1,01 en el 98 % de la tierra: no hay sombra de lluvia.
 
 ---
 
@@ -67,7 +67,7 @@ P(celda, t) = c_P · P_base(φ, dist_costa) · m_oro(celda) · w(celda) · m_est
 - **Invariancia de malla:** la prueba fina / gruesa→fina→gruesa / gruesa sigue pasando para la lluvia.
 - **Biomas:** aparecen desiertos o estepas a sotavento de las cordilleras grandes en latitudes medias. Es la comprobación del objetivo §1 de la visión madre.
 - **Total global:** la lluvia sobre tierra queda dentro de ±5 % (o se ajusta con `c_P`).
-- **No-regresión:** con `k_oro = 0,5` y `agotamiento_humedad = false`, la salida es idéntica byte a byte a la del commit bb6a8c0.
+- **No-regresión:** con `k_oro = 0,5` y `agotamiento_humedad = false`, la salida es idéntica byte a byte a la del commit 6031705.
 
 ## 5. Efecto aguas abajo (para tenerlo en cuenta)
 Cambia la distribución de la lluvia, así que cambian la humedad del suelo, los biomas, la productividad vegetal (modelo Miami) y, con ella, el forraje y la capacidad de carga de los agentes. Hay que esperar que la densidad de agentes caiga a sotavento de las cordilleras. Es el comportamiento buscado.
@@ -170,7 +170,7 @@ Con `k_oro = 40`, no contar en `Λ` la subida del último tramo (el aire que *ll
 
 ### 6.4 Efecto de cada cambio sobre el planeta
 
-Config por defecto (un año) frente a la salida de referencia de bb6a8c0, en tres tablas.
+Config por defecto (un año) frente a la salida de referencia de 6031705, en tres tablas.
 
 **Variantes:**
 - T1: solo `k_oro = 150`;
@@ -229,11 +229,11 @@ En el resto de la franja, con T5 llueve 864 mm (803 en la referencia) y el desie
 
 ### 6.5 Validación (§4) y pruebas
 
-**No regresión.** Con los cuatro interruptores apagados, la salida es **idéntica byte a byte** a la del binario de ece0868 (el terreno no cambió desde bb6a8c0):
+**No regresión.** Con los cuatro interruptores apagados, la salida es **idéntica byte a byte** a la del binario de f6e34e6 (el terreno no cambió desde 6031705):
 - el JSON, con erosión y sin ella;
 - el volcado por celda.
 
-Se repite con `herramientas/no_regresion.sh bb6a8c0 terreno config/terreno.toml config/experiments/terreno_sin_sombra.toml`.
+Se repite con `herramientas/no_regresion.sh 6031705 terreno config/terreno.toml config/experiments/terreno_sin_sombra.toml`.
 
 **Mundo plano.** Test `en_un_mundo_plano_la_sombra_pluviometrica_no_cambia_nada`, con toda la tierra a 0 m:
 - `w = 1` y `c_P = 1` exactos;
@@ -353,7 +353,7 @@ Valores: `k_oro` = 40, `H_v` = 2 500 m, `L_recarga` = 3 000 km.
 
 Se cumplen el sotavento y el contraste. El barlovento se queda en ×1,75: la propia ladera ya seca el aire, y el paso de 25 km suaviza el pie. Con valores físicos y una cordillera realista no se fuerza más.
 
-### 7.4 El planeta con los valores definitivos (frente a la salida de bb6a8c0)
+### 7.4 El planeta con los valores definitivos (frente a la salida de 6031705)
 
 | Medida | Referencia | Definitivo |
 |---|---|---|

@@ -324,7 +324,7 @@ Todos son propuestas de partida, a calibrar contra los objetivos de §11.
 
 **Verificación:**
 - `fmt` y `clippy -D warnings` limpios; `cargo test` en verde.
-- **No regresión** con la erosión apagada, contra el binario del incremento 2 (commit `8dab382`): 7 300 valores comparados (365 ticks × 20 campos), **0 diferencias**.
+- **No regresión** con la erosión apagada, contra el binario del incremento 2 (commit `5e21b12`): 7 300 valores comparados (365 ticks × 20 campos), **0 diferencias**.
 - **Determinismo:** dos procesos con la génesis activa dan una salida idéntica byte a byte.
 - **Conservación:**
   - material de la génesis: residual de 31 m³ sobre 1,8·10¹⁶ m³ erosionados;
