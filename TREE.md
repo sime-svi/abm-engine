@@ -75,15 +75,15 @@ abm/
 │   │   │   └── tectonica/           # Relieve tectónico (incremento 4): deriva de placas → relieve de nacimiento
 │   │   │       ├── [x] mod.rs       # Génesis tectónica, estado final, interpolación a las celdas del terreno
 │   │   │       ├── [x] malla.rs     # Malla tectónica (nivel 2 del cubo) y cuaterniones
-│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques, delaminación, flujo lateral, erosión, sedimento, eventos
+│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques, delaminación, flujo lateral cúbico (adenda v6), erosión, sedimento (solo al mar abierto), eventos
 │   │   │       ├── [x] deriva/suavizado.rs # Borde suavizado (nota de bordes): pertenencia φ, normal, tipo de tramo, suavizado de la pertenencia, islas
-│   │   │       ├── [x] deriva/fosas.rs     # Ciclo de las fosas (nota de fosas v2): tramos difusos y activos, nacimientos, polaridad, losa, muertes, convergencia difusa
+│   │   │       ├── [x] deriva/fosas.rs     # Ciclo de las fosas (nota de fosas v3): tramos difusos y activos, nacimientos (espontáneos solo en el tramo de fondo viejo), polaridad, losa, muertes, convergencia difusa
 │   │   │       ├── [x] isostasia.rs # Altura isostática (con el agua), Parsons y Sclater, fosas, nivel del mar
 │   │   │       └── [x] historia.rs  # Eventos, métricas de cada Myr y cuentas de la corteza continental
 │   │   └── tests/
 │   │       ├── [x] terreno.rs       # incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación…) + lluvia y w vs resolución + diagnóstico
 │   │       ├── [x] erosion.rs       # incr. 3 (material, hondonadas, camino, tope, caché…) + relieve orográfico + mundo plano
-│   │       └── [x] tectonica.rs     # incr. 4: determinismo, giro rígido, sin continentes, India–Asia, rift, caché (+ exploratorias; deriva_en_varias_semillas)
+│   │       └── [x] tectonica.rs     # incr. 4: determinismo, giro rígido, sin continentes, India–Asia, rift, caché (+ exploratorias: deriva_en_varias_semillas, calibraciones, diagnostico_pilas, diagnostico_fondo_viejo)
 │   │
 │   ├── abm-metrics/               # OBSERVADORES + LOD de almacenamiento (→ core, ruleset, persistence)
 │   │   ├── [x] Cargo.toml
@@ -119,6 +119,7 @@ abm/
 │   ├── [x] escenarios.py          # Batería de escenarios de referencia (márgenes + presupuesto de tiempo)
 │   ├── [x] escenarios.toml        # Los escenarios, sus métricas, márgenes y notas
 │   ├── [x] no_regresion.sh        # No regresión byte a byte frente a un commit anterior (worktree temporal)
+│   ├── [x] planeta_semillas.py    # El planeta con varias semillas: tabla de cierre de la tectónica frente a ETOPO
 │   └── analisis/
 │       ├── [x] agentes.py         # Resumen de una corrida de agentes (N/N_max, fecundidad, e0, mortalidad…)
 │       ├── [x] terreno.py         # Resumen y comparación de planetas (biomas, diagnóstico, tectónica, sombra pluviométrica)

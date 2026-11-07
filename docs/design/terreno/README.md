@@ -385,3 +385,44 @@ Detalle técnico en `incremento-4-diseno.md` §9–§11; la adenda, en `adenda_b
 - Cómo se consume el fondo viejo sin rodear de fosa los continentes.
 - Si el basalto de la convergencia difusa debe ir también bajo los continentes, donde los levanta.
 - Por qué vuelven picos de corteza de más de 100 km en los choques.
+
+### La última ronda de la tectónica: un fallo del sedimento y la tabla de cierre (07-11-2026, tercera parte)
+
+**Dos cambios del responsable.**
+- **Fosas espontáneas solo donde el fondo es viejo.** Ahora solo nace una fosa sola donde el fondo oceánico tiene más de 140 millones de años, y solo en ese tramo, no en todo el borde del continente.
+- **Convergencia difusa sin basalto.** Cuando dos placas se juntan sin fosa, el basalto del fondo ya no pasa a ser corteza continental.
+- **Flujo de la corteza muy gruesa.** Cuando la corteza pasa de 50 km de espesor, su parte de abajo, caliente y blanda, se escurre hacia los lados. Ahora ese flujo crece con el cubo del espesor de esa capa blanda. Así, una columna muy gruesa se aplana enseguida y una moderada casi no se mueve.
+
+**Los picos de más de 100 km.** El responsable pidió comprobar si eran columnas de verdad o un error del dibujo en muestras (los trocitos de corteza que lleva cada placa).
+- No eran la misma muestra contada dos veces: eran regiones gruesas de verdad.
+- Pero al seguir la muestra más gruesa paso a paso apareció un **fallo de base**. Había muestras del fondo del mar con cientos de kilómetros de sedimento encima, hasta 1 835 km.
+- **Cómo pasaba.** Los ríos llevan el sedimento al mar más cercano y lo van llenando. Cuando el mar era pequeño y cerrado, como el último resto de un océano entre dos continentes que chocan, se llenaba enseguida, y todo lo que seguía llegando se quedaba en la desembocadura, sin límite.
+- **Qué provocaba.** Cuando a ese montón le llegaba un choque o un volcán, se convertía en una columna de corteza de cientos de kilómetros. También inflaba el sedimento que llega al mar.
+- **El arreglo.** Ahora un mar cerrado pequeño (menos de 500 000 km²) es una cuenca, como el mar Caspio. Se rellena hasta el borde y lo que sobra sigue río abajo hasta el mar abierto. El sedimento máximo de una muestra bajó a unas decenas de kilómetros.
+
+**La calibración.** Con la base arreglada se ajustaron a la vez, con cinco historias distintas del planeta (semillas), cinco cosas:
+- **El flujo de la corteza gruesa:** que un choque como el de la India con Asia deje 70–80 km, como el Tíbet.
+- **La erosión:** que una cordillera vieja se gaste en 100–200 millones de años.
+- **La caída de las raíces pesadas de la corteza** (la **delaminación**): cuánto tarda en desprenderse la base de una corteza muy gruesa.
+- **Cuánto sedimento se pega a las fosas.**
+- **Cuántas fosas nacen solas.**
+
+**La tabla de cierre, en una frase: la tectónica ya se parece a la Tierra, el relieve todavía no.**
+- **Lo que cumple:**
+  - la longitud de las fosas: 59 000 km, frente a unos 51 000;
+  - el fondo que se hunde cada año;
+  - la velocidad de las placas;
+  - la corteza más gruesa al final: 76 km;
+  - el tiempo de cálculo: 181 de 200 segundos.
+- **El fondo oceánico envejece demasiado.** Ya no hay fosas que rodeen continentes enteros, pero el fondo viejo pegado a los bordes de los continentes no se hunde nunca: llega a 99 millones de años de media (la Tierra, 64).
+  - Un fondo más viejo es más hondo, así que el mar baja entre medio kilómetro y uno.
+  - Con el mar bajo, las plataformas continentales quedan en seco:
+    - emerge un tercio del planeta;
+    - la tierra queda a 1 150 m de media (la Tierra, 670);
+    - casi no hay llanuras por debajo de 200 m;
+    - la plataforma pasa de 43 km a 4.
+  - No se corrige con la erosión, porque sería tapar un error con otro.
+- **Los choques entre continentes destruyen demasiada corteza.** Lo que la Tierra pierde ahora con la India, el modelo lo pierde siempre. Por eso los continentes pierden un 13 % de su volumen y llega al mar más sedimento del real.
+
+**Lo que queda.** Decidir cómo se cierra un océano como el Atlántico, cuyos bordes no tienen fosa. En la Tierra lo hacen fosas que se alargan por el borde o que llegan desde el océano de al lado. Y revisar por qué los choques duran tanto.
+

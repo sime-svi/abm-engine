@@ -22,7 +22,7 @@ binario = "terreno"
 descripcion = "el planeta por defecto (relieve tectónico, incremento 4), un año, con el volcado por celda para medir la sombra pluviométrica"
 config = "config/terreno.toml"
 ajustes = ["run.dump_world=true", "run.dump_climate=true"]
-presupuesto_s = 200   # ~20 s con la génesis en caché; ~190 s si hay que recalcularla (la deriva de 500 Myr, ~110 s)
+presupuesto_s = 200   # ~20 s con la génesis en caché; ~181 s si hay que recalcularla (la génesis, ~166 s)
 
 # Márgenes del 2026-11-05 con el relieve tectónico (incremento 4; incremento-4-diseno.md §8). Se
 # movieron a propósito al cambiar el relieve: el valor anterior (relieve de ruido) va en cada nota. La
@@ -53,23 +53,23 @@ nota = "tierra emergida (33,1 %; ruido 38,8 %; la Tierra 28,4 %, banda del dise�
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "altura_media_tierra_m"
-min = 847.1
-max = 994.8
-nota = "altura media de la tierra (1 459 m; ruido 407; la Tierra 671): alta porque el nivel del mar queda 1 079 m bajo el dato (hallazgo); 1 544 m tras la conservación exacta; 1 277 con la adenda de balance de la corteza (2026-11-05); 989,4 con la nota de bordes y el flujo lateral (2026-11-06); 1 203 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 921 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 1287.0
+max = 1512.0
+nota = "altura media de la tierra (1 459 m; ruido 407; la Tierra 671): alta porque el nivel del mar queda 1 079 m bajo el dato (hallazgo); 1 544 m tras la conservación exacta; 1 277 con la adenda de balance de la corteza (2026-11-05); 989,4 con la nota de bordes y el flujo lateral (2026-11-06); 1 203 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 921 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 1400 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.hipsometria_frac"
 franja = 0
-min = 0.07905
-max = 0.1006
-nota = "tierra por debajo de 200 m (0,9 %; ruido 68 %; la Tierra 28 %); 0,0342 con la adenda de balance de la corteza (2026-11-05); 0,08983 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 0.02256
+max = 0.02871
+nota = "tierra por debajo de 200 m (0,9 %; ruido 68 %; la Tierra 28 %); 0,0342 con la adenda de balance de la corteza (2026-11-05); 0,08983 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 0,02563 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.hipsometria_frac"
 franja = 3
-min = 0.1884
-max = 0.2226
-nota = "tierra de 1 000 a 2 000 m (81 %; la Tierra 16 %): los cratones a +0,45 km del dato quedan a ~1,5 km sobre el mar; 76 % tras la conservación exacta; 0,604 con la adenda de balance de la corteza (2026-11-05); 0,289 con la nota de bordes y el flujo lateral (2026-11-06); 0,6417 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,2055 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 0.6375
+max = 0.7533
+nota = "tierra de 1 000 a 2 000 m (81 %; la Tierra 16 %): los cratones a +0,45 km del dato quedan a ~1,5 km sobre el mar; 76 % tras la conservación exacta; 0,604 con la adenda de balance de la corteza (2026-11-05); 0,289 con la nota de bordes y el flujo lateral (2026-11-06); 0,6417 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,2055 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 0,6954 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -81,9 +81,9 @@ nota = "profundidad media del océano (3 945 m; ruido 3 153; la Tierra 3 667; ba
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "c_p"
-min = 1.543
-max = 1.806
-nota = "factor provisional de la lluvia de la tierra (1,99; ruido 1,21): la tierra alta seca el aire; se retirará al calibrar la lluvia con la Tierra; 1,78 con la adenda de balance de la corteza (2026-11-05); 1,932 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 1,674 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 1.858
+max = 2.174
+nota = "factor provisional de la lluvia de la tierra (1,99; ruido 1,21): la tierra alta seca el aire; se retirará al calibrar la lluvia con la Tierra; 1,78 con la adenda de balance de la corteza (2026-11-05); 1,932 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 1,674 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 2,016 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -95,30 +95,30 @@ nota = "lluvia media anual sobre tierra (559 mm; ruido 687; la Tierra ~800); 595
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tierra_w_bajo_frac"
-min = 0.3644
-max = 0.4268
-nota = "tierra donde el aire llega con menos de la mitad de su vapor (64 %; ruido 16 %); 76 % tras la conservación exacta; 0,286 con la adenda de balance de la corteza (2026-11-05); 0,248 con la nota de bordes y el flujo lateral (2026-11-06); 0,3956 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta)"
+min = 0.4891
+max = 0.5729
+nota = "tierra donde el aire llega con menos de la mitad de su vapor (64 %; ruido 16 %); 76 % tras la conservación exacta; 0,286 con la adenda de balance de la corteza (2026-11-05); 0,248 con la nota de bordes y el flujo lateral (2026-11-06); 0,3956 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,531 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "ppn_miami_tierra"
-min = 583.3
-max = 684.6
-nota = "PPN media de la tierra (551 g/m²/año; ruido 704): la base del forraje de los agentes; 645,8 con la adenda de balance de la corteza (2026-11-05); 536,7 con la nota de bordes y el flujo lateral (2026-11-06); 634 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta)"
+min = 465.9
+max = 546.8
+nota = "PPN media de la tierra (551 g/m²/año; ruido 704): la base del forraje de los agentes; 645,8 con la adenda de balance de la corteza (2026-11-05); 536,7 con la nota de bordes y el flujo lateral (2026-11-06); 634 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 506,3 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.bioma_pct"
 bioma = "desierto"
-min = 7.465
-max = 8.76
-nota = "desierto, % del planeta (5,64; ruido 6,08); 5,13 tras la conservación exacta; 3,63 con la adenda de balance de la corteza (2026-11-05); 6,89 con la nota de bordes y el flujo lateral (2026-11-06); 8,112 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 4.058
+max = 4.762
+nota = "desierto, % del planeta (5,64; ruido 6,08); 5,13 tras la conservación exacta; 3,63 con la adenda de balance de la corteza (2026-11-05); 6,89 con la nota de bordes y el flujo lateral (2026-11-06); 8,112 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 4,41 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.bioma_pct"
 bioma = "selva"
-min = 1.865
-max = 2.192
-nota = "selva, % del planeta (1,41; ruido 2,73); 2,36 con la adenda de balance de la corteza (2026-11-05); 1,42 con la nota de bordes y el flujo lateral (2026-11-06); 2,029 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta)"
+min = 0.9567
+max = 1.124
+nota = "selva, % del planeta (1,41; ruido 2,73); 2,36 con la adenda de balance de la corteza (2026-11-05); 1,42 con la nota de bordes y el flujo lateral (2026-11-06); 2,029 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 1,041 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.bioma_pct"
@@ -130,23 +130,23 @@ nota = "bosque templado, % del planeta (4,09; ruido 5,66); 3,21 tras la conserva
 [[escenario.metrica]]
 medida = "terreno.bioma_pct"
 bioma = "pradera"
-min = 3.842
-max = 4.487
-nota = "pradera, % del planeta (2,21; ruido 2,91); 2,01 tras la conservación exacta; 1,43 con la adenda de balance de la corteza (2026-11-05); 1,75 con la nota de bordes y el flujo lateral (2026-11-06); 2,015 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 4,165 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 1.257
+max = 1.468
+nota = "pradera, % del planeta (2,21; ruido 2,91); 2,01 tras la conservación exacta; 1,43 con la adenda de balance de la corteza (2026-11-05); 1,75 con la nota de bordes y el flujo lateral (2026-11-06); 2,015 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 4,165 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 1,362 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.bioma_pct"
 bioma = "hielo"
-min = 3.085
-max = 3.623
-nota = "hielo, % del planeta (7,01; ruido 3,90): la tierra alta es más fría; 4,78 tras la conservación exacta; 8,61 con la adenda de balance de la corteza (2026-11-05); 4,842 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 3,354 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 6.548
+max = 7.69
+nota = "hielo, % del planeta (7,01; ruido 3,90): la tierra alta es más fría; 4,78 tras la conservación exacta; 8,61 con la adenda de balance de la corteza (2026-11-05); 4,842 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 3,354 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 7,119 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "lagos"
-min = 4836.0
-max = 5676.0
-nota = "celdas de lago (9 969; ruido 42): ver la tierra en cuencas cerradas; 6 423 tras la conservación exacta; 4 030 con la adenda de balance de la corteza (2026-11-05); 9 301 con la nota de bordes y el flujo lateral (2026-11-06); 5 256 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 7349.0
+max = 8625.0
+nota = "celdas de lago (9 969; ruido 42): ver la tierra en cuencas cerradas; 6 423 tras la conservación exacta; 4 030 con la adenda de balance de la corteza (2026-11-05); 9 301 con la nota de bordes y el flujo lateral (2026-11-06); 5 256 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 7987 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -158,23 +158,23 @@ nota = "tierra en cuencas cerradas (4,4 %; la Tierra a 26 km, 10,4 %: Caspio, Ta
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "rios_km"
-min = 203000.0
-max = 238304.0
-nota = "longitud de los ríos (261 843 km; ruido 198 425); 199 300 km tras la conservación exacta; 163 463 con la adenda de balance de la corteza (2026-11-05); 271 771 con la nota de bordes y el flujo lateral (2026-11-06); 220 652 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 239200.0
+max = 280800.0
+nota = "longitud de los ríos (261 843 km; ruido 198 425); 199 300 km tras la conservación exacta; 163 463 con la adenda de balance de la corteza (2026-11-05); 271 771 con la nota de bordes y el flujo lateral (2026-11-06); 220 652 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 2,6e+05 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.sotavento"
 campo = "lluvia_mm"
-min = 416.5
-max = 489.0
-nota = "lluvia a sotavento de las cordilleras grandes en latitudes medias (638 mm; ruido 250): sin contraste, toda la tierra alta está seca; 802 mm tras la conservación exacta; 650,6 con la adenda de balance de la corteza (2026-11-05); 469,5 con la nota de bordes y el flujo lateral (2026-11-06); 559,9 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 452,7 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 521.2
+max = 611.9
+nota = "lluvia a sotavento de las cordilleras grandes en latitudes medias (638 mm; ruido 250): sin contraste, toda la tierra alta está seca; 802 mm tras la conservación exacta; 650,6 con la adenda de balance de la corteza (2026-11-05); 469,5 con la nota de bordes y el flujo lateral (2026-11-06); 559,9 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 452,7 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 566,6 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.sotavento"
 campo = "desierto_pct"
-min = 12.47
-max = 14.67
-nota = "desierto a sotavento de las cordilleras grandes (1,7 %; ruido 16,5 %); 6,34 con la adenda de balance de la corteza (2026-11-05); 10,3 con la nota de bordes y el flujo lateral (2026-11-06); 3,019 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 13,57 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 2.155
+max = 2.536
+nota = "desierto a sotavento de las cordilleras grandes (1,7 %; ruido 16,5 %); 6,34 con la adenda de balance de la corteza (2026-11-05); 10,3 con la nota de bordes y el flujo lateral (2026-11-06); 3,019 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 13,57 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 2,345 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.resto_latitudes_medias"
@@ -193,16 +193,16 @@ nota = "factor orográfico medio en las laderas de barlovento de las cordilleras
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "rel_pendiente_p50_sobre_2000"
-min = 0.01767
-max = 0.02103
-nota = "pendiente mediana a 25 km de la tierra por encima de 2 000 m (0,0157; la Tierra 0,0103); 0,0374 con la adenda de balance de la corteza (2026-11-05); 0,0231 con la nota de bordes y el flujo lateral (2026-11-06); 0,01935 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta)"
+min = 0.0159
+max = 0.01893
+nota = "pendiente mediana a 25 km de la tierra por encima de 2 000 m (0,0157; la Tierra 0,0103); 0,0374 con la adenda de balance de la corteza (2026-11-05); 0,0231 con la nota de bordes y el flujo lateral (2026-11-06); 0,01935 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,01742 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "rel_plataforma_km"
-min = 9.373
-max = 11.0
-nota = "anchura media de la plataforma continental (0,6 km; la Tierra a 26 km, 43 km): faltan márgenes (hallazgo); 3,64 con la adenda de balance de la corteza (2026-11-05); 6,25 con la nota de bordes y el flujo lateral (2026-11-06); 5,416 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 10,19 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 3.728
+max = 4.376
+nota = "anchura media de la plataforma continental (0,6 km; la Tierra a 26 km, 43 km): faltan márgenes (hallazgo); 3,64 con la adenda de balance de la corteza (2026-11-05); 6,25 con la nota de bordes y el flujo lateral (2026-11-06); 5,416 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 10,19 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 4,052 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -229,8 +229,8 @@ nota = "correlación velocidad–fosa de las placas (+0,46): positiva, como en l
 medida = "terreno.valor"
 campo = "tect_forsyth_uyeda_continente"
 min = -0.85
-max = -0.25
-nota = "correlación velocidad–continente de las placas (−0,55): negativa, como en la Tierra"
+max = -0.15
+nota = "correlación velocidad–continente de las placas (−0,55): negativa, como en la Tierra; -0,2471 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -242,30 +242,30 @@ nota = "placas al final de la deriva (12; la Tierra: 7 grandes, 13 de más del 1
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_f_cont_final"
-min = 0.3584
-max = 0.4206
-nota = "corteza continental al final (0,334 desde 0,40; la Tierra ~0,40 estable): pendiente de la adenda de sumideros del responsable; 0,304 tras la conservación exacta: las copias del remuestreo inflaban la corteza; 0,363 con la nota de bordes y el flujo lateral (2026-11-06); 0,3324 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,3895 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 0.3003
+max = 0.3524
+nota = "corteza continental al final (0,334 desde 0,40; la Tierra ~0,40 estable): pendiente de la adenda de sumideros del responsable; 0,304 tras la conservación exacta: las copias del remuestreo inflaban la corteza; 0,363 con la nota de bordes y el flujo lateral (2026-11-06); 0,3324 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,3895 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 0,3263 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_nivel_mar_m"
-min = -57.31
-max = 102.7
-nota = "nivel del mar respecto al dato (−1 079 m; el diseño esperaba ~0): cuencas de Parsons y Sclater más fondo viejo atrapado (hallazgo); −1 184 m tras la conservación exacta; -618,6 con la adenda de balance de la corteza (2026-11-05); -504,2 con la nota de bordes y el flujo lateral (2026-11-06); -695,8 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 22,69 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = -1094.0
+max = -934.1
+nota = "nivel del mar respecto al dato (−1 079 m; el diseño esperaba ~0): cuencas de Parsons y Sclater más fondo viejo atrapado (hallazgo); −1 184 m tras la conservación exacta; -618,6 con la adenda de balance de la corteza (2026-11-05); -504,2 con la nota de bordes y el flujo lateral (2026-11-06); -695,8 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 22,69 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); -1014 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_edad_media_myr"
-min = 56.85
-max = 66.76
-nota = "edad media del fondo oceánico (104 Myr; la Tierra 64, Seton et al. 2020); 79,0 con la adenda de balance de la corteza (2026-11-05); 132,2 con la nota de bordes y el flujo lateral (2026-11-06); 114,1 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 61,8 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 106.1
+max = 124.6
+nota = "edad media del fondo oceánico (104 Myr; la Tierra 64, Seton et al. 2020); 79,0 con la adenda de balance de la corteza (2026-11-05); 132,2 con la nota de bordes y el flujo lateral (2026-11-06); 114,1 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 61,8 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 115,4 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_edad_mas_200_frac"
-min = 0.05604
-max = 0.06573
-nota = "fondo oceánico de más de 200 Myr (15 %; la Tierra ~0,1 %): falta el inicio de subducción en márgenes viejos (hallazgo); 0,084 con la adenda de balance de la corteza (2026-11-05); 0,239 con la nota de bordes y el flujo lateral (2026-11-06); 0,1545 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,06089 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 0.1731
+max = 0.203
+nota = "fondo oceánico de más de 200 Myr (15 %; la Tierra ~0,1 %): falta el inicio de subducción en márgenes viejos (hallazgo); 0,084 con la adenda de balance de la corteza (2026-11-05); 0,239 con la nota de bordes y el flujo lateral (2026-11-06); 0,1545 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,06089 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 0,1881 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -284,72 +284,72 @@ nota = "adenda de balance §6.9: en cada paso, el cambio de V_cont es fuentes me
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_area_subducida_km2_anio"
-min = 4.463
-max = 5.412
-nota = "fondo oceánico que se hunde (6,29 km²/año); la Tierra 2,7–3,4: el doble, problema de base (longitud y forma de los bordes y cinemática, nota siguiente); 3,64 con la nota de bordes y el flujo lateral (2026-11-06); 4,937 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 3.256
+max = 3.948
+nota = "fondo oceánico que se hunde (6,29 km²/año); la Tierra 2,7–3,4: el doble, problema de base (longitud y forma de los bordes y cinemática, nota siguiente); 3,64 con la nota de bordes y el flujo lateral (2026-11-06); 4,937 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 3,602 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_arcos_au"
-min = 4.516
-max = 5.414
-nota = "producción de los arcos (6,92 AU); la Tierra 2,7–5: alta porque se hunde el doble de placa; 3,87 con la nota de bordes y el flujo lateral (2026-11-06); 4,965 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 3.43
+max = 4.112
+nota = "producción de los arcos (6,92 AU); la Tierra 2,7–5: alta porque se hunde el doble de placa; 3,87 con la nota de bordes y el flujo lateral (2026-11-06); 4,965 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 3,771 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_erosion_subduccion_au"
-min = 1.691
-max = 2.097
-nota = "erosión por subducción (2,39 AU); la Tierra 1,3–1,7: alta por la misma razón; 1,40 con la nota de bordes y el flujo lateral (2026-11-06); 1,894 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 1.233
+max = 1.529
+nota = "erosión por subducción (2,39 AU); la Tierra 1,3–1,7: alta por la misma razón; 1,40 con la nota de bordes y el flujo lateral (2026-11-06); 1,894 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 1,381 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_sedimento_subducido_au"
-min = 0.5862
-max = 0.7461
-nota = "sedimento subducido (1,04 AU); la Tierra 1,0–1,65; 0,377 con la nota de bordes y el flujo lateral (2026-11-06); 0,6661 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 0.4284
+max = 0.5453
+nota = "sedimento subducido (1,04 AU); la Tierra 1,0–1,65; 0,377 con la nota de bordes y el flujo lateral (2026-11-06); 0,6661 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 0,4869 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_choques_au"
-min = 2.172
-max = 2.609
-nota = "corteza perdida en choques (4,72 AU); la Tierra 0,4–0,7: un tercio del solape ocurre en bordes divergentes y transformantes (dientes de bordes que se deslizan); 3,00 con la nota de bordes y el flujo lateral (2026-11-06); 3,513 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 2,391 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 2.595
+max = 3.117
+nota = "corteza perdida en choques (4,72 AU); la Tierra 0,4–0,7: un tercio del solape ocurre en bordes divergentes y transformantes (dientes de bordes que se deslizan); 3,00 con la nota de bordes y el flujo lateral (2026-11-06); 3,513 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 2,391 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 2,856 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_delaminacion_au"
-min = 0.0208
-max = 0.03863
-nota = "delaminación (1,18 AU); la Tierra ≈1,1 (mal acotada); tau_del sin calibrar mientras falle la base; 0,0502 con la nota de bordes y el flujo lateral (2026-11-06); 0,3447 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,02972 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 0.5333
+max = 0.9904
+nota = "delaminación (1,18 AU); la Tierra ≈1,1 (mal acotada); tau_del sin calibrar mientras falle la base; 0,0502 con la nota de bordes y el flujo lateral (2026-11-06); 0,3447 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,02972 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 0,7619 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_sedimento_al_mar_au"
-min = 3.267
-max = 3.909
-nota = "sedimento que llega al mar (4,93 AU); la Tierra ≈1,8: con tau_ero = 63 Myr (relajación) y el doble de corteza engrosada por arcos y choques; 3,07 con la nota de bordes y el flujo lateral (2026-11-06); 3,588 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta)"
+min = 2.493
+max = 2.983
+nota = "sedimento que llega al mar (4,93 AU); la Tierra ≈1,8: con tau_ero = 63 Myr (relajación) y el doble de corteza engrosada por arcos y choques; 3,07 con la nota de bordes y el flujo lateral (2026-11-06); 3,588 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 2,738 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_v_cont_cambio_frac"
-min = -0.04285
-max = 0.03715
-nota = "cambio de V_cont tras el rodaje (−15,9 % en 450 Myr); criterio de la adenda ±10 %; -0,0658 con la nota de bordes y el flujo lateral (2026-11-06); -0,1252 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); -0,002847 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = -0.1569
+max = -0.07691
+nota = "cambio de V_cont tras el rodaje (−15,9 % en 450 Myr); criterio de la adenda ±10 %; -0,0658 con la nota de bordes y el flujo lateral (2026-11-06); -0,1252 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); -0,002847 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); -0,1169 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_espesor_max_final_km"
-min = 98.6
-max = 133.4
-nota = "espesor máximo de la corteza al final (78,8 km; tope H_max = 80); la Tierra 70–80 (Tíbet, Andes); 63,3 con la nota de bordes y el flujo lateral (2026-11-06); 116 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 67.31
+max = 91.07
+nota = "espesor máximo de la corteza al final (78,8 km; tope H_max = 80); la Tierra 70–80 (Tíbet, Andes); 63,3 con la nota de bordes y el flujo lateral (2026-11-06); 116 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 79,19 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_transformantes_km"
-min = 59023.0
-max = 69288.0
-nota = "fallas transformantes con la regla del modelo (62 250 km); la Tierra medida igual: 38 500 (52 placas) o 29 600 (15 placas), tierra_bordes.toml; 51 211 con la nota de bordes y el flujo lateral (2026-11-06); 56 497 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 64 156 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 43880.0
+max = 51510.0
+nota = "fallas transformantes con la regla del modelo (62 250 km); la Tierra medida igual: 38 500 (52 placas) o 29 600 (15 placas), tierra_bordes.toml; 51 211 con la nota de bordes y el flujo lateral (2026-11-06); 56 497 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 64 156 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 4,77e+04 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -368,23 +368,23 @@ nota = "corteza continental solapada en bordes divergentes y transformantes (4,4
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_perimetro_km"
-min = 238017.0
-max = 290910.0
-nota = "perímetro de los bordes (205 730 km); la Tierra de 15 placas medida igual, 182 600 ± 25 % (tierra_bordes.toml, regla_nota); 264 464 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 175300.0
+max = 214300.0
+nota = "perímetro de los bordes (205 730 km); la Tierra de 15 placas medida igual, 182 600 ± 25 % (tierra_bordes.toml, regla_nota); 264 464 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 1,948e+05 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_dorsales_km"
-min = 85623.0
-max = 104649.0
-nota = "dorsales (74 552 km); la Tierra de 15 placas medida igual, 86 700 ± 25 %; 95 136 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 59900.0
+max = 73210.0
+nota = "dorsales (74 552 km); la Tierra de 15 placas medida igual, 86 700 ± 25 %; 95 136 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 6,656e+04 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_fosas_km"
-min = 77678.0
-max = 94939.0
-nota = "fosas (74 038 km); la Tierra de 15 placas medida igual, 37 300: 2 veces aun con L_borde = 300 km (1,56), así que la causa son las fuerzas que mueven las placas (nota de bordes §11.2); 86 308 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 59420.0
+max = 72620.0
+nota = "fosas (74 038 km); la Tierra de 15 placas medida igual, 37 300: 2 veces aun con L_borde = 300 km (1,56), así que la causa son las fuerzas que mueven las placas (nota de bordes §11.2); 86 308 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 6,602e+04 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -412,37 +412,37 @@ nota = "convergencia perpendicular media en las fosas, ponderada por longitud (n
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_fosa_lenta_frac"
-min = 0.2394
-max = 0.2928
-nota = "fracción de la longitud de fosa por debajo de 2 cm/año (nota de fosas §0; 0,2087 el 2026-11-07); Bird: SUB 21,4 % y OCB 81 % tramo a tramo; en la malla 31 % (todas las placas) y 36 % (15 mayores); 0,2661 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta)"
+min = 0.1473
+max = 0.1801
+nota = "fracción de la longitud de fosa por debajo de 2 cm/año (nota de fosas §0; 0,2087 el 2026-11-07); Bird: SUB 21,4 % y OCB 81 % tramo a tramo; en la malla 31 % (todas las placas) y 36 % (15 mayores); 0,2661 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 0,1637 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_difusas_km"
-min = 10599.0
-max = 13490.0
-nota = "convergencia difusa de la nota de fosas (km, la mitad de cada lado); Bird OCB ~16 200 km en la malla, a 1,3 cm/año (12 045 el 2026-11-07)"
+min = 5609.0
+max = 7139.0
+nota = "convergencia difusa de la nota de fosas (km, la mitad de cada lado); Bird OCB ~16 200 km en la malla, a 1,3 cm/año (12 045 el 2026-11-07); 6374 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_area_difusa_km2_anio"
-min = 0.2895
-max = 0.3916
-nota = "fondo absorbido por la convergencia difusa (km²/año); la nota pide ~0,2 (0,3406 el 2026-11-07)"
+min = 0.2049
+max = 0.2771
+nota = "fondo absorbido por la convergencia difusa (km²/año); la nota pide ~0,2 (0,3406 el 2026-11-07); 0,241 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_edad_media_fosas_myr"
-min = 42.83
-max = 57.95
-nota = "edad media de las fosas activas, ponderada por longitud (Myr) (50,39 el 2026-11-07)"
+min = 96.28
+max = 130.3
+nota = "edad media de las fosas activas, ponderada por longitud (Myr) (50,39 el 2026-11-07); 113,3 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_losa_media_frac"
-min = 0.7491
-max = 0.8448
-nota = "fracción media del tirón de la losa, min(1, L/L_losa), en las fosas activas (0,7969 el 2026-11-07)"
+min = 0.8333
+max = 0.9398
+nota = "fracción media del tirón de la losa, min(1, L/L_losa), en las fosas activas (0,7969 el 2026-11-07); 0,8866 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
 
 [[escenario]]
 nombre = "agentes_equilibrio"

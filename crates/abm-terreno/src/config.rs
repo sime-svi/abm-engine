@@ -190,10 +190,13 @@ pub struct TectonicaCfg {
     /// tiempo característico `tau_del` (calibrado).
     pub h_del_km: f64,
     pub tau_del_myr: f64,
-    /// Flujo lateral de la corteza engrosada (adenda v3 §6.6b): por encima de `h_flujo` la corteza
-    /// inferior se desparrama hacia los lados con difusividad `d_flujo` (km²/Myr, calibrado).
+    /// Flujo lateral de la corteza engrosada (adenda v6 §6.6b): por encima de `h_flujo` la corteza
+    /// inferior se desparrama hacia los lados con difusividad `D_0·(c/c_ref)³` (km²/Myr), con
+    /// `c = h_c − h_flujo` el espesor del canal débil (Clark y Royden 2000). `D_0` se calibra; `c_ref`
+    /// es una escala de normalización.
     pub h_flujo_km: f64,
-    pub d_flujo_km2_myr: f64,
+    pub d0_flujo_km2_myr: f64,
+    pub c_ref_km: f64,
     pub w_min_orog_km: f64,
     pub w_margen_km: f64,
     pub f_rift: f64,
@@ -231,6 +234,9 @@ pub struct TectonicaCfg {
     pub lambda_esp: f64,
     /// Longitud de losa con la que el tirón es pleno (km; losa que llega a los 660 km con 45–60°).
     pub l_losa_km: f64,
+    /// Edad mínima del fondo para un nacimiento espontáneo (`a_min` de la nota de fosas v3, Myr;
+    /// supuesto físico: solo el fondo viejo y denso se hunde solo; se calibra en 100–180).
+    pub a_min_myr: f64,
     // --- Eventos de placas (§5.6) ---
     pub n_p0: u32,
     pub n_cratones: u32,
@@ -246,6 +252,12 @@ pub struct TectonicaCfg {
     /// exportación al mar), y `n_ero` (rango 1,5–3: la erosión crece mucho más que proporcional con
     /// el relieve; Montgomery y Brandon 2002).
     pub e1_km_myr: f64,
+    /// Área mínima de un mar abierto (km²): el sedimento de los ríos solo sale al mar en un mar
+    /// conectado de al menos esta área. Un mar cerrado más pequeño (el resto de un océano que se
+    /// cierra entre dos continentes, un lago de rift bajo el nivel del mar) es una cuenca cerrada:
+    /// se rellena hasta su cota de desagüe y lo que sobra sigue hasta el mar abierto, como en el
+    /// Caspio. Criterio de la malla (a ~52 km un estrecho estrecho puede no verse), no físico.
+    pub area_mar_abierto_km2: f64,
     pub n_ero: f64,
     /// Deformación de los bordes de Voronoi, de los cratones y de las líneas de rift (fracción del
     /// radio): los bordes reales no son rectos.
@@ -297,13 +309,14 @@ impl Default for TectonicaCfg {
             p_se: 0.4,
             v_ero_cm_anio: 6.0,
             s_ero_km: 1.0,
-            f_acr: 0.3,
+            f_acr: 0.2,
             eta_col: 0.5,
             eta_arco: 0.9,
             h_del_km: 50.0,
-            tau_del_myr: 50.0,
+            tau_del_myr: 25.0,
             h_flujo_km: 50.0,
-            d_flujo_km2_myr: 3000.0,
+            d0_flujo_km2_myr: 50.0,
+            c_ref_km: 10.0,
             w_min_orog_km: 150.0,
             w_margen_km: 150.0,
             f_rift: 0.7,
@@ -320,8 +333,9 @@ impl Default for TectonicaCfg {
             l_borde_km: 150.0,
             x_ini_km: 150.0,
             tau_muerte_myr: 10.0,
-            lambda_esp: 1.7e-7,
+            lambda_esp: 4.0e-6,
             l_losa_km: 800.0,
+            a_min_myr: 140.0,
             n_p0: 12,
             n_cratones: 8,
             n_min: 8,
@@ -330,8 +344,9 @@ impl Default for TectonicaCfg {
             v_rift_cm_anio: 2.0,
             v_sutura_cm_anio: 0.5,
             t_sutura_myr: 10.0,
-            e1_km_myr: 0.01,
-            n_ero: 2.0,
+            e1_km_myr: 0.005,
+            area_mar_abierto_km2: 5.0e5,
+            n_ero: 2.5,
             deformacion: 0.06,
             nivel_malla: 2,
             dt_myr: 1.0,
@@ -766,17 +781,20 @@ impl TectonicaCfg {
             && self.s_ero_km >= 0.0
             && self.v_ero_cm_anio >= 0.0
             && self.h_flujo_km > 0.0
-            && self.d_flujo_km2_myr >= 0.0
+            && self.d0_flujo_km2_myr >= 0.0
+            && self.c_ref_km > 0.0
             && self.l_borde_km > 0.0
             && self.theta_tr_grados > 0.0
             && self.theta_tr_grados < 90.0
             && self.x_ini_km > 0.0
             && self.tau_muerte_myr > 0.0
             && self.lambda_esp >= 0.0
-            && self.l_losa_km > 0.0)
+            && self.l_losa_km > 0.0
+            && self.a_min_myr >= 0.0
+            && self.area_mar_abierto_km2 >= 0.0)
         {
             return Err(invalid(
-                "se requiere p_arc_oc, p_arc_cont, p_se, s_ero_km, v_ero_cm_anio, d_flujo_km2_myr >= 0, tau_del_myr, h_del_km, h_flujo_km, l_borde_km, x_ini_km, tau_muerte_myr, l_losa_km > 0, lambda_esp >= 0 y 0 < theta_tr_grados < 90",
+                "se requiere p_arc_oc, p_arc_cont, p_se, s_ero_km, v_ero_cm_anio, d0_flujo_km2_myr >= 0, c_ref_km, tau_del_myr, h_del_km, h_flujo_km, l_borde_km, x_ini_km, tau_muerte_myr, l_losa_km > 0, lambda_esp, area_mar_abierto_km2 >= 0 y 0 < theta_tr_grados < 90",
             ));
         }
         if !(self.rho_w < self.rho_s

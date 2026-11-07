@@ -1149,3 +1149,63 @@ Formato de entrada:
 - **Tiempo:** deriva 112 s (antes ~100); planeta 187,6 s de 200.
 - **Batería:** 34 márgenes movidos con nota y 4 métricas nuevas de fosas (59 en el planeta).
 - **Pendiente (incremento-4-diseno.md §30):** cómo consumir el fondo viejo sin rodear márgenes de fosa; el basalto bajo los continentes; los picos; luego, la calibración conjunta de la erosión.
+
+## [2026-11-07] Última ronda de la tectónica: nota de fosas v3, flujo cúbico (adenda v6), sedimento al mar abierto, calibración conjunta y tabla de cierre
+
+- **Qué pidió el responsable.**
+  - Nota de fosas v3: nacimiento espontáneo solo donde el fondo pasa de `a_min` y solo en ese tramo; en la convergencia difusa el basalto nunca pasa a corteza continental. Acepta mis tres decisiones de la v2.
+  - Adenda v6: flujo lateral `D_0·(c/c_ref)³` con `c = h_c − h_flujo`. Antes de calibrar, comprobar si los picos de 107–129 km eran columnas reales.
+  - Calibración conjunta con 5 semillas (`D_0`, `E_1`, `n_ero`, `τ_del`, `f_acr`, `X_ini`, `λ_esp`, `a_min`) y la tabla de cierre frente a ETOPO. Avisar si el tiempo pasaba de 200 s.
+- **Nota v3** (`deriva/fosas.rs`).
+  - Candidatas de margen junto a fondo de más de `a_min`, con `p = 1 − exp(−λ·((a − a_min)/100)·L·Δt)` por bloque.
+  - `partir_por_fosa`: separa el océano que está delante del tramo, con un camino mínimo de varias fuentes.
+  - Transformantes solo en el tramo viejo.
+  - Difusa: se retira el basalto, y `hc` y sedimento van a las celdas continentales de la franja.
+  - Prueba 1 adaptada (conserva el sedimento a 10⁻⁹).
+- **Adenda v6.**
+  - Flujo cúbico con subpasos adaptativos al canal más grueso.
+  - Red compacta (`RedFlujo`), idéntica byte a byte al recorrido celda a celda: el flujo pasa de 23 a 18 s.
+  - Las parejas de ocultas que no pueden fluir no entran.
+- **Los picos (incremento-4-diseno.md §33).**
+  - Por muestras distintas, eran regiones gruesas, no duplicados.
+  - Pero las alimentaba un **fallo de base**: `sedimento_al_mar` dejaba sin tope en la desembocadura lo que no cabía en un mar cerrado pequeño ya lleno. Muestras de 160–1 835 km de sedimento, que un choque o un arco convertían en corteza: picos de 688–2 068 km y exportación de hasta 10 AU.
+  - Arreglo: solo es salida un mar abierto (`area_mar_abierto_km2` = 5·10⁵ km²). Los mares cerrados pequeños son cuencas que se llenan hasta su desagüe. Como seguro, lo que no cabe sigue hasta el mar más cercano con sitio (`sedimento_desbordado_km3`, 0,005–0,03 AU).
+  - Quedan agujas pasajeras de sumar muestras (islas y fusiones).
+- **Calibración (§34).**
+  - `D_0` = 50 km²/Myr: India–Asia a 72 km; con la base corregida, manda `D_0` y no `τ_del`. Antes del arreglo daba 70–79 km por el sedimento apilado.
+  - `τ_del` = 25 Myr: delaminación 0,71 AU.
+  - `n_ero` = 2,5 y `E_1` = 0,005: relajación 135 Myr.
+  - `f_acr` = 0,2: acrecionado/subducido 0,24.
+  - `λ_esp` = 4·10⁻⁶: la edad no responde entre 1·10⁻⁶ y 1,6·10⁻⁵.
+  - `X_ini` 150 y `a_min` 140 sin cambio: no mueven ni la fosa ni la edad.
+  - Decisión mía: no subir `D_0` para aplanar las columnas de más de 100 km del planeta, que vienen del exceso de los choques (CLAUDE §2.8).
+- **Tabla de cierre (§35; `herramientas/planeta_semillas.py`, 5 semillas, planeta entero).**
+  - Cumplen:
+    - fosa 59 470 km (×1,17);
+    - área que se hunde 3,14 km²/año;
+    - velocidad 4,49 cm/año;
+    - corteza máxima al final 76 km;
+    - tiempo 181,3 s de 200.
+  - No cumplen:
+    - relieve frente a ETOPO: tierra emergida 0,33 (0,28), altura media 1 150 m (671), por debajo de 200 m 3,9 % (28 %), pendiente ×2,4, plataforma 4,7 km (43);
+    - edad media del fondo 99 Myr (64,2), con un 18,5 % de más de 180 Myr;
+    - `f_cont` 0,33;
+    - ΔV_cont −13 ± 8 %;
+    - al mar 2,5 AU;
+    - corteza máxima de toda la deriva 101 km.
+- **Causas (§36).**
+  - La v3 deja sin consumir el fondo viejo de los márgenes pasivos (el 44–68 % está a menos de 300 km de su orilla continental). Las cuencas se ahondan y el mar baja 0,5–1 km, así que las plataformas emergen y la tierra queda alta y sin llanuras. Con la v2 el mar quedaba en el dato, pero la fosa medía ×1,55.
+  - Los choques destruyen 2,9 AU (como la Tierra de hoy con India–Asia, pero siempre; la media a largo plazo es 0,4–0,7) en 8 500 km de borde (Bird CCB 21 200). Es el mayor sumidero del volumen continental y el probable origen del exceso de relieve y de exportación.
+- **Herramientas:**
+  - `planeta_semillas.py` (la tabla de cierre);
+  - `diagnostico_pilas` (dos pasadas: sigue etapa a etapa la muestra que pica);
+  - `diagnostico_fondo_viejo`;
+  - en `deriva_en_varias_semillas`, los flujos de sedimento y su máximo;
+  - `D0` en `calibracion_relajacion`; `TAU_DEL` en `calibracion_flujo_lateral`.
+- **Batería:** 39 márgenes del planeta movidos con nota (otra realización). Agentes idénticos byte a byte frente a `main`.
+- **Pendiente (§38):**
+  - cómo se cierra un océano de tipo Atlántico (propagación de fosas por el margen, invasión desde el océano vecino), decisión del responsable;
+  - la duración y la velocidad de los choques;
+  - las agujas de sumar muestras;
+  - recalibrar la erosión cuando cambie la base.
+

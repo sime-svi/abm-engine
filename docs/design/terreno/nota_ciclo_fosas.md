@@ -2,7 +2,12 @@
 
 Documento de diseño. Complementa a diseno_relieve_tectonico.md (incremento 4 del terreno), a nota_bordes_placa.md y a adenda_balance_corteza.md (versión 5).
 
-Estado: versión 2. Diagnóstico del §0 hecho y preguntas del §11 respondidas; lista para implementar.
+Estado: versión 3. Diseño cerrado.
+
+Cambios de la versión 3:
+- El nacimiento espontáneo ya no convierte en fosa todo un margen: solo nace donde el fondo es viejo (más de a_min), y la fosa ocupa solo el tramo de fondo viejo (6.4).
+- En la convergencia difusa, la corteza oceánica no pasa a corteza continental (6.2).
+- Se aceptan tres decisiones de implementación: la corteza que flota es la continental de más de 20 km; una fosa espontánea nace con L = X_ini; el tirón sigue mientras la fosa vive.
 
 ---
 
@@ -93,7 +98,7 @@ Sí se modela:
 
 Se abstrae o se deja para más adelante:
 - **Retroceso de la fosa y apertura de cuencas tras el arco (back-arc).** Son reales e importantes; ampliación futura.
-- **Propagación lateral gradual de una fosa nueva.** La fosa nace de una vez en su tramo candidato.
+- **Propagación lateral de fosas**, incluida la invasión de océanos viejos desde fosas existentes, como los arcos de Escocia y del Caribe, que avanzan hacia el Atlántico. Aquí la fosa nace de una vez en el tramo de fondo viejo. Ampliación futura.
 - **Inicio de subducción por plumas del manto.** Ampliación futura.
 - **Rotura de la losa y saltos de fosa tras un choque de arco.** Se reproducen solo en parte, porque un tramo que sigue convergiendo tras un choque vuelve a acumular convergencia y puede renacer.
 
@@ -137,7 +142,8 @@ El estado viaja con la celda de margen de la placa de arriba, como el resto de c
 | X_ini | Convergencia acumulada para el nacimiento inducido | 150 | km | Modelos numéricos: 100–150 km en zona de fractura (Gurnis et al. 2004), ~200 km (Li y Gurnis 2023). Se puede mover dentro de 100–200 |
 | W_dif | Anchura de la franja donde se reparte el engrosamiento difuso a cada lado | igual a L_borde (150) | km | Del orden de la anchura de los bordes difusos reales |
 | τ_muerte | Tiempo con convergencia nula o negativa tras el que muere una fosa | 10 | Myr | Supuesto; ajustable |
-| λ_esp | Probabilidad de nacimiento espontáneo por km de tramo candidato y por Myr, para fondo de 100 Myr | calibrar | 1/(km·Myr) | Calibrado contra la distribución de edades del fondo (Seton et al. 2020) |
+| λ_esp | Probabilidad de nacimiento espontáneo por km de tramo candidato y por Myr, por cada 100 Myr de edad por encima de a_min | calibrar | 1/(km·Myr) | Calibrado contra la distribución de edades del fondo (Seton et al. 2020) |
+| a_min | Edad mínima del fondo para un nacimiento espontáneo | 140 | Myr | Supuesto físico: solo el fondo viejo y denso se hunde por sí solo. Se puede mover dentro de 100–180 al calibrar |
 | L_losa | Longitud de losa con la que el tirón alcanza su valor pleno | 800 | km | Geométrico: losa que llega a la base del manto superior (660 km) con inclinaciones de 45–60°; rango 660–1 000 |
 
 ---
@@ -151,7 +157,8 @@ Todo tramo clasificado como convergente (nota_bordes_placa.md, 6.3) que no perte
 ### 6.2 Convergencia difusa
 
 En un tramo difuso no se consume placa. El área que converge en el paso (el solape del tramo) se absorbe así:
-- la corteza y el sedimento de las celdas solapadas se reparten como espesor entre las celdas de ambas placas a menos de W_dif del borde, en proporción a su área;
+- la corteza continental o de arco y el sedimento de las celdas solapadas se reparten como espesor a menos de W_dif del borde, en proporción al área: lo continental, en el lado continental; si los dos lados son oceánicos, el sedimento se reparte entre ambos;
+- la corteza oceánica (el basalto) nunca pasa a corteza continental. El área oceánica solapada se retira como en una fosa, pero sin arco ni sumideros de la adenda. En la Tierra, el fondo que converge sin fosa se pliega y se engruesa un poco, y a este nivel de detalle su efecto en el relieve es pequeño;
 - se conserva el volumen;
 - no hay arcos, ni A_sub, ni sumideros.
 
@@ -180,20 +187,23 @@ Tramos candidatos:
 - **márgenes pasivos**, es decir, transiciones de océano a continente dentro de una misma placa;
 - **fallas transformantes entre placas** con contraste de edad entre lados mayor que la mitad de la edad del lado viejo.
 
-Se divide cada candidato en segmentos de longitud L_borde. Para cada segmento, con a la edad del fondo del lado que se hundiría:
+Solo cuentan los segmentos donde el fondo del lado que se hundiría es viejo: a > a_min. En la Tierra, el fondo joven no se hunde solo, y ni siquiera el fondo de ~180 Myr del Atlántico ha empezado a hundirse junto a sus márgenes pasivos: el nacimiento espontáneo es raro y exige litosfera vieja y densa.
 
-p = 1 − exp(−λ_esp · (a / 100 Myr) · L_borde · Δt)
+Se divide cada candidato en segmentos de longitud L_borde. Para cada segmento con a > a_min:
+
+p = 1 − exp(−λ_esp · ((a − a_min) / 100 Myr) · L_borde · Δt)
 
 Con el generador sembrado se decide si nace una fosa en ese segmento.
 
 Si nace en un margen pasivo:
-- La parte oceánica se separa de la placa como placa nueva. Se reutiliza la maquinaria de división de los rifts, pero el corte sigue el límite entre corteza oceánica y continental, no un círculo.
-- La fosa ocupa todo el tramo candidato contiguo de esa placa, hasta los bordes existentes, que se cierran con fallas transformantes.
+- La fosa ocupa solo el tramo contiguo de margen donde el fondo de al lado sigue teniendo más de a_min, no todo el margen.
+- En sus extremos, la fosa se une a los bordes existentes con fallas transformantes, como los bordes que en la Tierra rasgan la placa en el extremo de una fosa.
+- La parte oceánica que queda entre la fosa y esos bordes se separa como placa nueva. Se reutiliza la maquinaria de división de los rifts, cortando por el límite entre corteza oceánica y continental, no por un círculo.
 - Su polaridad es la del océano bajo el continente.
 
-Si nace en una falla transformante: el tramo pasa a fosa activa, y se hunde el lado viejo.
+Si nace en una falla transformante: solo el tramo con fondo de más de a_min pasa a fosa activa, y se hunde el lado viejo.
 
-En ambos casos: t_j = 0, L_j = 0 y T_j = 0. Se registra el evento.
+En ambos casos: t_j = 0, L_j = X_ini y T_j = 0, porque una losa que se hunde por su propio peso tira desde el principio. Se registra el evento.
 
 ### 6.5 Vida de la fosa
 

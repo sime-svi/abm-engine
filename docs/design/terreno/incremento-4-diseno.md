@@ -697,7 +697,7 @@ Con la configuración de §25 (5 semillas; la Tierra, de Bird en la malla):
 - El escenario del planeta tarda 187,6 s de 200.
 - Con `λ_esp` = 1·10⁻⁶, la deriva llegaba a 117–380 s: la búsqueda del sedimento en el mar recorre cada vez más mar cuando la exportación es grande y las plataformas se llenan.
 
-## 30. Pendientes (2026-11-07 b, en orden)
+## 30. Pendientes (2026-11-07 b, en orden; sustituida por §38)
 
 1. **Decisión del responsable sobre el consumo del fondo viejo** (§25, §27). Los nacimientos en márgenes pasivos que piden la edad del fondo convierten márgenes enteros en fosa y suben fosa y área un 50 %; sin ellos, fosa, área y tamaños son los de la Tierra. Además, el fondo de más de 180 Myr no baja del 4 %.
 2. **Basalto de la convergencia difusa bajo los continentes** (1,1 km³/año): la nota dice «ambas placas». ¿Solo la placa oceánica?
@@ -707,3 +707,194 @@ Con la configuración de §25 (5 semillas; la Tierra, de Bird en la malla):
 6. Calibrar `τ_del`, `f_acr` y `X_ini` (100–200) tras decidir 1–3, con varias semillas.
 7. Lluvia: reparto por latitudes (nota propia); barlovento con objetivo ~1,2 (CHELSA).
 8. Acortamiento andino, ciclo de Wilson, flexión de la litosfera, microplacas; casquetes polares.
+
+## 31. Nota de fosas v3: implementación (2026-11-07 c)
+
+`deriva/fosas.rs`. El responsable aceptó las tres decisiones de §24 (flota la corteza de más de 20 km, una fosa espontánea nace con `L = X_ini`, el tirón sigue mientras la fosa vive).
+
+**Nacimiento espontáneo solo donde el fondo es viejo (6.4).**
+- Candidatas de margen: las celdas continentales cuya vecina oceánica más vieja de su placa tiene más de `a_min` (140 Myr), sin otra placa a menos de `L_borde`. Se trocean en bloques de unos `L_borde`, con una tirada sembrada por bloque y paso: `p = 1 − exp(−λ_esp·((a − a_min)/100 Myr)·L·Δt)`.
+- Al nacer, el tramo de la fosa es el conjunto conexo de celdas candidatas del bloque, no todo el margen.
+- `partir_por_fosa` (sustituye a `partir_por_corteza`): un camino mínimo de varias fuentes por el fondo oceánico de la placa, desde las celdas de mar de su orilla. Las que tocan el tramo llevan la marca 1. La placa nueva es el océano con la marca 1 (el que está delante del tramo). Las fosas se ponen solo en los bordes nuevos que tienen corteza continental a algún lado.
+- En una transformante: solo el tramo con fondo de más de `a_min` y contraste de edad (más de la mitad de la edad del viejo) pasa a fosa, y se hunde el lado viejo.
+
+**Convergencia difusa (6.2): el basalto nunca pasa a corteza continental.** El área oceánica solapada se retira sin arco ni sumideros. La corteza de tipo continental o de arco y el sedimento de la muestra se reparten como espesor a menos de `W_dif` = `L_borde`, por área: en las celdas continentales de las dos placas si las hay; si no, entre todas las de las dos placas. Se conserva el volumen continental (`hc` más el sedimento con su masa).
+
+**Prueba 1 de la nota, adaptada a la v3.** El texto de su §10 («la corteza se engruesa y el volumen se conserva») es anterior a la regla del basalto. Ahora las dos placas llevan 0,5 km de sedimento. A 1 cm/año durante 10 Myr no nace fosa, no se hunde nada como fosa, se retira el fondo que converge y el sedimento se acumula en la franja (más de 0,55 km). El inventario continental se conserva a 10⁻⁹. Las otras cuatro pruebas y India–Asia siguen en verde.
+
+## 32. Adenda v6: flujo lateral con el cubo del canal (2026-11-07 c)
+
+**Ley.** `V_ik = D_0·(c_i/c_ref)³·(h_c,i − h_c,k)/d_ik·ℓ_ik·Δt`, con `c_i = h_c,i − h_flujo` (el canal débil por encima de 50 km) y `c_ref` = 10 km (normalización). Va de la columna más gruesa a la vecina y usa el `D` de la de arriba. En un canal, el caudal crece con el cubo de su espesor (Clark y Royden 2000), así que un engrosamiento excesivo se aplana mucho más deprisa que uno moderado. Se retira `d_flujo_km2_myr` (la ley lineal).
+
+**Subpasos adaptativos.** Cada subpaso se adapta al canal más grueso de ese momento, con `Δt_sub = min(resto, d_min²/(16·D(h_max)))`. La muestra más gruesa del planeta fija el número de subpasos. Por eso el coste del flujo depende de que no haya agujas.
+
+**Red compacta** (`RedFlujo`).
+- Las muestras que intervienen se guardan en un índice ordenado por placa y celda local, junto con los lados de cada celda fuente y las parejas de visible y oculta.
+- La red se rehace solo cuando una celda pasa a fuente al recibir.
+- Cada subpaso hace las mismas cuentas, en el mismo orden, que recorrer el mundo celda a celda. La salida es idéntica byte a byte, comprobado con la semilla 42 y `D_0` = 1600.
+- Las parejas de ocultas que no pueden fluir (las dos por debajo de `h_flujo`) no entran; se añaden si su celda pasa a fuente.
+- El flujo pasa de 23 a 18 s por deriva: el coste no estaba en las tablas sino en el número de subpasos.
+
+**Calibración de `D_0` con India–Asia** (adenda v6: espesor máximo de 70–80 km; mesetas de cientos a ~1 000 km). Espesor máximo a los 50 Myr de choque, a 52 km, con la base ya corregida (§33):
+
+| `D_0` (km²/Myr) | 25 | 50 | 100 | 200 | 400 | 800 | 1 600 |
+|---|---|---|---|---|---|---|---|
+| `τ_del` = 25 Myr | 74 | 72 | 69 | — | 64 | 62 | 61 |
+| `τ_del` = 50 Myr | — | 74 | 71 | 68 | 65 | — | 61 |
+| `τ_del` = 100 Myr | — | — | 72 | — | 66 | — | — |
+
+- Manda `D_0`; `τ_del` apenas cambia nada en India–Asia.
+- La meseta de más de 4 km mide 245–320 km de ancho y 0,23–0,30 Mkm². El Tíbet mide ~1 000 km y 2,5 Mkm²: el escenario es pequeño (un choque de 2 000 km de frente durante 50 Myr) y no llega a mesetas tan grandes con ningún `D_0`.
+- Antes del arreglo del sedimento, el mismo barrido daba 70–79 km: parte de ese espesor venía del sedimento apilado en el mar que se cierra entre India y Asia.
+- `D_0` = 50 km²/Myr equivale a ~2·10²⁰ Pa·s en un canal de 10 km, dentro del rango de Clark y Royden (2000): 10¹⁸ en los bordes suaves del Tíbet y 10²¹ en los abruptos.
+
+## 33. Los picos de 107–129 km: ¿columnas reales? (2026-11-07 c)
+
+**Primera comprobación, por muestras distintas** (antes de los arreglos; 5 semillas). De las celdas·paso de más de 100 km, tienen al menos 3 **otras** muestras de más de 80 km alrededor:
+- el 95–96 % en las semillas 42 y 1;
+- el 63 % en la 2, el 32 % en la 3 y el 46 % en la 4.
+
+Las agujas (vecinas de menos del 70 %) son el 1, 1, 26, 67 y 0 %. Entre ellas, las que ve más de una celda o tienen el centro en otra son pocas. No son la misma muestra vista varias veces: son regiones gruesas de verdad.
+
+**Pero de dónde salen esas regiones** (`diagnostico_pilas`, dos pasadas de la misma deriva).
+- Antes del paso del pico, la muestra era oceánica y llevaba encima **160, 229, 648, 900, 1 376 y hasta 1 835 km de sedimento**.
+- Un choque, un arco, una convergencia difusa o la reconstrucción de los mapas lo convertía en corteza (`sumar_hc`), con picos de 156 a 1 592 km.
+- El flujo lateral lo repartía por las vecinas en el mismo paso y dejaba regiones de 60–75 km.
+- Eran esos picos los que llegaban a 688–2 068 km en algunas semillas, y también inflaban la exportación al mar, que llegó a 10 AU.
+
+**La causa, en `sedimento_al_mar`.** El sedimento de cada desembocadura llenaba el mar más cercano hasta la plataforma (−130 m). Si ese mar ya estaba lleno, todo lo que sobraba se quedaba en la desembocadura, sin tope. El comentario decía que eso no pasaba en una deriva normal, y sí pasa. Lo producen los mares cerrados pequeños rodeados de montañas que se erosionan:
+- el resto de un océano que se cierra entre dos continentes que chocan;
+- una depresión de rift por debajo del nivel del mar.
+
+**Arreglo** (dos partes):
+1. **Solo es salida un mar abierto.** Una masa de mar conectada de al menos `area_mar_abierto_km2` = 5·10⁵ km² (y la mayor, si ninguna llega).
+   - Un mar cerrado más pequeño es una cuenca cerrada para la inundación por prioridad. Se rellena hasta su cota de desagüe y lo que sobra sigue cuesta abajo hasta el mar abierto, como en el Caspio, con unos 20 km de sedimento en su cuenca sur.
+   - Es un criterio de la malla (a ~52 km un estrecho puede no verse), no un parámetro físico.
+2. **Seguro:** si el mar abierto de una desembocadura ya está lleno hasta la plataforma, lo que sobra sigue hasta el mar más cercano con sitio, aunque cruce tierra. Se cuenta aparte (`sedimento_desbordado_km3`).
+
+**Efecto** (5 semillas):
+- El sedimento máximo de una muestra baja de 160–1 835 km a 34–71 km.
+- Lo desbordado queda en 0,005–0,02 AU, y 0,45–0,56 AU se quedan en cuencas cerradas.
+- Ya no hay picos de cientos de km.
+- Quedan agujas de 110–150 km durante una sola etapa. Salen de sumar varias muestras en una al absorber islas (`absorber_islas`) o al fundir placas, y el flujo las aplana en el mismo paso.
+
+**Respuesta.** Los picos eran columnas reales en el sentido de la pregunta (no muestras duplicadas). Pero los alimentaba un fallo de la base: el sedimento apilado sin tope.
+
+## 34. Calibración conjunta con 5 semillas (2026-11-07 c)
+
+Semillas 42, 1, 2, 3 y 4 (`deriva_en_varias_semillas` con `VARIANTES`), con la base de §33. Media ± desviación entre semillas.
+
+**Erosión** (`λ_esp` = 1,6·10⁻⁵, `f_acr` = 0,2; cada pareja `E_1`–`n_ero` da una relajación de ~140 Myr):
+
+| `n_ero`, `E_1` (km/Myr), `D_0` | al mar (AU) | ΔV_cont | `f_cont` | fosa (km) | edad del fondo; > 180 Myr | máximo visible (km) |
+|---|---|---|---|---|---|---|
+| 2; 0,01; 1 600 | 2,85 ± 0,69 | −13,2 % | 0,337 | 67 300 | 75 Myr; 13 % | 98 |
+| 2,5; 0,005; 1 600 | 2,28 ± 0,28 | −8,2 % | 0,351 | 60 900 | 78; 17 % | 106 |
+| 3; 0,0025; 1 600 | 2,16 ± 0,51 | −10,1 % | 0,334 | 69 700 | 73; 13 % | 95 |
+| 2,5; 0,005; 400 | 2,39 ± 0,29 | −10,1 % | 0,342 | 64 900 | 74; 14 % | 96 |
+
+**Parámetros de las fosas y la delaminación** (`λ_esp` = 4·10⁻⁶, `n_ero` = 2,5, `E_1` = 0,005):
+
+| variante | al mar | delaminación (AU) | ΔV_cont | fosa (km) | difusa (km) | edad; > 180 Myr | máximo visible |
+|---|---|---|---|---|---|---|---|
+| `D_0` 1 600, `τ_del` 50 | 2,48 | 0,26 | −10,4 % | 59 500 | 8 170 | 79; 14,5 % | 113 ± 24 |
+| + `X_ini` = 200 km | 2,38 | 0,28 | −9,7 % | 59 700 | 9 680 | 83; 15,5 % | 101 |
+| + `a_min` = 100 Myr | 2,38 | 0,25 | −8,6 % | 63 200 | 8 830 | 78; 16 % | 101 |
+| + `τ_del` = 25 Myr | 2,33 | 0,43 | −9,7 % | 63 300 | 8 350 | 81; 15,6 % | 90 ± 11 |
+| + `τ_del` = 15 | 2,42 | 0,74 | −15,2 % | 64 600 | 7 980 | 75; 11,6 % | 96 |
+| + `τ_del` = 10 | 2,30 | 0,81 | −13,6 % | 64 300 | 8 760 | 76; 13,9 % | 105 ± 38 |
+| `D_0` 100, `τ_del` 25 | 2,24 | 0,62 | −10,6 % | 63 700 | 8 680 | 77; 13 % | 96 |
+| `D_0` 50, `τ_del` 25 | 2,49 | 0,71 | −13,4 ± 7,8 % | 59 500 | 7 100 | 83; 18 % | 93 |
+| `D_0` 50, `τ_del` 50 | 2,49 | 0,46 | −11,3 % | 59 800 | 7 920 | 83; 19 % | 106 |
+
+Celdas·paso de más de 100 km (5 semillas): 21 con `D_0` = 1 600, 325 con 100 y 2 331 con 50.
+
+**`λ_esp`**: con 1·10⁻⁶, 4·10⁻⁶ y 1,6·10⁻⁵ nacen 4, 8 y 15 fosas en márgenes por 100 Myr, y la edad media del fondo apenas cambia (74–84 Myr; más de 180 Myr, 13–18 %).
+
+**Valores elegidos:**
+
+| Parámetro | Valor | Por qué |
+|---|---|---|
+| `D_0` | 50 km²/Myr | India–Asia, el caso limpio, da 72 km (§32; objetivo 70–80). En el planeta, un `D_0` alto aplana mejor las columnas (21 celdas·paso de más de 100 km con 1 600, frente a 2 331), pero sus choques engruesan de más (§36): subirlo para eso sería tapar una irrealidad con otra (CLAUDE §2.8) |
+| `τ_del` | 25 Myr | Delaminación de 0,71 AU, la más cercana a ≈1,1; con 50 Myr, 0,46 AU y máximo visible de 106 km. India–Asia no cambia. La caída convectiva de una raíz eclogítica tarda 10–30 Myr |
+| `n_ero`, `E_1` | 2,5; 0,005 km/Myr | La relajación tarda 135 Myr (100–200; con 0,004, 177 Myr; con 0,006, 125). Con n = 3 la exportación es casi la misma (2,16 frente a 2,28 AU) y las llanuras bajan de 1 m/Myr. Con n = 2 se exportan 2,85 AU |
+| `f_acr` | 0,2 | Acrecionado/subducido = 0,24 (Tierra 0,3/1,0–1,65 = 0,18–0,30) |
+| `λ_esp` | 4·10⁻⁶ /(km·Myr) | ~8 nacimientos en márgenes por 100 Myr. La edad no responde, así que no se sube (la nota: el nacimiento espontáneo es raro) |
+| `X_ini` | 150 km (igual) | 200 km no acorta la fosa y alarga la convergencia difusa |
+| `a_min` | 140 Myr (igual) | 100 Myr da más nacimientos (13 por 100 Myr) y más fosa, pero no rejuvenece el fondo |
+
+**Tasas de la erosión** con `n_ero` = 2,5 y `E_1` = 0,005: 0,25 m/Myr a 300 m, 0,9 a 500 m, 5 a 1 km; 0,08 km/Myr a 3 km, 0,16 a 4 km, 0,28 a 5 km. Las llanuras se quedan por debajo de los metros por Myr de los escudos (1–10 m/Myr), y las cordilleras dentro de 0,1–1 km/Myr por encima de ~3,5 km.
+
+## 35. Tabla de cierre (2026-11-07 c)
+
+`herramientas/planeta_semillas.py`: el planeta entero (génesis, relieve y un año de clima) con las semillas 42, 1, 2, 3 y 4. Media ± desviación [mínimo–máximo]. La Tierra del relieve es ETOPO 2022 con la roca sin hielo y su rebote, a 26 km.
+
+| | Modelo | Tierra u objetivo | |
+|---|---|---|---|
+| Tierra emergida | 0,330 ± 0,034 [0,276–0,368] | 0,284 | ✗ |
+| Altura media de la tierra | 1 150 ± 188 m [884–1 400] | 671 m | ✗ |
+| Tierra por debajo de 200 m | 0,039 ± 0,012 [0,026–0,053] | 0,283 | ✗ |
+| Pendiente media de la tierra (±25 km) | 0,0124 ± 0,0016 | 0,0052 | ✗ (×2,4) |
+| Anchura media de la plataforma | 4,7 ± 0,7 km | 42,8 km | ✗ |
+| Corteza máxima al final | 76 ± 4,5 km [70–81] | 70–80 km | ✓ |
+| Corteza máxima de toda la deriva | 101 ± 2,7 km [98–104] | 70–80 km | ✗ |
+| Edad media del fondo al final | 99 ± 16,5 Myr [74–115] (mediana 64) | 64,2 Myr | ✗ |
+| Fondo de más de 180 Myr | 18,5 ± 4,3 % | menos del 1 % | ✗ |
+| `f_cont` | 0,333 ± 0,038 | 0,40 ± 0,03 | ✗ |
+| Cambio del volumen continental | −13,4 ± 7,8 % [−25,6 a −4,4] | ±10 % | ✗ |
+| Velocidad de las placas | 4,49 ± 0,23 cm/año | 4,39 | ✓ |
+| Sedimento al mar | 2,49 ± 0,37 AU | ≈1,8 | ✗ |
+| Longitud de fosa | 59 470 ± 6 030 km [50 370–66 020] | ~51 000 ± 25 % | ✓ (×1,17) |
+| Área que se hunde | 3,14 ± 0,35 km²/año | ≈2,7 (Bird SUB); 2,7–3,4 | ✓ (×1,16) |
+| Tiempo de cálculo del planeta | 181,3 s solo (batería); 180–204 s con las cinco a la vez | 200 s | ✓ |
+
+Otras medidas: la convergencia media de las fosas es de 5,46 cm/año (Bird SUB 5,3). La convergencia difusa mide 7 100 km y absorbe 0,26 km²/año (OCB: 17 400 km y ~0,2 km²/año). La placa mayor ocupa el 27 % (el Pacífico, el 20,5 %). Al final de la deriva, el nivel del mar queda entre 500 y 1 000 m por debajo del dato y el océano tiene 3,93 km de profundidad media (3,67 km en la Tierra).
+
+La longitud de fosa y el área que se hunde cumplen, así que no van a la ampliación futura.
+
+## 36. Lo que no cuadra, y su causa
+
+1. **El fondo viejo baja el mar, y eso deforma el relieve.**
+   - **Qué pasa con la nota v3.** Solo nace fosa en el tramo de fondo viejo, así que la fosa y el área que se hunde son las de la Tierra. Pero el fondo viejo de los márgenes pasivos no se consume. Envejece toda la deriva: 79–83 Myr de media a lo largo de ella y 99 Myr al final.
+   - **Cómo baja el mar.** Las cuencas son más hondas y el océano ocupa más área (`f_cont` de 0,33). El mar baja de 0,5 a 1 km.
+   - **Qué hace eso al relieve:**
+     - las plataformas y los taludes quedan en seco;
+     - emerge el 33 % del planeta;
+     - la tierra queda a 1 150 m de media;
+     - casi no hay tierra por debajo de 200 m;
+     - la plataforma mide 4 km;
+     - la pendiente media se dobla;
+     - la franja de 1–2 km guarda el 45 % de la tierra (Tierra 16 %).
+   - **Con la v2** (todo el margen pasaba a fosa), el mar quedaba en el dato y la tierra a 921 m, pero la fosa medía ×1,55 y el área que se hunde +50 %.
+   - **No es cosa de la erosión.** Bajar la tierra a fuerza de erosión sería compensar una irrealidad con otra.
+   - **Dónde está ese fondo** (`diagnostico_fondo_viejo`, 5 semillas):
+     - del 44 al 68 % está a menos de 300 km de la orilla continental de su propia placa;
+     - del 0 al 1 % está en placas sin fosa;
+     - del 21 al 48 % está a más de 3 000 km de la fosa de su placa;
+     - la placa mayor (22–43 % del planeta) guarda del 32 al 71 %.
+2. **Los choques destruyen 2,9 ± 1,0 AU.**
+   - Es lo que hace la Tierra de hoy en pleno choque India–Asia (~3 AU), pero en el modelo es permanente. La media terrestre a largo plazo es de 0,4–0,7 AU.
+   - El borde de choque del modelo mide 8 500 km; el de Bird (CCB), 21 200.
+   - Es el mayor sumidero del volumen continental, y probablemente el origen del relieve y de la exportación de más: 2,5 frente a 1,8 AU.
+   - También explica que el planeta haga columnas de más de 100 km con el `D_0` de India–Asia.
+   - No estaba en la lista de calibración: `η_col` es medido.
+3. **El sedimento que llega a las fosas es poco:** 0,49 AU subducidas y 0,12 acrecionadas, frente a 1,0–1,65 y 0,3. De los 2,5 AU que salen al mar, la mayor parte se queda en el fondo junto a los márgenes pasivos, el mismo fondo viejo del punto 1.
+4. **La delaminación queda en 0,71 AU** (≈1,1, objetivo débil).
+5. **Corteza máxima de toda la deriva, 101 km.** Son agujas pasajeras de sumar muestras (islas y fusiones) y columnas de los choques que un `D_0` bajo tarda en aplanar. La máxima al final queda en 76 km.
+6. **Sedimento máximo de una muestra: 44–61 km** (en la Tierra, unos 20 km). Son cuencas cerradas llenas hasta su desagüe y muestras ocultas bajo otras. Hay que revisarlo.
+
+## 37. Coste (2026-11-07 c)
+
+- El planeta tarda 181,3 s de 200 con la génesis recalculada (la génesis, el 92 %). Con `D_0` = 1 600 tardaba 171–176 s, y antes de esta ronda, 187,6 s.
+- Con cinco planetas a la vez, cada uno tarda 180–204 s (comparten la máquina).
+- La red compacta del flujo ahorra un 22 % de su coste (§32). Al quitar las pilas de sedimento desaparecen las agujas que forzaban subpasos diminutos.
+
+## 38. Pendientes (2026-11-07 c, en orden)
+
+1. **Decisión del responsable: cómo se cierra un océano de tipo Atlántico.** El fondo viejo pegado a márgenes pasivos no se consume con la v3 (§36.1), y de eso salen el nivel del mar y el relieve frente a ETOPO. Con la v2 la edad cuadraba, pero la fosa y el área no. Faltan los mecanismos de la Tierra: la propagación de una fosa a lo largo del margen o la invasión de la subducción desde el océano vecino (Antillas Menores, Scotia, Gibraltar).
+2. **Los choques destruyen de 4 a 7 veces la media terrestre** (§36.2): cuánto duran y a qué velocidad convergen (`c_col`, suturas).
+3. Agujas de sumar muestras (islas y fusiones) y sedimento máximo de 44–61 km.
+4. Volver a calibrar la erosión con la exportación cuando cambie la base (1 y 2).
+5. Lluvia: reparto por latitudes (nota propia); barlovento con objetivo ~1,2 (CHELSA).
+6. Acortamiento andino, ciclo de Wilson, flexión de la litosfera, microplacas; casquetes polares.
+

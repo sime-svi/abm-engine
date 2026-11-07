@@ -498,7 +498,131 @@ pub const CLASES_CONVERGENCIA_CM_ANIO: [f64; 10] =
 pub struct EtapaTraza {
     pub etapa: &'static str,
     pub h_max_km: f64,
+    /// La muestra continental más gruesa (índice de placa, celda local).
+    pub max_en: (u32, u32),
+    /// La muestra vigilada (`Deriva::vigilada`) al acabar la etapa, si sigue viva.
+    pub vigilada: Option<Corteza>,
     pub segundos: f64,
+}
+
+/// Red del flujo lateral de un paso ([`Deriva::flujo_lateral`]): las muestras que intervienen, en
+/// orden de (placa, celda local), su espesor de tipo continental y lo que reciben en el subpaso; los
+/// lados de cada celda fuente hacia sus vecinas (en el orden de las celdas fuente y de `LADOS`) y
+/// las parejas de muestra visible y oculta de una celda.
+#[derive(Default)]
+struct RedFlujo {
+    muestras: Vec<(u32, u32)>,
+    hc: Vec<f64>,
+    delta: Vec<f64>,
+    grupos: Vec<GrupoFlujo>,
+    lados: Vec<LadoFlujo>,
+    parejas: Vec<(u32, u32)>,
+}
+
+/// Una celda fuente: su muestra (índice en la red) y el tramo de sus lados.
+struct GrupoFlujo {
+    i: u32,
+    desde: u32,
+    hasta: u32,
+}
+
+/// Un lado de una celda fuente: la muestra de la vecina, la distancia entre centros, la longitud del
+/// lado común y la celda vecina (si recibe, puede pasar a fuente).
+struct LadoFlujo {
+    j: u32,
+    d: f64,
+    l: f64,
+    k2: u32,
+}
+
+/// Una muestra: placa y celda local.
+type Muestra = (u32, u32);
+/// Un lado antes de indexar: la muestra vecina, la distancia, el lado común y la celda vecina.
+type LadoCrudo = (Muestra, f64, f64, u32);
+
+impl RedFlujo {
+    fn rehacer(
+        &mut self,
+        d: &Deriva,
+        fuente: &[u32],
+        ocultas: &[(u32, u32, u32)],
+        choque_con: &HashMap<u32, u32>,
+    ) {
+        let malla = &d.malla;
+        let existe = |p: u32, l: u32| d.placas[p as usize].get(l).is_some();
+        // Lados con sus condiciones fijas en el paso (dueños y representantes no cambian).
+        let mut crudos: Vec<(Muestra, Vec<LadoCrudo>)> = Vec::new();
+        for &k in fuente {
+            let ku = k as usize;
+            let (p, si) = (d.dueno[ku], d.rep[ku]);
+            if p == NADA || si == NADA || !existe(p, si) {
+                continue;
+            }
+            let mut v = Vec::new();
+            for (o, &j) in LADOS.iter().enumerate() {
+                let k2 = malla.vec[ku][j];
+                if k2 == NADA {
+                    continue;
+                }
+                let p2 = d.dueno[k2 as usize];
+                let sutura = p2 != p
+                    && p2 != NADA
+                    && (choque_con.get(&k) == Some(&p2) || choque_con.get(&k2) == Some(&p));
+                if (p2 != p && !sutura) || (p2 == p && d.rep[k2 as usize] == si) {
+                    continue;
+                }
+                let s2 = d.rep[k2 as usize];
+                if p2 == NADA || s2 == NADA || !existe(p2, s2) {
+                    continue;
+                }
+                v.push(((p2, s2), malla.dvec[ku][j], malla.lado_comun[ku][o], k2));
+            }
+            crudos.push(((p, si), v));
+        }
+        let pares: Vec<((u32, u32), (u32, u32))> = ocultas
+            .iter()
+            .filter(|&&(p, lr, lh)| existe(p, lr) && existe(p, lh))
+            .map(|&(p, lr, lh)| ((p, lr), (p, lh)))
+            .collect();
+        self.muestras.clear();
+        for (m, v) in &crudos {
+            self.muestras.push(*m);
+            self.muestras.extend(v.iter().map(|x| x.0));
+        }
+        for (a, b) in &pares {
+            self.muestras.push(*a);
+            self.muestras.push(*b);
+        }
+        self.muestras.sort_unstable();
+        self.muestras.dedup();
+        let idx = |m: (u32, u32)| -> u32 {
+            self.muestras.binary_search(&m).expect("muestra de la red") as u32
+        };
+        let (mut grupos, mut lados) = (Vec::new(), Vec::new());
+        for (m, v) in &crudos {
+            let desde = lados.len() as u32;
+            lados.extend(v.iter().map(|&(m2, dd, l, k2)| LadoFlujo {
+                j: idx(m2),
+                d: dd,
+                l,
+                k2,
+            }));
+            grupos.push(GrupoFlujo {
+                i: idx(*m),
+                desde,
+                hasta: lados.len() as u32,
+            });
+        }
+        self.parejas = pares.iter().map(|&(a, b)| (idx(a), idx(b))).collect();
+        self.grupos = grupos;
+        self.lados = lados;
+        self.hc = self
+            .muestras
+            .iter()
+            .map(|&(p, l)| d.placas[p as usize].get(l).map_or(0.0, |c| c.hc))
+            .collect();
+        self.delta = vec![0.0; self.muestras.len()];
+    }
 }
 
 /// Una celda del mundo que una placa perdió en un solape.
@@ -662,6 +786,8 @@ pub struct Deriva {
     /// Traza de diagnóstico (pruebas): con `Some`, cada paso añade sus etapas. `None` no cuesta nada.
     pub traza: Option<Vec<EtapaTraza>>,
     traza_reloj: Option<std::time::Instant>,
+    /// Muestra que la traza sigue etapa a etapa (índice de placa, celda local; diagnóstico).
+    pub vigilada: Option<(u32, u32)>,
     /// Consumo del último paso por la celda de borde a la que se asigna (celda, código del tipo de
     /// borde, km²) y solape de los choques por la celda del frente (celda, código, km³): las mismas
     /// cuentas que `area_subducida_por_borde_km2` y `choque_solapado_por_borde_km3`.
@@ -871,6 +997,7 @@ impl Deriva {
             dientes_cont_por_via_km3: [0.0; 4],
             traza: None,
             traza_reloj: None,
+            vigilada: None,
             consumo_en_borde_paso: Vec::new(),
             solape_en_borde_paso: Vec::new(),
             consumo_paso: Vec::new(),
@@ -988,18 +1115,27 @@ impl Deriva {
             return;
         };
         let segundos = t0.elapsed().as_secs_f64();
-        let h_max_km = self
-            .placas
-            .iter()
-            .filter(|p| p.viva)
-            .flat_map(|p| p.cort.iter())
-            .filter(|c| c.cont)
-            .map(|c| c.h)
-            .fold(0.0, f64::max);
+        let (mut h_max_km, mut max_en) = (0.0, (NADA, NADA));
+        for (pi, p) in self.placas.iter().enumerate().filter(|(_, p)| p.viva) {
+            for (s, c) in p.cort.iter().enumerate() {
+                if c.cont && c.h > h_max_km {
+                    (h_max_km, max_en) = (c.h, (pi as u32, p.celda[s]));
+                }
+            }
+        }
+        let vigilada = self.vigilada.and_then(|(p, l)| {
+            self.placas
+                .get(p as usize)
+                .filter(|pl| pl.viva)
+                .and_then(|pl| pl.get(l))
+                .copied()
+        });
         if let Some(t) = self.traza.as_mut() {
             t.push(EtapaTraza {
                 etapa,
                 h_max_km,
+                max_en,
+                vigilada,
                 segundos,
             });
         }
@@ -3140,10 +3276,12 @@ impl Deriva {
         self.cuentas.delaminacion_km3 += total;
     }
 
-    /// Flujo lateral de la corteza engrosada (adenda de balance v3 §6.6b): la corteza inferior de
+    /// Flujo lateral de la corteza engrosada (adenda de balance v6 §6.6b): la corteza inferior de
     /// una columna de más de `h_flujo`, caliente y débil, se desparrama hacia sus vecinas de lado de
     /// la misma placa con corteza de tipo continental y menos espesor:
-    /// `V_ik = D_flujo · (h_c,i − h_c,k) / d_ik · ℓ_ik · Δt`.
+    /// `V_ik = D_0·(c_i/c_ref)³ · (h_c,i − h_c,k) / d_ik · ℓ_ik · Δt`, con `c_i = h_c,i − h_flujo` el
+    /// espesor del canal débil: el flujo en un canal crece con el cubo de su espesor (Clark y Royden
+    /// 2000), así que los engrosamientos excesivos se aplanan mucho más deprisa que los moderados.
     ///
     /// Va por la malla del mundo, entre celdas vecinas de la misma placa y con la muestra que ve cada
     /// una: la rejilla propia de una placa está girada respecto a la del mundo, y la corteza nueva o
@@ -3156,18 +3294,19 @@ impl Deriva {
     /// celda (`ℓ = lado`, `d = d_min`).
     ///
     /// Cada subpaso calcula todos los `V_ik` con los espesores de su inicio y los aplica a la vez
-    /// (función pura del estado; conserva el volumen por construcción). Subpasos con
-    /// `D·Δt_sub/d² ≤ 1/16` (una muestra puede verla más de una celda).
+    /// (función pura del estado; conserva el volumen por construcción). Los subpasos se adaptan al
+    /// mayor `D_ef = D_0·(c/c_ref)³` de cada uno, con `D_ef·Δt_sub/d² ≤ 1/16` (una muestra puede
+    /// verla más de una celda).
     fn flujo_lateral(&mut self) {
         let cfg = &self.cfg;
-        if cfg.d_flujo_km2_myr <= 0.0 {
+        if cfg.d0_flujo_km2_myr <= 0.0 {
             return;
         }
         let malla = &self.malla;
         let d2 = malla.dist_lado_min_km * malla.dist_lado_min_km;
-        let n_sub = ((cfg.d_flujo_km2_myr * cfg.dt_myr * 16.0 / d2).ceil() as usize).max(1);
-        let dt_sub = cfg.dt_myr / n_sub as f64;
-        let (h_flujo, h_cont_min, d) = (cfg.h_flujo_km, cfg.h_cont_min_km, cfg.d_flujo_km2_myr);
+        let (h_flujo, h_cont_min) = (cfg.h_flujo_km, cfg.h_cont_min_km);
+        let (d0, c_ref) = (cfg.d0_flujo_km2_myr, cfg.c_ref_km);
+        let difus = |hi: f64| d0 * ((hi - h_flujo) / c_ref).powi(3);
         // Celdas fuente: las que ven una muestra de más de h_flujo (y las que lo pasen al recibir).
         let hc_de = |placas: &[Placa], k: usize, dueno: &[u32], rep: &[u32]| -> Option<f64> {
             let p = dueno[k];
@@ -3184,28 +3323,38 @@ impl Deriva {
         // Parejas (placa, celda local de la visible, celda local de una oculta en la misma celda del
         // mundo) con corteza de tipo continental en alguna de las dos.
         let (off, lista) = self.indice_inverso();
-        let mut ocultas: Vec<(u32, u32, u32)> = Vec::new();
-        for k in 0..malla.num {
-            let (p, lr) = (self.dueno[k], self.rep[k]);
+        // Solo cuentan las parejas que pueden fluir: la de una celda fuente o con la oculta de más de
+        // h_flujo. Las demás (casi todas, en el interior de los continentes) se añaden si su celda
+        // pasa a ser fuente al recibir.
+        let parejas_de = |d: &Deriva, k: usize| -> Vec<(u32, u32, u32)> {
+            let (p, lr) = (d.dueno[k], d.rep[k]);
+            let mut v = Vec::new();
             if p == NADA || lr == NADA {
-                continue;
+                return v;
             }
-            let pl = &self.placas[p as usize];
+            let pl = &d.placas[p as usize];
             let Some(cr) = pl.get(lr) else {
-                continue;
+                return v;
             };
             for &sm in &lista[off[k] as usize..off[k + 1] as usize] {
                 let lh = pl.celda[sm as usize];
                 if lh != lr && (cr.hc > 0.0 || pl.cort[sm as usize].hc > 0.0) {
-                    ocultas.push((p, lr, lh));
+                    v.push((p, lr, lh));
+                }
+            }
+            v
+        };
+        let mut ocultas: Vec<(u32, u32, u32)> = Vec::new();
+        for k in 0..malla.num {
+            let es_fuente = fuente.binary_search(&(k as u32)).is_ok();
+            for par in parejas_de(self, k) {
+                let pl = &self.placas[par.0 as usize];
+                if es_fuente || pl.get(par.2).is_some_and(|c| c.hc > h_flujo) {
+                    ocultas.push(par);
                 }
             }
         }
-        let alguna_oculta = ocultas.iter().any(|&(p, lr, lh)| {
-            let pl = &self.placas[p as usize];
-            pl.get(lr).is_some_and(|c| c.hc > h_flujo) || pl.get(lh).is_some_and(|c| c.hc > h_flujo)
-        });
-        if fuente.is_empty() && !alguna_oculta {
+        if fuente.is_empty() && ocultas.is_empty() {
             return;
         }
         let (d_min, lado) = (malla.dist_lado_min_km, malla.lado_km);
@@ -3218,74 +3367,72 @@ impl Deriva {
                 choque_con.insert(b.k, b.q);
             }
         }
-        let mut delta: HashMap<(u32, u32), f64> = HashMap::new();
+        // Las muestras que intervienen, en un índice compacto (ordenado por placa y celda local, el
+        // orden en que se aplican los cambios), y los lados de cada celda fuente: se rehacen solo
+        // cuando entra una celda fuente nueva. Cada subpaso hace las mismas cuentas y en el mismo
+        // orden que recorrer las celdas del mundo una a una, sin buscar las muestras cada vez.
+        let mut red = RedFlujo::default();
+        let mut rehacer = true;
         let mut recibe: Vec<u32> = Vec::new();
         let mut movido = 0.0;
-        for _ in 0..n_sub {
-            for &k in &fuente {
-                let ku = k as usize;
-                let p = self.dueno[ku];
-                let Some(hi) = hc_de(&self.placas, ku, &self.dueno, &self.rep) else {
-                    continue;
-                };
+        let mut resta = cfg.dt_myr;
+        while resta > 1e-12 {
+            if rehacer {
+                red.rehacer(self, &fuente, &ocultas, &choque_con);
+                rehacer = false;
+            }
+            // Subpaso estable con el canal más grueso de ahora.
+            let h_max = red.hc.iter().fold(h_flujo, |m, &h| m.max(h));
+            if h_max <= h_flujo {
+                break;
+            }
+            let dt_sub = resta.min(d2 / (16.0 * difus(h_max)));
+            resta -= dt_sub;
+            for g in &red.grupos {
+                let hi = red.hc[g.i as usize];
                 if hi <= h_flujo {
                     continue;
                 }
-                let si = self.rep[ku];
-                for (o, &j) in LADOS.iter().enumerate() {
-                    let k2 = malla.vec[ku][j];
-                    if k2 == NADA {
-                        continue;
-                    }
-                    let p2 = self.dueno[k2 as usize];
-                    let sutura = p2 != p
-                        && p2 != NADA
-                        && (choque_con.get(&k) == Some(&p2) || choque_con.get(&k2) == Some(&p));
-                    if (p2 != p && !sutura) || (p2 == p && self.rep[k2 as usize] == si) {
-                        continue;
-                    }
-                    let Some(hk) = hc_de(&self.placas, k2 as usize, &self.dueno, &self.rep) else {
-                        continue;
-                    };
+                for e in &red.lados[g.desde as usize..g.hasta as usize] {
+                    let hk = red.hc[e.j as usize];
                     if hk <= 0.0 || hk >= hi {
                         continue;
                     }
-                    let v = d * (hi - hk) / malla.dvec[ku][j] * malla.lado_comun[ku][o] * dt_sub;
-                    *delta.entry((p, si)).or_insert(0.0) -= v;
-                    *delta.entry((p2, self.rep[k2 as usize])).or_insert(0.0) += v;
-                    recibe.push(k2);
+                    let v = difus(hi) * (hi - hk) / e.d * e.l * dt_sub;
+                    red.delta[g.i as usize] -= v;
+                    red.delta[e.j as usize] += v;
+                    recibe.push(e.k2);
                 }
             }
             // Entre la muestra visible de cada celda y sus ocultas.
-            for &(p, lr, lh) in &ocultas {
-                let pl = &self.placas[p as usize];
-                let (Some(cr), Some(ch)) = (pl.get(lr), pl.get(lh)) else {
-                    continue;
-                };
-                let ((hi, li), (hk, lk)) = if cr.hc >= ch.hc {
-                    ((cr.hc, lr), (ch.hc, lh))
+            for &(ir, ih) in &red.parejas {
+                let (cr, ch) = (red.hc[ir as usize], red.hc[ih as usize]);
+                let ((hi, li), (hk, lk)) = if cr >= ch {
+                    ((cr, ir), (ch, ih))
                 } else {
-                    ((ch.hc, lh), (cr.hc, lr))
+                    ((ch, ih), (cr, ir))
                 };
                 if hi <= h_flujo || hk <= 0.0 || hk >= hi {
                     continue;
                 }
-                let v = d * (hi - hk) / d_min * lado * dt_sub;
-                *delta.entry((p, li)).or_insert(0.0) -= v;
-                *delta.entry((p, lk)).or_insert(0.0) += v;
+                let v = difus(hi) * (hi - hk) / d_min * lado * dt_sub;
+                red.delta[li as usize] -= v;
+                red.delta[lk as usize] += v;
             }
-            let mut cambios: Vec<((u32, u32), f64)> = delta.drain().collect();
-            cambios.sort_unstable_by_key(|x| x.0);
-            for ((p, l), dv) in cambios {
+            for i in 0..red.muestras.len() {
+                let dv = red.delta[i];
                 if dv == 0.0 {
                     continue;
                 }
+                red.delta[i] = 0.0;
+                let (p, l) = red.muestras[i];
                 let a = malla.area[l as usize];
                 let Some(c) = self.placas[p as usize].get_mut(l) else {
                     continue;
                 };
                 c.hc += dv / a;
                 c.h += dv / a;
+                red.hc[i] = c.hc;
                 if dv > 0.0 {
                     movido += dv;
                     if !c.cont && c.h > h_cont_min {
@@ -3293,7 +3440,7 @@ impl Deriva {
                     }
                 }
             }
-            // Las celdas que pasaron de h_flujo al recibir también son fuente.
+            // Las celdas que pasaron de h_flujo al recibir también son fuente, con sus ocultas.
             recibe.sort_unstable();
             recibe.dedup();
             for &k in &recibe {
@@ -3305,6 +3452,12 @@ impl Deriva {
                 {
                     let i = fuente.partition_point(|&x| x < k);
                     fuente.insert(i, k);
+                    for par in parejas_de(self, k as usize) {
+                        if !ocultas.contains(&par) {
+                            ocultas.push(par);
+                        }
+                    }
+                    rehacer = true;
                 }
             }
             recibe.clear();
@@ -3326,7 +3479,8 @@ impl Deriva {
         // deposita. Si no, se lleva su propio sedimento, que vuelve a la cuenca, y la corteza de
         // debajo no se gasta nunca.
         let z = self.alturas();
-        let (zf, _, _) = self.inundacion(&z, self.zeta_m);
+        let abierto = self.mar_abierto(&z, self.zeta_m);
+        let (zf, _, _) = self.inundacion(&z, &abierto);
         let cuenca: Vec<bool> = (0..self.malla.num)
             .map(|k| zf[k].is_finite() && zf[k] > z[k] + 1.0)
             .collect();
@@ -3418,23 +3572,65 @@ impl Deriva {
         hi
     }
 
-    /// Inundación por prioridad desde la costa (Barnes et al. 2014) sobre la tierra de alturas `z`
-    /// con el mar a `zeta`: cota de desagüe de cada celda de tierra (`∞` si no llega al mar), la
-    /// celda hacia la que drena y el orden de salida (de la cota de desagüe más baja a la más alta).
-    fn inundacion(&self, z: &[f64], zeta: f64) -> (Vec<f64>, Vec<u32>, Vec<u32>) {
+    /// Mar abierto: las celdas de mar (`z < zeta`) de las masas conectadas de al menos
+    /// `area_mar_abierto_km2` (y, si ninguna llega, la mayor). Los mares cerrados más pequeños son
+    /// cuencas cerradas para el sedimento ([`Deriva::inundacion`]).
+    fn mar_abierto(&self, z: &[f64], zeta: f64) -> Vec<bool> {
+        let num = self.malla.num;
+        let mut comp = vec![NADA; num];
+        let mut areas: Vec<f64> = Vec::new();
+        let mut pila: Vec<u32> = Vec::new();
+        for k0 in 0..num {
+            if z[k0] >= zeta || comp[k0] != NADA {
+                continue;
+            }
+            let c = areas.len() as u32;
+            let mut a = 0.0;
+            comp[k0] = c;
+            pila.push(k0 as u32);
+            while let Some(k) = pila.pop() {
+                a += self.malla.area[k as usize];
+                for &v in &self.malla.vec[k as usize] {
+                    if v != NADA && z[v as usize] < zeta && comp[v as usize] == NADA {
+                        comp[v as usize] = c;
+                        pila.push(v);
+                    }
+                }
+            }
+            areas.push(a);
+        }
+        let a_min = self.cfg.area_mar_abierto_km2;
+        let mayor = areas
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.total_cmp(b.1))
+            .map(|(i, _)| i);
+        let abierta: Vec<bool> = (0..areas.len())
+            .map(|i| areas[i] >= a_min || Some(i) == mayor)
+            .collect();
+        (0..num)
+            .map(|k| comp[k] != NADA && abierta[comp[k] as usize])
+            .collect()
+    }
+
+    /// Inundación por prioridad desde la costa del mar abierto (Barnes et al. 2014) sobre las
+    /// alturas `z`: cota de desagüe de cada celda que no es mar abierto (tierra o mar cerrado; `∞`
+    /// si no llega al mar), la celda hacia la que drena y el orden de salida (de la cota de desagüe
+    /// más baja a la más alta). Un mar cerrado es una cuenca: su cota de desagüe es la de su orilla.
+    fn inundacion(&self, z: &[f64], abierto: &[bool]) -> (Vec<f64>, Vec<u32>, Vec<u32>) {
         let num = self.malla.num;
         let mut zf = vec![f64::INFINITY; num];
         let mut padre = vec![NADA; num];
         let mut heap = BinaryHeap::new();
         for k in 0..num {
-            if z[k] < zeta
+            if abierto[k]
                 && self.malla.vec[k]
                     .iter()
-                    .any(|&v| v != NADA && z[v as usize] >= zeta)
+                    .any(|&v| v != NADA && !abierto[v as usize])
             {
-                zf[k] = zeta;
+                zf[k] = self.zeta_m;
                 heap.push(Item {
-                    d: zeta,
+                    d: self.zeta_m,
                     k: k as u32,
                 });
             }
@@ -3442,7 +3638,7 @@ impl Deriva {
         let mut orden: Vec<u32> = Vec::new();
         while let Some(Item { d, k }) = heap.pop() {
             let ku = k as usize;
-            if z[ku] >= zeta {
+            if !abierto[ku] {
                 orden.push(k);
             }
             for &v in &self.malla.vec[ku] {
@@ -3450,7 +3646,7 @@ impl Deriva {
                     continue;
                 }
                 let vu = v as usize;
-                if z[vu] < zeta || zf[vu] < f64::INFINITY {
+                if abierto[vu] || zf[vu] < f64::INFINITY {
                     continue;
                 }
                 zf[vu] = z[vu].max(d);
@@ -3484,7 +3680,8 @@ impl Deriva {
             vol[k as usize] += v;
         }
         // 1) Inundación por prioridad desde las celdas de mar con tierra al lado.
-        let (zf, padre, orden) = self.inundacion(&z, zeta);
+        let abierto = self.mar_abierto(&z, zeta);
+        let (zf, padre, orden) = self.inundacion(&z, &abierto);
         let mut heap = BinaryHeap::new();
         // 2) De la cota de desagüe más alta a la más baja: cada celda recibe lo suyo y lo de
         //    arriba, llena su depresión y pasa el resto a su desagüe.
@@ -3512,7 +3709,7 @@ impl Deriva {
                 if pa == NADA {
                     deposito.push((k, resto));
                     cuencas += resto;
-                } else if z[pa as usize] < zeta {
+                } else if abierto[pa as usize] {
                     a_mar.push((pa, resto));
                 } else {
                     vol[pa as usize] += resto;
@@ -3522,7 +3719,7 @@ impl Deriva {
         // Tierra sin salida al mar (sin ninguna celda de mar en el planeta) y erosión en el mar.
         for (k, &v) in vol.iter().enumerate() {
             if v > 0.0 {
-                if z[k] < zeta {
+                if abierto[k] {
                     a_mar.push((k as u32, v));
                 } else {
                     deposito.push((k as u32, v));
@@ -3536,7 +3733,7 @@ impl Deriva {
         let mut libre = vec![f64::NAN; num];
         let mut dist = vec![f64::INFINITY; num];
         let mut tocadas: Vec<u32> = Vec::new();
-        let mut al_mar = 0.0;
+        let (mut al_mar, mut desbordado) = (0.0, 0.0);
         let mut i = 0;
         while i < a_mar.len() {
             let m = a_mar[i].0;
@@ -3568,7 +3765,7 @@ impl Deriva {
                     break;
                 }
                 for (j, &v) in self.malla.vec[ku].iter().enumerate() {
-                    if v == NADA || z[v as usize] >= zeta {
+                    if v == NADA || !abierto[v as usize] {
                         continue;
                     }
                     let nd = d + self.malla.dvec[ku][j];
@@ -3586,10 +3783,61 @@ impl Deriva {
             }
             tocadas.clear();
             if resto > 0.0 {
-                // Un mar cerrado ya lleno hasta la plataforma (no pasa en una deriva normal).
-                deposito.push((m, resto));
+                // El mar de la desembocadura ya está lleno hasta la plataforma: un mar cerrado
+                // pequeño, como el último resto de un océano entre dos continentes que chocan,
+                // rodeado de montañas que se erosionan. Lo que sobra sigue hasta el mar más cercano
+                // con sitio, aunque tenga que cruzar tierra: el río pasa por encima del mar relleno.
+                // (Antes se quedaba todo en la desembocadura, sin tope: muestras de cientos de km de
+                // sedimento, que luego pasaban a corteza.)
+                desbordado += resto;
+                heap.clear();
+                dist[m as usize] = 0.0;
+                tocadas.push(m);
+                heap.push(Item { d: 0.0, k: m });
+                while let Some(Item { d, k }) = heap.pop() {
+                    let ku = k as usize;
+                    if d > dist[ku] {
+                        continue;
+                    }
+                    if abierto[ku] {
+                        if libre[ku].is_nan() {
+                            libre[ku] = self.sed_hasta(ku, z_plat) * a_roca * self.malla.area[ku];
+                        }
+                        let dd = resto.min(libre[ku]);
+                        if dd > 0.0 {
+                            deposito.push((k, dd));
+                            libre[ku] -= dd;
+                            resto -= dd;
+                        }
+                        if resto <= 0.0 {
+                            break;
+                        }
+                    }
+                    for (j, &v) in self.malla.vec[ku].iter().enumerate() {
+                        if v == NADA {
+                            continue;
+                        }
+                        let nd = d + self.malla.dvec[ku][j];
+                        if nd < dist[v as usize] {
+                            if dist[v as usize].is_infinite() {
+                                tocadas.push(v);
+                            }
+                            dist[v as usize] = nd;
+                            heap.push(Item { d: nd, k: v });
+                        }
+                    }
+                }
+                for &k in &tocadas {
+                    dist[k as usize] = f64::INFINITY;
+                }
+                tocadas.clear();
+                if resto > 0.0 {
+                    // Ningún mar del planeta tiene sitio (no puede pasar con océanos).
+                    deposito.push((m, resto));
+                }
             }
         }
+        self.cuentas.sedimento_desbordado_km3 += desbordado;
         self.cuentas.sedimento_al_mar_km3 += al_mar;
         self.cuentas.sedimento_en_cuencas_km3 += cuencas;
         // 4) Depósito exacto (con su masa: la roca `v` ocupa `v·ρ_c/ρ_s` de sedimento).

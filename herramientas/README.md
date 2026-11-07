@@ -7,6 +7,7 @@ Programas fuera del motor para verificar, medir y consultar las corridas (CLAUDE
 | `verificar.sh` | Toda la verificación de CLAUDE §10 en un comando: formato, clippy, tests, batería de escenarios y, con `--no-regresion REF`, no regresión byte a byte frente a un commit |
 | `escenarios.py` + `escenarios.toml` | Batería de escenarios de referencia: corridas fijas con unas pocas métricas clave, sus márgenes y su presupuesto de tiempo |
 | `no_regresion.sh` | Compara byte a byte la salida actual con la de un commit anterior (para los cambios que no deben alterar nada) |
+| `planeta_semillas.py` | El planeta entero con varias semillas a la vez y la tabla de cierre de la tectónica: media, desviación y extremos frente a ETOPO y a los objetivos de la adenda y la nota de fosas |
 | `analisis/agentes.py` | Resume una corrida de agentes: población frente a `N_max`, fecundidad, esperanza de vida, hambre, mortalidad por sexo |
 | `analisis/terreno.py` | Resume y compara corridas del planeta: biomas, diagnóstico, `c_P`, relieve tectónico y, con el volcado por celda, la sombra pluviométrica y las laderas de barlovento de pie a cresta |
 | `analisis/referencia_tierra.py` | Calcula las tablas de la Tierra con las que se compara el relieve (`config/referencias/tierra_relieve.toml`) |
@@ -117,8 +118,14 @@ También mide la **convergencia de las fosas** (diagnóstico de `nota_ciclo_fosa
 ```bash
 SEMILLAS=42,1,2,3,4 VARIANTES="tectonica.lambda_esp=0;tectonica.lambda_esp=2e-7" \
   cargo test --release -p abm-terreno --test tectonica deriva_en_varias_semillas -- --ignored --nocapture
-E1=0.005,0.01,0.02 N_ERO=2,3 \
+E1=0.005,0.01,0.02 N_ERO=2,3 D0=1600 \
   cargo test --release -p abm-terreno --test tectonica calibracion_relajacion -- --ignored --nocapture
+D0=100,400,1600 \
+  cargo test --release -p abm-terreno --test tectonica calibracion_flujo_lateral -- --ignored --nocapture
+SEMILLA=3 VARIANTE="tectonica.n_ero=3" UMBRAL=140 \
+  cargo test --release -p abm-terreno --test tectonica diagnostico_pilas -- --ignored --nocapture
+SEMILLAS=42,1,2,3,4 \
+  cargo test --release -p abm-terreno --test tectonica diagnostico_fondo_viejo -- --ignored --nocapture
 ```
 
 `VARIANTES` son ajustes de la config como los de `--set`: separados por comas dentro de una variante y por `;` entre variantes. Sin ella, la config tal cual.
@@ -133,7 +140,27 @@ Por cada una da:
 - el tiempo de cada etapa del paso, con la traza de `Deriva::dar_paso`;
 - las fosas de la nota de fosas: longitud activa y difusa, edad, tirón, nacimientos y muertes;
 - la edad del fondo;
-- las cuatro medidas de fuerzas del §10 de la nota: oblicuidad, tamaños de las placas, potencia de cada fuerza y área creada y consumida.
+- las cuatro medidas de fuerzas del §10 de la nota: oblicuidad, tamaños de las placas, potencia de cada fuerza y área creada y consumida;
+- el sedimento: el máximo de una muestra, el que no cupo en el mar de su desembocadura y el que queda en cuencas cerradas.
+
+Las otras pruebas exploratorias:
+- `calibracion_relajacion`: cuánto tarda la corteza engrosada de India–Asia en volver a 38 km, con cada `E_1`, `n_ero` y `D_0`;
+- `calibracion_flujo_lateral`: espesor máximo y meseta de India–Asia con cada `D_0`;
+- `diagnostico_pilas`: dos pasadas de la misma deriva. La primera halla los pasos en que alguna etapa deja una muestra por encima de `UMBRAL`, aunque otra la baje en el mismo paso. La segunda sigue esa muestra etapa a etapa, con su placa, su borde más cercano y sus vecinas;
+- `diagnostico_fondo_viejo`: dónde queda al final el fondo de más de 180 Myr (en qué placa, a qué distancia de su fosa y de su orilla continental).
+
+## La tabla de cierre del planeta
+
+```bash
+herramientas/planeta_semillas.py                        # semillas 42,1,2,3,4, a la vez (~4 min)
+herramientas/planeta_semillas.py --semillas 7,8 --set tectonica.e1_km_myr=0.004
+```
+
+Corre el planeta entero (génesis, relieve y un año de clima) con cada semilla y lo analiza como la batería (`analisis/terreno.py`). Da la media, la desviación y los extremos de cada fila:
+- **frente a ETOPO** (la roca sin hielo con su rebote, a 26 km): tierra emergida, altura media de la tierra, fracción por debajo de 200 m, pendiente media y anchura de la plataforma;
+- **frente a los objetivos de la adenda y de la nota de fosas:** corteza máxima, edad del fondo, `f_cont`, cambio de volumen, velocidad de las placas, sedimento al mar, longitud de fosa, área que se hunde y tiempo.
+
+Escribe cada corrida en `output/semillas/` y el resumen en `output/semillas/cierre.json`. El tiempo de cada semilla está medido con las cinco a la vez: el de una sola es el de la batería.
 
 ## La batería de escenarios
 

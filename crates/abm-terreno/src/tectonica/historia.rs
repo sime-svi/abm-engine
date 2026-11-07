@@ -169,6 +169,10 @@ pub struct CuentasCorteza {
     pub erosion_km3: f64,
     pub sedimento_al_mar_km3: f64,
     pub sedimento_en_cuencas_km3: f64,
+    /// Parte del sedimento al mar que no cabía en el mar de su desembocadura (lleno hasta la
+    /// plataforma) y siguió hasta el mar más cercano con sitio (traslado; diagnóstico).
+    #[serde(default)]
+    pub sedimento_desbordado_km3: f64,
     /// Sedimento sin celda donde ponerse (sin dueño; no debería haber): se pierde.
     pub sedimento_sin_destino_km3: f64,
     /// Área de arcos oceánicos que pasa a corteza continental (más de `H_cont_min`; km²).

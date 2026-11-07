@@ -36,10 +36,8 @@ pub struct ConteoFosas {
     pub nacen: [u32; 3],
     /// Muertes: sin convergencia y por choque.
     pub mueren: [u32; 2],
-    /// Fondo absorbido por convergencia difusa (km²) y la parte de su base basáltica que acaba bajo
-    /// corteza continental (km³; diagnóstico).
+    /// Fondo retirado en la convergencia difusa (km²).
     pub area_difusa_km2: f64,
-    pub basalto_bajo_continente_km3: f64,
 }
 
 /// Muestra perdida en un solape de un tramo difuso: se absorbe engrosando las dos placas (6.2).
@@ -506,18 +504,20 @@ impl Deriva {
         }
     }
 
-    /// Nacimiento espontáneo (nota de fosas §6.4) en márgenes pasivos (transiciones de océano a
-    /// continente dentro de una placa, sin otra placa a menos de `L_borde`) y en transformantes entre
-    /// fondos oceánicos con un contraste de edad mayor que la mitad de la del lado viejo. Por segmento
-    /// de unos `L_borde` (bloques de la malla), `p = 1 − exp(−λ_esp·(a/100 Myr)·L·Δt)`, con `a` la
-    /// edad del fondo que se hundiría y `L` la longitud candidata del segmento: una tirada sembrada por
-    /// segmento y paso, en orden fijo. Devuelve si partió alguna placa.
+    /// Nacimiento espontáneo (nota de fosas v3 §6.4), solo donde el fondo que se hundiría tiene más
+    /// de `a_min`: en márgenes pasivos (transiciones de océano a continente dentro de una placa, sin
+    /// otra placa a menos de `L_borde`) y en transformantes entre fondos oceánicos con un contraste de
+    /// edad mayor que la mitad de la del lado viejo. Por segmento de unos `L_borde` (bloques de la
+    /// malla), `p = 1 − exp(−λ_esp·((a − a_min)/100 Myr)·L·Δt)`, con `L` la longitud candidata del
+    /// segmento: una tirada sembrada por segmento y paso, en orden fijo. La fosa ocupa solo el tramo
+    /// contiguo de fondo viejo. Devuelve si partió alguna placa.
     pub(super) fn nacimientos_espontaneos(&mut self) -> bool {
         let lam = self.cfg.lambda_esp;
         if lam <= 0.0 {
             self.aplicar_estado_fosas();
             return false;
         }
+        let a_min = self.cfg.a_min_myr;
         let dt = self.cfg.dt_myr;
         let num = self.malla.num;
         let lado = self.malla.lado_km;
@@ -529,69 +529,102 @@ impl Deriva {
             let (j, i) = (r / n, r % n);
             ((c * ns + j / s) * ns + i / s) as u64
         };
-        let prob = |a: f64, largo: f64| 1.0 - (-lam * (a / 100.0) * largo * dt).exp();
-        // A. Márgenes pasivos: (placa, bloque) → (longitud, Σ edad·longitud, celda oceánica).
-        let mut margen: std::collections::BTreeMap<(u32, u64), (f64, f64, u32)> =
-            Default::default();
+        let prob = |a: f64, largo: f64| 1.0 - (-lam * ((a - a_min) / 100.0) * largo * dt).exp();
+        // A. Márgenes pasivos con fondo de más de a_min al lado: celda continental → edad de su
+        // fondo oceánico más viejo de la misma placa.
+        let mut viejo: HashMap<u32, f64> = HashMap::new();
         for k in 0..num {
             let p = self.dueno[k];
             if p == NADA || !self.corteza(k).is_some_and(|c| c.cont) {
                 continue;
             }
-            let oc = self.malla.vec[k].iter().copied().find(|&v| {
-                v != NADA
-                    && self.dueno[v as usize] == p
-                    && self.corteza(v as usize).is_some_and(|c| !c.cont)
-            });
-            let Some(kv) = oc else {
+            let edad = self.malla.vec[k]
+                .iter()
+                .filter(|&&v| v != NADA && self.dueno[v as usize] == p)
+                .filter_map(|&v| {
+                    self.corteza(v as usize)
+                        .filter(|c| !c.cont)
+                        .map(|c| c.edad_oc)
+                })
+                .fold(f64::NEG_INFINITY, f64::max);
+            if edad <= a_min {
                 continue;
-            };
+            }
             if self.vecindad.de(k).iter().any(|&j| {
                 let d = self.dueno[j as usize];
                 d != NADA && d != p
             }) {
                 continue;
             }
-            let edad = self.corteza(kv as usize).map_or(0.0, |c| c.edad_oc);
-            let e = margen.entry((p, bloque(k))).or_insert((0.0, 0.0, kv));
+            viejo.insert(k as u32, edad);
+        }
+        // (placa, bloque) → (longitud, Σ edad·longitud, celdas).
+        let mut margen: std::collections::BTreeMap<(u32, u64), (f64, f64, Vec<u32>)> =
+            Default::default();
+        let mut celdas_viejas: Vec<u32> = viejo.keys().copied().collect();
+        celdas_viejas.sort_unstable();
+        for &k in &celdas_viejas {
+            let p = self.dueno[k as usize];
+            let e = margen
+                .entry((p, bloque(k as usize)))
+                .or_insert((0.0, 0.0, Vec::new()));
             e.0 += lado;
-            e.1 += edad * lado;
+            e.1 += viejo[&k] * lado;
+            e.2.push(k);
         }
         let mut partidas: Vec<(usize, usize, f64, u32)> = Vec::new();
         let mut ya: Vec<u32> = Vec::new();
-        for (&(p, b), &(largo, se, kv)) in &margen {
+        for (&(p, b), (largo, se, celdas)) in &margen {
             if ya.contains(&p) {
                 continue;
             }
             let a = se / largo;
             let id = self.placas[p as usize].id;
-            if azar(self.seed, self.paso, id ^ splitmix64(b), P_ESPONTANEO, 0) >= prob(a, largo) {
+            if azar(self.seed, self.paso, id ^ splitmix64(b), P_ESPONTANEO, 0) >= prob(a, *largo) {
                 continue;
             }
-            if let Some((h_cont, h_oc)) = self.partir_por_corteza(p as usize, kv as usize) {
+            // El tramo contiguo (8 vecinas) de margen con fondo viejo al lado.
+            let mut tramo: Vec<u32> = celdas.clone();
+            let mut en: std::collections::HashSet<u32> = tramo.iter().copied().collect();
+            let mut pila = tramo.clone();
+            while let Some(c) = pila.pop() {
+                for &v in &self.malla.vec[c as usize] {
+                    if v != NADA
+                        && self.dueno[v as usize] == p
+                        && viejo.contains_key(&v)
+                        && en.insert(v)
+                    {
+                        tramo.push(v);
+                        pila.push(v);
+                    }
+                }
+            }
+            if let Some((h_cont, h_oc)) = self.partir_por_fosa(p as usize, &en) {
                 ya.push(p);
-                partidas.push((h_cont, h_oc, a, kv));
+                partidas.push((h_cont, h_oc, a, celdas[0]));
             }
         }
-        // B. Transformantes con contraste de edad: (par, bloque) → (longitud, Σ edad vieja·long.,
-        // votos de la placa que se hundiría, bordes).
+        // B. Transformantes con contraste de edad y fondo viejo: (par, bloque) → candidato.
+        let viejo_transf = |d: &Deriva, b: &Borde| -> Option<(f64, u32)> {
+            if b.tipo != TipoBorde::Transformante {
+                return None;
+            }
+            let (cp, cq) = (d.corteza(b.k as usize)?, d.corteza(b.k_q as usize)?);
+            if cp.cont || cq.cont {
+                return None;
+            }
+            let vieja = cp.edad_oc.max(cq.edad_oc);
+            if vieja <= a_min || (cp.edad_oc - cq.edad_oc).abs() <= 0.5 * vieja {
+                return None;
+            }
+            Some((vieja, if cp.edad_oc > cq.edad_oc { b.p } else { b.q }))
+        };
         let mut trans: std::collections::BTreeMap<((u32, u32), u64), CandTransf> =
             Default::default();
         for (i, b) in self.bordes.iter().enumerate() {
-            if b.tipo != TipoBorde::Transformante {
-                continue;
-            }
-            let (Some(cp), Some(cq)) = (self.corteza(b.k as usize), self.corteza(b.k_q as usize))
-            else {
+            let Some((vieja, hunde)) = viejo_transf(self, b) else {
                 continue;
             };
-            if cp.cont || cq.cont {
-                continue;
-            }
-            let vieja = cp.edad_oc.max(cq.edad_oc);
-            if (cp.edad_oc - cq.edad_oc).abs() <= 0.5 * vieja {
-                continue;
-            }
             if self
                 .estado_fosa(b.p, self.rep[b.k as usize], b.q)
                 .is_some_and(|e| e.activa)
@@ -599,7 +632,6 @@ impl Deriva {
                 continue;
             }
             let par = (b.p.min(b.q), b.p.max(b.q));
-            let hunde = if cp.edad_oc > cq.edad_oc { b.p } else { b.q };
             let e = trans.entry((par, bloque(b.k as usize))).or_default();
             e.largo += 0.5 * b.largo_km;
             e.edad_l += vieja * 0.5 * b.largo_km;
@@ -623,9 +655,9 @@ impl Deriva {
             let arriba = if hunde == pa { pb } else { pa };
             transformantes.push((arriba, hunde, c.regs.clone(), a));
         }
-        // Fosas de las transformantes: todo el tramo transformante contiguo del par.
+        // Fosas de las transformantes: solo el tramo contiguo con fondo de más de a_min.
         for (arriba, hunde, semilla, a) in transformantes {
-            let regs = self.tramo_de(&semilla, |b| b.tipo == TipoBorde::Transformante);
+            let regs = self.tramo_de(&semilla, |b| viejo_transf(self, b).is_some());
             let largo: f64 = regs.iter().map(|&i| 0.5 * self.bordes[i].largo_km).sum();
             self.poner_fosa(&regs, arriba, hunde);
             self.fosas_paso.nacen[2] += 1;
@@ -650,14 +682,17 @@ impl Deriva {
             self.aplicar_estado_fosas();
             return false;
         }
-        // Fosas de los márgenes: todo el borde nuevo entre la parte continental y la oceánica.
+        // Fosas de los márgenes: el borde nuevo entre el continente y la placa oceánica nueva, solo
+        // donde hay corteza continental a un lado (los cortes por el océano son transformantes).
         self.clasificar_bordes();
-        for (h_cont, h_oc, a, kv) in partidas {
+        for (h_cont, h_oc, a, kc) in partidas {
             let regs: Vec<usize> = (0..self.bordes.len())
                 .filter(|&i| {
                     let b = &self.bordes[i];
-                    (b.p as usize, b.q as usize) == (h_cont, h_oc)
-                        || (b.p as usize, b.q as usize) == (h_oc, h_cont)
+                    let par = (b.p as usize, b.q as usize);
+                    (par == (h_cont, h_oc) || par == (h_oc, h_cont))
+                        && (self.corteza(b.k as usize).is_some_and(|c| c.cont)
+                            || self.corteza(b.k_q as usize).is_some_and(|c| c.cont))
                 })
                 .collect();
             if regs.is_empty() {
@@ -671,7 +706,7 @@ impl Deriva {
                 .filter(|&k| self.dueno[k] as usize == h_oc)
                 .map(|k| self.malla.area[k])
                 .sum();
-            let punto = Some(self.malla.dir[kv as usize]);
+            let punto = Some(self.malla.dir[kc as usize]);
             self.evento_det(
                 "nacimiento_fosa",
                 vec![id_o, id_c],
@@ -791,34 +826,56 @@ impl Deriva {
         self.aplicar_estado_fosas();
     }
 
-    /// Parte la placa `pi` por el límite entre su corteza oceánica y la continental (6.4): la parte
-    /// oceánica conexa que contiene la celda `k_oc` pasa a una placa nueva. Devuelve los índices de
-    /// la placa continental y la oceánica, o `None` si alguna quedaría por debajo de `A_min`.
-    pub(super) fn partir_por_corteza(&mut self, pi: usize, k_oc: usize) -> Option<(usize, usize)> {
+    /// Parte la placa `pi` para una fosa espontánea en su margen pasivo (nota de fosas v3 §6.4): la
+    /// placa nueva es el océano de la placa que queda delante del tramo de fosa `tramo` (celdas
+    /// continentales del margen): el que tiene ese tramo como margen más cercano por el océano. Así,
+    /// desde los extremos de la fosa, el corte atraviesa el océano hasta los bordes existentes, como
+    /// los desgarres del extremo de una fosa real. Devuelve los índices de la placa continental y de
+    /// la oceánica, o `None` si alguna quedaría por debajo de `A_min`.
+    pub(super) fn partir_por_fosa(
+        &mut self,
+        pi: usize,
+        tramo: &std::collections::HashSet<u32>,
+    ) -> Option<(usize, usize)> {
         let num = self.malla.num;
-        let mut en_o = vec![false; num];
-        let mut pila = vec![k_oc as u32];
-        en_o[k_oc] = true;
-        let (mut a_o, mut a_tot) = (0.0, 0.0);
-        while let Some(k) = pila.pop() {
-            a_o += self.malla.area[k as usize];
-            for &v in &self.malla.vec[k as usize] {
-                if v == NADA || en_o[v as usize] || self.dueno[v as usize] != pi as u32 {
-                    continue;
-                }
-                if self.corteza(v as usize).is_some_and(|c| !c.cont) {
-                    en_o[v as usize] = true;
-                    pila.push(v);
+        let p = pi as u32;
+        let oceano =
+            |d: &Deriva, k: usize| d.dueno[k] == p && d.corteza(k).is_some_and(|c| !c.cont);
+        // Fuentes: el fondo oceánico junto al margen, con 1 si toca el tramo de fosa.
+        let mut fuentes: Vec<(u32, f64, u32)> = Vec::new();
+        for k in 0..num {
+            if !oceano(self, k) {
+                continue;
+            }
+            let mut junto = None;
+            for &v in &self.malla.vec[k] {
+                if v != NADA
+                    && self.dueno[v as usize] == p
+                    && self.corteza(v as usize).is_some_and(|c| c.cont)
+                {
+                    junto = Some(junto.unwrap_or(0).max(tramo.contains(&v) as u32));
                 }
             }
+            if let Some(e) = junto {
+                fuentes.push((k as u32, 0.0, e));
+            }
         }
-        for k in 0..num {
-            if self.dueno[k] == pi as u32 {
+        let oc: Vec<bool> = (0..num).map(|k| oceano(self, k)).collect();
+        let mut campo = std::mem::take(&mut self.campo);
+        campo.calcular(&self.malla, &fuentes, |u, v| oc[u] && oc[v], f64::INFINITY);
+        let delante: Vec<bool> = (0..num).map(|k| oc[k] && campo.fuente[k] == 1).collect();
+        self.campo = campo;
+        let (mut a_o, mut a_tot) = (0.0, 0.0);
+        for (k, &d) in delante.iter().enumerate() {
+            if self.dueno[k] == p {
                 a_tot += self.malla.area[k];
+                if d {
+                    a_o += self.malla.area[k];
+                }
             }
         }
         let a_min = self.cfg.a_min_frac * self.malla.area_total();
-        if a_o < a_min || a_tot - a_o < a_min {
+        if a_o <= 0.0 || a_o < a_min || a_tot - a_o < a_min {
             return None;
         }
         let paso = self.paso;
@@ -829,7 +886,7 @@ impl Deriva {
         for s in 0..madre.celda.len() {
             let l = madre.celda[s];
             let c = madre.cort[s];
-            let dest = if en_o[madre.mundo[s] as usize] {
+            let dest = if delante[madre.mundo[s] as usize] && !c.cont {
                 &mut h_o
             } else {
                 &mut h_c
@@ -846,7 +903,7 @@ impl Deriva {
         self.placas.push(h_c);
         self.placas.push(h_o);
         for k in 0..num {
-            if self.dueno[k] == pi as u32 {
+            if self.dueno[k] == p {
                 let l = self.rep[k];
                 self.dueno[k] = if self.placas[ic].mapa[l as usize] != NADA {
                     ic as u32
@@ -858,12 +915,14 @@ impl Deriva {
         Some((ic, ic + 1))
     }
 
-    /// Convergencia difusa (6.2): la corteza y el sedimento de cada muestra perdida en un tramo
-    /// difuso se reparten como espesor entre las celdas de las dos placas a menos de `W_dif`
-    /// (= `L_borde`) del solape, por área. Se conserva el volumen; no hay arcos ni sumideros.
+    /// Convergencia difusa (nota de fosas v3 §6.2): el área oceánica solapada de un tramo difuso se
+    /// retira como en una fosa, pero sin arco ni sumideros, y su basalto no pasa nunca a corteza
+    /// continental (a esta escala, el pliegue del fondo apenas cambia el relieve). La corteza de tipo
+    /// continental o de arco y el sedimento de la muestra se reparten como espesor a menos de `W_dif`
+    /// (= `L_borde`), por área: en las celdas continentales de las dos placas si las hay; si los dos
+    /// lados son oceánicos, entre los dos. Se conserva el volumen continental.
     pub(super) fn absorber_difusa(&mut self, lista: &[Difusa]) {
         self.fosas_paso.area_difusa_km2 = 0.0;
-        self.fosas_paso.basalto_bajo_continente_km3 = 0.0;
         if lista.is_empty() {
             return;
         }
@@ -872,10 +931,12 @@ impl Deriva {
         let (rs, rc, h_cont_min) = (cfg.rho_s, cfg.rho_c, cfg.h_cont_min_km);
         for d in lista {
             self.fosas_paso.area_difusa_km2 += d.a;
-            let v_bas = (d.c.h - d.c.hc).max(0.0) * d.a;
             let v_hc = d.c.hc * d.a;
             let v_sed = d.c.sed * d.a;
-            let mut celdas: Vec<u32> = self
+            if v_hc + v_sed <= 0.0 {
+                continue;
+            }
+            let celdas: Vec<u32> = self
                 .vecindad
                 .de(d.k as usize)
                 .iter()
@@ -885,30 +946,33 @@ impl Deriva {
                     (p == d.ganadora || p == d.perdedora) && self.rep[j as usize] != NADA
                 })
                 .collect();
-            if celdas.is_empty() {
-                celdas.push(d.k);
+            let continentales: Vec<u32> = celdas
+                .iter()
+                .copied()
+                .filter(|&j| self.corteza(j as usize).is_some_and(|c| c.cont))
+                .collect();
+            let mut destino = if continentales.is_empty() {
+                celdas
+            } else {
+                continentales
+            };
+            if destino.is_empty() {
+                destino.push(d.k);
             }
-            let a_tot: f64 = celdas.iter().map(|&j| self.malla.area[j as usize]).sum();
+            let a_tot: f64 = destino.iter().map(|&j| self.malla.area[j as usize]).sum();
             let mut puesto = 0.0;
-            let mut bajo_cont = 0.0;
-            for j in celdas {
+            for j in destino {
                 let w = self.malla.area[j as usize] / a_tot;
-                puesto += self.en_celda(&inv, j as usize, w, false, |c, a, f| {
-                    // `f` = w / Σ área de las muestras de la celda: el espesor por km³ de la
-                    // muestra perdida que le toca a cada muestra de la celda.
+                puesto += self.en_celda(&inv, j as usize, w, false, |c, _, f| {
+                    // `f` = w / Σ área de las muestras de la celda: el espesor por km³ repartido.
                     if v_hc > 0.0 {
                         c.sumar_hc(v_hc * f, d.c.arco, rs, rc, h_cont_min);
                         c.dh_dt += v_hc * f / cfg.dt_myr;
                         c.edad_orog = 0.0;
                     }
-                    c.h += v_bas * f;
                     c.sed += v_sed * f;
-                    if c.cont {
-                        bajo_cont += v_bas * f * a;
-                    }
                 });
             }
-            self.fosas_paso.basalto_bajo_continente_km3 += bajo_cont;
             // Lo que no encontró muestra (no pasa en una deriva normal) se cuenta como sin sitio.
             if puesto < 1.0 - 1e-9 {
                 self.cuentas.choque_sin_sitio_km3 += (1.0 - puesto) * (v_hc + v_sed * rs / rc);

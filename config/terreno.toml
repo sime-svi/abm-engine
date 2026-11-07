@@ -142,13 +142,14 @@ p_arc_cont   = 0.8         # ídem, arco sobre margen continental (medido: Clift
 p_se         = 0.4         # erosión por subducción por km² que se hunde (medido: 1,3–1,7 AU / 2,7–3,4 km²/año)
 v_ero_cm_anio = 6.0        # margen erosivo si converge más rápido... (medido: Clift y Vannucchi 2004)
 s_ero_km     = 1.0         # ...y le llega menos sedimento (medido: Clift y Vannucchi 2004)
-f_acr        = 0.3         # fracción del sedimento de fosa que se pega al margen acrecionario (calibrado)
+f_acr        = 0.2         # fracción del sedimento de fosa que se pega al margen acrecionario (calibrado, 5 semillas: acrecionado/subducido 0,24; Tierra 0,3/1,0–1,65)
 eta_col      = 0.5         # choque continente–continente: queda arriba (medido: India–Asia, ~50 %)
 eta_arco     = 0.9         # choque arco–continente: queda arriba (medido: Luzón en Taiwán, ~90 %)
 h_del_km     = 50.0        # la base de la corteza pasa a eclogita (físico: 1,2–1,5 GPa)
-tau_del_myr  = 50.0        # delaminación del exceso (calibrado: ≈1,1 AU y espesor máximo 70–80 km)
+tau_del_myr  = 25.0        # delaminación del exceso (calibrado, 5 semillas con D_0 = 50: 0,71 AU frente a 0,46 con 50 Myr; India–Asia igual). Caída convectiva de una raíz: 10–30 Myr
 h_flujo_km   = 50.0        # por encima, la corteza inferior caliente fluye hacia los lados (adenda v3 §6.6b; físico, 45–60)
-d_flujo_km2_myr = 3000.0   # difusividad del flujo lateral (calibrado con India–Asia: espesor máximo 72–77 km sin tope; ~viscosidad 1e20 Pa·s)
+d0_flujo_km2_myr = 50.0    # D_0 (adenda v6: D = D_0·(c/c_ref)³, c = h_c − h_flujo). Calibrado con India–Asia (70–80 km): 72 km a los 50 Myr (con 100, 69; con 1600, 61). ~2·10²⁰ Pa·s en un canal de 10 km (Clark y Royden 2000: 10¹⁸–10²¹)
+c_ref_km     = 10.0        # espesor de canal de referencia (normalización, no física)
 w_min_orog_km = 150.0
 w_margen_km  = 150.0
 f_rift       = 0.7
@@ -168,8 +169,9 @@ l_borde_km   = 150.0       # radio del borde suavizado (calibrado contra los bor
 # Ciclo de vida de las fosas (nota_ciclo_fosas.md v2). W_dif, la franja de la convergencia difusa, es L_borde.
 x_ini_km     = 150.0       # convergencia acumulada para que nazca una fosa (Gurnis et al. 2004: 100–150 km; Li y Gurnis 2023: ~200)
 tau_muerte_myr = 10.0      # sin convergencia durante este tiempo, la fosa muere (supuesto)
-lambda_esp   = 1.7e-7      # nacimiento espontáneo por km de candidato y Myr con fondo de 100 Myr (calibrado, 5 semillas: edad media del fondo 64 Myr, Seton 2020)
+lambda_esp   = 4.0e-6      # nacimiento espontáneo por km de tramo y Myr, por 100 Myr de edad sobre a_min (nota v3). ~8 por 100 Myr: la edad del fondo apenas cambia entre 1·10⁻⁶ y 1,6·10⁻⁵ (5 semillas), así que no se sube más
 l_losa_km    = 800.0       # losa con la que el tirón es pleno (llega a 660 km con 45–60°; 660–1000)
+a_min_myr    = 140.0       # edad mínima del fondo para un nacimiento espontáneo (nota de fosas v3; supuesto físico; 100–180)
 # Eventos de placas (§5.6)
 n_p0         = 12
 n_cratones   = 8
@@ -179,8 +181,9 @@ tau_rift_myr = 150.0
 v_rift_cm_anio = 2.0
 v_sutura_cm_anio = 0.5
 t_sutura_myr = 10.0
-e1_km_myr    = 0.01        # erosión a 1 km sobre el mar (km/Myr; adenda v5 §6.7: E = E_1·(z/1 km)^n_ero). PROVISIONAL: da la relajación (144 Myr); la exportación espera a la base (fosas ×1,5)
-n_ero        = 2.0         # exponente de la erosión con la altura (rango 1,5–3; Montgomery y Brandon 2002)
+e1_km_myr    = 0.005       # erosión a 1 km sobre el mar (km/Myr; adenda v5 §6.7: E = E_1·(z/1 km)^n_ero). Calibrado con n_ero: relajación 135 Myr (100–200); exporta ~2,4 AU (5 semillas; objetivo ~1,8)
+n_ero        = 2.5         # exponente de la erosión con la altura (rango 1,5–3; Montgomery y Brandon 2002). Con 3 exporta casi igual y las llanuras bajan de 1 m/Myr
+area_mar_abierto_km2 = 5.0e5 # mar abierto: el sedimento solo sale a un mar conectado de esta área; uno cerrado más pequeño es una cuenca (criterio de la malla)
 deformacion  = 0.06        # deformación de bordes de Voronoi, cratones y líneas de rift (fracción del radio)
 # Malla, tiempo y detalle (§5.7)
 nivel_malla  = 2           # nivel del cubo del terreno (~52 km con n0 = 48; decisión del responsable)

@@ -2,7 +2,10 @@
 
 Documento de diseño. Complementa a diseno_relieve_tectonico.md (incremento 4 del terreno).
 
-Estado: versión 5. Diseño cerrado.
+Estado: versión 6. Diseño cerrado.
+
+Cambios de la versión 6:
+- El flujo lateral de la corteza engrosada crece con el cubo del espesor del canal débil (6.6b), como el flujo real en un canal. Así frena los picos de los choques sin tope artificial.
 
 Cambios de la versión 5:
 - Se retira la caída de la raíz de los arcos de la versión 4. Las tasas medidas de los arcos ya descuentan esa caída, así que sumarla aparte la contaba dos veces.
@@ -146,7 +149,8 @@ Todo el sedimento cuenta como material continental, porque en este modelo su ún
 | h_del | Espesor a partir del cual la base de la corteza se vuelve eclogita y se desprende | 50 | km | Físico (presiones de 1,2–1,5 GPa); rango 45–55 |
 | τ_del | Tiempo característico de la delaminación del exceso | 50 (inicial) | Myr | Calibrado: delaminación global ≈1,1 AU y espesor máximo de 70–80 km |
 | h_flujo | Espesor a partir del cual la corteza inferior, caliente y débil, fluye hacia los lados | 50 | km | Físico, del mismo orden que h_del; rango 45–60 |
-| D_flujo | Difusividad del flujo lateral | calibrar | km²/Myr | Calibrado: espesor máximo de 70–80 km sin tope, mesetas de cientos a ~1 000 km de ancho, y relajación junto con τ_del y τ_ero |
+| D_0 | Difusividad del flujo lateral con un canal débil de espesor c_ref | calibrar (antes, D_flujo = 3 000 km²/Myr constante) | km²/Myr | Calibrado: espesor máximo de 70–80 km sin tope, en India–Asia y en el planeta, y mesetas de cientos a ~1 000 km de ancho |
+| c_ref | Espesor de canal de referencia | 10 | km | Escala de normalización, no física |
 | E_1 | Erosión de la génesis a 1 km de altura sobre el mar (6.7) | calibrar | km/Myr | Calibrado: relajación a 35–38 km en 100–200 Myr y exportación al mar ≈1,8 AU, con la media de varias semillas |
 | n_ero | Exponente de la erosión con la altura | 2 (inicial); rango 1,5–3 | adimensional | Calibrado con los mismos objetivos. Comprobación: metros por Myr en llanuras y escudos estables; 0,1–1 km/Myr en cordilleras activas |
 | ε_cons | Error relativo de conservación admitido por paso | igual que la malla del terreno | adimensional | Numérico |
@@ -227,13 +231,15 @@ Lo retirado pasa al manto y forma F_del. Se usa la forma exponencial exacta porq
 
 La corteza muy gruesa no crece sin límite. Su parte baja, caliente y débil, se desparrama hacia los lados, como una masa de pan. Así las mesetas se ensanchan en vez de apilarse en un punto, como ocurre en el Tíbet.
 
-Para cada par de celdas vecinas i y k de la misma placa, ambas con corteza de tipo continental, si h_c,i > h_flujo y h_c,i > h_c,k, el volumen que pasa de i a k en el paso es:
+Para cada par de celdas vecinas i y k, ambas con corteza de tipo continental (también a través de una sutura), si h_c,i > h_flujo y h_c,i > h_c,k, el volumen que pasa de i a k en el paso es:
 
-V_ik = D_flujo · (h_c,i − h_c,k) / d_ik · ℓ_ik · Δt
+V_ik = D_0 · (c_i / c_ref)³ · (h_c,i − h_c,k) / d_ik · ℓ_ik · Δt,   con c_i = h_c,i − h_flujo
+
+c_i es el espesor del canal caliente y débil de la base de la corteza, la parte por encima de h_flujo. El flujo en un canal crece con el cubo de su espesor: un canal el doble de grueso deja pasar ocho veces más. Es el modelo de flujo de corteza inferior usado para el borde oriental del Tíbet (Clark y Royden 2000). Por eso los engrosamientos excesivos se aplanan mucho más deprisa que los moderados, sin necesidad de tope.
 
 Aquí d_ik es la distancia entre los centros de las celdas y ℓ_ik la longitud del lado que comparten. V_ik se resta de i y se suma a k, así que el volumen se conserva por construcción.
 
-Todos los V_ik de un subpaso se calculan con los espesores del inicio del subpaso y se aplican a la vez; así la regla es una función pura del estado. Si el paso tectónico es grande, se divide en subpasos para que sea estable (condición orientativa: D_flujo · Δt_sub / d² ≤ 1/8).
+Todos los V_ik de un subpaso se calculan con los espesores del inicio del subpaso y se aplican a la vez; así la regla es una función pura del estado. Si el paso tectónico es grande, se divide en subpasos para que sea estable (condición orientativa: D_ef · Δt_sub / d² ≤ 1/8, con D_ef el mayor valor de D_0 · (c / c_ref)³ del subpaso).
 
 H_max = 80 km deja de ser una regla. Queda solo como comprobación en los tests: ninguna celda debe superarlo. Si alguna muestra se acerca a valores como los 150 km vistos antes del tope, es síntoma de que algún proceso apila corteza en un punto, y hay que buscarlo.
 
@@ -358,7 +364,7 @@ Esta adenda no usa azar. Todas las reglas son funciones puras del estado. Los re
 
 ### Si un objetivo no se cumple
 
-Primero se revisa la base: un mecanismo que falte o un valor medido mal aplicado. Solo los parámetros calibrados (f_acr, τ_del, D_flujo, E_1, n_ero) se ajustan, siempre con la media de varias semillas y no antes de implementar nota_ciclo_fosas.md.
+Primero se revisa la base: un mecanismo que falte o un valor medido mal aplicado. Solo los parámetros calibrados (f_acr, τ_del, D_0, E_1, n_ero) se ajustan, siempre con la media de varias semillas y no antes de implementar nota_ciclo_fosas.md.
 
 Los parámetros medidos pueden moverse dentro de su rango publicado, porque estas tasas tienen incertidumbres de hasta el doble. Fuera de ese rango, no.
 
@@ -382,6 +388,7 @@ Queda abierta una cuestión que no bloquea esta adenda: las fosas y las dorsales
 
 - Behn, M. D. y Kelemen, P. B. (2006). Stability of arc lower crust: insights from the Talkeetna arc section, south central Alaska, and the seismic structure of modern arcs. Journal of Geophysical Research 111.
 - Bird, P. (2003). An updated digital model of plate boundaries. Geochemistry, Geophysics, Geosystems 4.
+- Clark, M. K. y Royden, L. H. (2000). Topographic ooze: building the eastern margin of Tibet by lower crustal flow. Geology 28.
 - Clift, P. y Vannucchi, P. (2004). Controls on tectonic accretion versus erosion in subduction zones. Reviews of Geophysics 42, RG2001.
 - Clift, P. D., Vannucchi, P. y Phipps Morgan, J. (2009). Crustal redistribution, crust–mantle recycling and Phanerozoic evolution of the continental crust. Earth-Science Reviews 97, 80–104.
 - Clift, P. D., Schouten, H. y Vannucchi, P. (2009). Arc–continent collisions, sediment recycling and the maintenance of the continental crust. Geological Society Special Publication 318.
