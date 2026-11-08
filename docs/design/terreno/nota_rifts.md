@@ -2,7 +2,11 @@
 
 Documento de diseño. Complementa a diseno_relieve_tectonico.md (incremento 4 del terreno), a nota_ciclo_fosas.md (versión 6) y a adenda_balance_corteza.md (versión 9, §6.10: estiramiento de los márgenes).
 
-Estado: diseño cerrado salvo las preguntas del §11. Es la última nota de la tectónica; tras implementarla se congela la capa.
+Estado: versión 2. Diseño cerrado.
+
+Cambios de la versión 2:
+- Corrección de un error de calibración. En la versión 1, λ_A se ajustó al ritmo de la ruptura de Pangea (6–10 rupturas en ~150 Myr), como si fuera el ritmo de siempre. Ese ritmo corresponde a la fase de ruptura de un supercontinente. Entre rupturas, mientras los continentes se dispersan y se vuelven a juntar, hay muchas menos.
+- La probabilidad de ruptura crece con el tiempo que un bloque lleva unido, por el calentamiento del manto bajo él (6.1). Los trozos recién separados no vuelven a romperse enseguida, y los supercontinentes se rompen tras cierto tiempo unidos.
 
 ---
 
@@ -13,6 +17,8 @@ Estado: diseño cerrado salvo las preguntas del §11. Es la última nota de la t
 **Frecuencia.** Los continentes se parten con frecuencia. Pangea empezó a romperse hace unos 200 Myr y en ~150 Myr se abrieron varios océanos y mares por etapas: el Atlántico central, el Atlántico sur, el Índico entre África, India, Madagascar, Antártida y Australia, el Atlántico norte y, más tarde, el mar Rojo. Son del orden de 6–10 rupturas grandes en ese tiempo.
 
 **Los continentes grandes se rompen más.** Un supercontinente aísla el manto de debajo y está rodeado de fosas que tiran de sus bordes. Por eso los supercontinentes se rompen, y los continentes pequeños rara vez.
+
+**El calor se acumula con el tiempo.** Un continente grande funciona como una tapa: el calor del manto se acumula debajo y, con el tiempo, lo levanta y lo debilita hasta partirlo. Por eso los supercontinentes duran unidos un tiempo limitado: Pangea, unos 150 Myr, y Rodinia, más. Después se rompen en una fase de muchas rupturas seguidas, como la de Pangea en los últimos ~200 Myr.
 
 **Se rompen por sus cicatrices.** Las rupturas aprovechan zonas débiles antiguas, sobre todo las suturas de choques anteriores. El Atlántico se abrió aproximadamente por donde se había cerrado un océano anterior, Iapetus. Es la observación que dio nombre al ciclo de Wilson: los océanos se cierran y vuelven a abrirse por el mismo sitio.
 
@@ -41,7 +47,7 @@ Sí se modela:
 Se abstrae o se deja para más adelante:
 - **Plumas del manto** como desencadenantes (Afar, las grandes erupciones al romperse Pangea). Ampliación futura, junto con los puntos calientes.
 - **Rifts fallidos** (aulacógenos), que se abren y se detienen sin crear océano. Ampliación futura.
-- **Aislamiento térmico** del supercontinente según el tiempo que lleve unido. Queda implícito en que la probabilidad crece con el área.
+- **Aislamiento térmico en detalle.** En la versión 2 se representa solo con un reloj por bloque (6.1), sin calcular el calor del manto.
 - **Rifts tras los arcos** (cuencas de trasarco). Van con el retroceso de las fosas, ya en ampliación futura.
 
 ---
@@ -68,7 +74,8 @@ No hay entidades nuevas.
 
 | Parámetro | Significado | Por defecto | Unidades | Origen |
 |---|---|---|---|---|
-| λ_A | Probabilidad de ruptura por Mkm² de continente y por Myr | 2,5·10⁻⁴ (inicial) | 1/(Mkm²·Myr) | Calibrado: ~4–7 rupturas por 100 Myr con unos 200 Mkm² de corteza continental, que es el ritmo de la ruptura de Pangea |
+| λ_A | Probabilidad de ruptura por Mkm² de continente y por Myr, para un bloque que ya lleva unido más de τ_ais | 4·10⁻⁴ (valor de la versión 1, a recalibrar) | 1/(Mkm²·Myr) | Calibrado con el número de placas grandes (~13) y la duración de los supercontinentes (§10) |
+| τ_ais | Tiempo que un bloque tiene que llevar unido para alcanzar su probabilidad plena de ruptura | 100 | Myr | Supuesto, del orden de la duración de los supercontinentes (Pangea, ~150 Myr); rango 50–200 |
 | A_trozo,min | Área mínima de cada trozo tras la ruptura | 0,5 | Mkm² | Físico: Madagascar, unos 0,6 Mkm², es de los trozos más pequeños separados por un rift |
 | L_sut,min | Longitud mínima de una sutura para guiar la ruptura | 3 · L_borde | km | Numérico |
 
@@ -82,7 +89,9 @@ Esta regla sustituye a τ_rift.
 
 Para cada bloque continental k que no esté ya en fase de rift:
 
-p_k = 1 − exp(−λ_A · A_k · Δt)
+p_k = 1 − exp(−λ_A · A_k · min(1, t_k / τ_ais) · Δt)
+
+Aquí t_k es el tiempo que lleva el bloque sin cambiar por una ruptura ni por un choque que le añada un continente. Un trozo recién separado empieza con t_k = 0, y un bloque que acaba de soldarse a otro también. El reloj viaja con el bloque, y al fundirse dos bloques se toma el menor.
 
 Con el generador sembrado, recorriendo los bloques en un orden fijo, se decide si el bloque se rompe en el paso.
 
@@ -129,7 +138,10 @@ Relación con otros trabajos:
 
 | Magnitud | Objetivo | Hoy |
 |---|---|---|
-| Rupturas por 100 Myr | ~4–7 (ritmo de la ruptura de Pangea) | 0,2–0,8 |
+| Rupturas por 100 Myr durante la ruptura de un supercontinente | ~4–7 (ritmo de la ruptura de Pangea) | 5,8 de media en toda la deriva |
+| Rupturas fuera de esa fase | claramente menos (criterio blando) | — |
+| Placas de al menos el 1 % del planeta | ~13 (Bird) | ~20 |
+| Duración de un supercontinente, si se forma | ~100–300 Myr (criterio blando) | — |
 | Anchura de la franja estirada | 100–300 km por lado | 65 km |
 | Anchura media de la plataforma | ≈43 km (ETOPO) | 8,2 km |
 | Vida media de los márgenes pasivos que terminan | 130–180 Myr (Bradley 2008) | — |

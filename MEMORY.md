@@ -1457,3 +1457,39 @@ Formato de entrada:
 - **Se para:** tras A, ninguna rama encaja con la causa. Las placas grandes nacen en los rifts (~5 por 100 Myr) y solo mueren en las suturas (~3); las oceánicas grandes no se consumen enteras. Opciones para el responsable, en el informe (§8).
 - **Tabla de cierre:** la tierra por encima de 2 000 m es el 15 %, frente al 5,3 % de la roca de ETOPO sin hielo (el ~11 % de la nota incluye el hielo).
 - **`main` no se toca:** la rama A no mejora el exceso y se pasa del presupuesto de tiempo. Decide el responsable.
+
+## [2026-11-08] La Tierra real en la regla del modelo, para los continentes: no sale el relieve real y la ronda se para
+
+- **Qué pidió el responsable** (encargo de la segunda ronda del día).
+  - **Primero:** meter el grosor real de la corteza (CRUST1.0) y su sedimento en la isostasia del modelo, con su nivel del mar, y comparar con ETOPO sin hielo: altura media de la tierra, por debajo de 200 m, por encima de 2 000 m, pendiente y plataforma. Medir también el grosor de la corteza continental del planeta frente a CRUST1.0. «Si con la corteza real no sale el relieve real, para y tráemelo.»
+  - **Después** (en espera): la nota de demografía de placas v2 (fuera A1; A2 y las fantasma se quedan; rama D de subducción de dorsales con `d_dc` 300 km; D6) y la nota de rifts v2 (reloj por bloque con `τ_ais` 100 Myr; recalibrar `λ_A` y `τ_ais` con las ~13 placas de ≥ 1 % y la duración de los supercontinentes).
+  - El objetivo de la tierra por encima de 2 000 m pasa a 5,3 %. Presupuesto de 275 s. Tabla de cierre con 5 semillas, informe y mapa.
+- **Hecho.**
+  - Herramienta `herramientas/analisis/tierra_corteza_regla.py`, con salida en `config/referencias/tierra_corteza.toml`.
+  - Usa CRUST1.0 interpolado de 1° a nivel 3, solo entre celdas continentales; LITHO1.0 para el manto litosférico; el océano con la regla de §46, y medidas como `referencia_tierra.py`, también a 1°.
+  - Informe `docs/informes/2026-11-08_corteza_real_en_la_regla.md`; diseño §67–§68; README de la fase; mapa del motor; TREE (pendiente 0 de realismo); README de herramientas.
+- **Resultado: no sale.**
+  - Con la corteza real, la regla da 1 389 m de altura media de la tierra (671), el 19,7 % por encima de 2 km (5,3 %), el 4,7 % por debajo de 200 m (28,3 %), una plataforma de 17 km (43; 54 a 1°) y la pendiente ×1,65 a 1°.
+  - Sale más alta que el propio planeta (1 136 m, 15 %): el exceso de relieve del planeta es sobre todo de la regla.
+- **Por qué.**
+  - La regla da 152 m por km de corteza y 273 por km de sedimento. En la Tierra, con CRUST1.0: 65–75 m por km de corteza y −17 a −21 por km de sedimento.
+  - Por tipo (real − regla): escudos y plataformas, −981 m (el 61 % de la tierra); Fanerozoico, −643; orógenos, −669; arcos, +19; rifts y corteza estirada, +263.
+  - Ejemplos: la plataforma rusa daría 2,1 km (real 110 m); Kenia, 0,34 km (real 2,26).
+  - La plataforma real emerge: el 69 % queda en tierra con la regla.
+  - No lo arreglan las densidades de las capas de CRUST1.0 (2 816 en tierra, casi la del modelo), quitar el sedimento ni mover `h_nivel` (con 47 km la tierra queda en el 10 % del planeta).
+  - LITHO1.0 explica poco: −2,3 m por km de manto litosférico.
+  - Lo que falta es la isostasia térmica del manto litosférico según la edad termotectónica, y la subsidencia de cuencas y márgenes. Un término perfecto por tipo daría como mucho un 7,2 % por encima de 2 km y 904 m de media.
+- **La corteza del planeta frente a CRUST1.0** (en tierra).
+  - Misma mediana (37,7 y 37,3 km), pero el doble de más de 45 km (20 %, frente a 9 %) y casi el triple de más de 50.
+  - Un tercio del sedimento (0,45 km, frente a 1,24) y un tercio de la corteza continental sumergida (3,5 % del planeta, frente a 9,2 %).
+- **Decisión que espera** (opciones en el §6 del informe):
+  1. isostasia térmica por edad termotectónica (recomendada, la más realista);
+  2. densificación de la corteza inferior gruesa;
+  3. la relación medida como apaño provisional;
+  4. seguir con la regla.
+  - La rama D y los rifts v2 no dependen de la isostasia y podrían ir antes.
+- **Las notas v2 del responsable** se commitean tal como llegaron, sin implementar.
+- **Estado:**
+  - el motor no cambia;
+  - la rama `terreno-demografia-placas` sigue sin fusionar, con la rama A;
+  - `main` sigue en 7c54bbd.

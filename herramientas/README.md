@@ -125,6 +125,33 @@ GlobSed se lee de `output/referencias/globsed/globsed-v3.asc`. Es la copia en AS
 
 También mide la **convergencia de las fosas** (diagnóstico de `nota_ciclo_fosas.md` §0): la componente perpendicular al borde (cm/año) por clases, su media ponderada por longitud y el área que se hunde. Lo hace tramo a tramo con la tasa de divergencia de Bird (clases SUB, fosas, y OCB, convergencia sin fosa) y en la malla con la regla de la nota. Fundir las placas pequeñas quita sobre todo fosas de microplacas de arco: las de las 15 mayores hunden 1,5 km²/año de los 2,7 de todas.
 
+## La Tierra real con la regla del modelo (los continentes)
+
+```bash
+python3 -I herramientas/analisis/tierra_corteza_regla.py   # ~1,5 min con las cachés; la primera vez, unos minutos más
+python3 -I herramientas/analisis/tierra_corteza_regla.py --planeta output/semillas/semilla_42_world.json
+```
+
+Responde a la misma pregunta para los continentes: con el grosor real de la corteza y de su sedimento (CRUST1.0, Laske et al. 2013), la isostasia continental del modelo (`isostasia::altura`), el océano con la regla de `tierra_regla_modelo.py` y el nivel del mar del modelo, ¿sale el relieve de ETOPO sin hielo?
+- **Qué mide:** las filas del relieve de la tabla de cierre (tierra emergida, altura media y mediana, tierra por debajo de 200 m y por encima de 2 000 m, pendiente a ±25 km, plataforma), con la misma definición que `referencia_tierra.py`.
+- **Cómo:** CRUST1.0 es de 1°. Se interpola bilinealmente a las celdas de nivel 3; en las continentales, solo con celdas de tipo continental. La pendiente y la plataforma se comparan también con ETOPO llevado a 1° (`tierra_1grado`).
+- **Variantes:**
+  - la regla solo en los continentes;
+  - toda la Tierra con la regla;
+  - con la densidad de cada capa de CRUST1.0;
+  - con las mesetas oceánicas;
+  - sin el sedimento continental o contándolo como corteza;
+  - con el cero movido;
+  - y dos cotas: la regla más el residuo medio de su tipo de corteza, y la recta real por tipo.
+- **Diagnósticos:**
+  - la altura real y la de la regla por grosor de la corteza, por tipo de corteza de CRUST1.0 y por grosor del sedimento;
+  - el residuo frente al manto litosférico de LITHO1.0 (Pasyanos et al. 2014);
+  - las rectas de la altura real;
+  - dónde pone la regla la plataforma real.
+- **El planeta:** con `--planeta` (por defecto, `output/semillas/semilla_*_world.json`), el grosor de la corteza continental del planeta frente a CRUST1.0: en tierra, bajo el mar y por percentiles.
+
+Descarga la primera vez a `output/referencias/crust1/` los ficheros de CRUST1.0 que usa (`crust1.bnds`, `crust1.rho`, `CNtype1-1.txt` y `CNtype1_key.txt`, sacados por su nombre de los tar de igppweb.ucsd.edu) y a `output/referencias/litho1/` el tar de LITHO1.0 (12 MB), que se lee sin extraerlo. Guarda en `output/cache/` las celdas de nivel 3 de Seton y de GlobSed, y la litosfera en la malla de 1°. Escribe `config/referencias/tierra_corteza.toml`, solo con la Tierra.
+
 ## La deriva en varias semillas
 
 ```bash

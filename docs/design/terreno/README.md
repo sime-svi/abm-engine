@@ -581,3 +581,34 @@ Iba a ser la última ronda del relieve tectónico. Antes de congelar la capa, el
 - probar a hacer más exigente el nacimiento de las fosas.
 
 **El relieve.** La tierra por encima de 2 000 m es el 15 % del planeta. En la Tierra sin hielo es el 5 % (el 11 % de la nota incluye el hielo de Antártida y Groenlandia).
+
+### La corteza real en la regla del modelo: los continentes (08-11-2026, segunda parte)
+
+**La pregunta del responsable.** Ya se había probado con el océano. Ahora, con los continentes: si se mete en la regla del modelo la corteza real de la Tierra, ¿sale el relieve real?
+- La **corteza** es la capa de roca ligera que flota sobre el manto, más denso. Bajo los continentes mide unos 35–40 km; bajo los océanos, unos 7.
+- La **isostasia** es esa flotación: como un iceberg, cuanto más gruesa es la corteza, más sobresale. La regla del modelo dice cuánto.
+- La corteza real sale de **CRUST1.0**, un mapa mundial del grosor de la corteza y de su sedimento hecho con medidas sísmicas, en cuadros de 1° (unos 111 km).
+
+**Lo que salió: no sale.**
+- Con la corteza real, la regla pone la tierra al doble de su altura: 1 389 m de media, frente a 671.
+- La tierra por encima de 2 000 m sería el 20 %, frente al 5 % real. La tierra baja, de menos de 200 m, el 5 %, frente al 28 %.
+- Por ejemplo, la llanura rusa o la Amazonía, que están casi al nivel del mar, quedarían a 1,6–2 km.
+- Con la corteza real sale una tierra todavía más alta que la del planeta del modelo. El relieve demasiado alto del planeta viene sobre todo de la regla, y no de su corteza.
+
+**Por qué.**
+- La regla solo mira la corteza: cada km de más la sube 152 m y cada km de sedimento, 273 m.
+- En la Tierra, debajo de la corteza está el **manto litosférico**, la parte rígida del manto que viaja con la placa.
+  - Bajo los continentes viejos (los escudos y las plataformas, como Rusia, Canadá o Australia) es frío y grueso, y el frío lo hace más denso: los hunde cerca de 1 km.
+  - Bajo las zonas jóvenes y calientes (los rifts, como el de Kenia, o el oeste de Estados Unidos) es fino y caliente, y las levanta.
+  - Es la **isostasia térmica**.
+- **Las cuencas sedimentarias** son bajas porque su suelo se hundió. Su sedimento rellena el hueco, no levanta la tierra.
+- **La regla del modelo** vale para una corteza joven sobre un manto caliente, como la de los arcos volcánicos, y ahí acierta.
+- **No basta con cambiar las densidades** de la corteza (las reales son casi las del modelo) ni con mover el punto de partida de la regla.
+
+**La corteza del planeta, comparada con la real.**
+- En tierra, la mitad tiene menos de 37,7 km, como en la Tierra.
+- Pero tiene el doble de corteza muy gruesa, de más de 45 km.
+- Tiene un tercio del sedimento.
+- Y un tercio de la corteza continental que queda bajo el mar, en las plataformas y los márgenes.
+
+**Lo que queda por decidir.** La ronda se paró aquí, como pidió el responsable, y él decide cómo arreglar la base. La opción más realista es añadir a la regla el enfriamiento de la litosfera continental con la edad, como ya tiene el fondo oceánico. Según los datos, eso arreglaría más o menos la mitad: la tierra por encima de 2 km bajaría del 20 % al 7 %. Esperan la muerte de las placas oceánicas al llegar su dorsal a una fosa (nota de demografía v2) y los rifts con reloj (nota de rifts v2), que no dependen de esto.

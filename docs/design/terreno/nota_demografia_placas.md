@@ -2,7 +2,13 @@
 
 Documento de diseño. Complementa a diseno_relieve_tectonico.md (incremento 4 del terreno), a nota_ciclo_fosas.md (versión 6), a nota_rifts.md y a adenda_balance_corteza.md (versión 9).
 
-Estado: diagnóstico y árbol de decisión. Quien implemente hace primero el §0, aplica las ramas que correspondan según el §2 y vuelve a medir. Si ninguna rama encaja, se trae aquí con los datos del §0.
+Estado: versión 2. Diagnóstico hecho; se cierran las ramas y se añade la muerte de placas por subducción de dorsales (rama D).
+
+Cambios de la versión 2:
+- **Rama A.** Se retira la soldadura por borde inactivo (A1): en el modelo no actúa nunca, porque las placas grandes siempre se mueven unas respecto a otras. Se mantienen la captura de microplacas (A2) y la retirada de las placas fantasma, que antes seguían "vivas" sin área.
+- **Rama D, nueva.** Cuando una dorsal llega a una fosa, deja de crear fondo y la placa que había entre ambas se rompe y es capturada. Es como murieron en la Tierra las placas oceánicas grandes (Farallón, Kula), y es lo que el diagnóstico echa en falta: en el modelo las placas grandes nacen en los rifts (~5 por 100 Myr) y solo mueren en las suturas (~3).
+- **Objetivo de tierra por encima de 2 km:** 5,3 %, la cifra de ETOPO sin hielo, que es lo que representa el modelo (antes ~11 %, con el hielo de Antártida y Groenlandia).
+- **Ramas B y C:** se descartan, porque el diagnóstico no da señal para ninguna de las dos.
 
 ---
 
@@ -25,6 +31,8 @@ Todo con 5 semillas: cada 50 Myr a lo largo de la deriva, y al final.
 **D4. Bordes inactivos.** Longitud de borde entre placas cuya velocidad relativa es menor que 0,2 cm/año, y cuánto tiempo llevan así.
 
 **D5. Por placa.** Área que se hunde y longitud de fosa de cada placa, distinguiendo las placas nacidas de rifts, de invasiones y de nacimientos espontáneos.
+
+**D6. Encuentros entre dorsales y fosas** (versión 2). Cuántas veces por 100 Myr un tramo de dorsal llega a menos de d_dc de una fosa donde se hunde una de sus dos placas, y qué pasa después.
 
 ---
 
@@ -91,8 +99,7 @@ No hay entidades nuevas. Por cada par de placas vecinas hace falta un contador d
 
 | Parámetro | Significado | Por defecto | Unidades | Origen |
 |---|---|---|---|---|
-| v_fus | Velocidad relativa por debajo de la cual un borde se considera inactivo | 0,2 | cm/año | Supuesto: los bordes activos más lentos de la Tierra se mueven unos milímetros al año; rango 0,1–0,5 |
-| τ_fus | Tiempo con el borde inactivo tras el que dos placas se sueldan | 20 | Myr | Supuesto; rango 10–50 |
+| d_dc | Distancia entre una dorsal y la fosa donde se hunde una de sus placas a partir de la cual la dorsal muere | 300 | km | Supuesto: las microplacas que quedaron frente a California tenían unos cientos de km de anchura al ser capturadas; rango 150–500 |
 | A_micro | Área por debajo de la cual una placa es microplaca | 0,5 | Mkm² | Supuesto, del orden de las microplacas de Bird; rango 0,2–1 |
 | τ_micro | Tiempo sin fosa activa tras el que una microplaca es capturada | 10 | Myr | Supuesto; rango 5–30 |
 | X_ini | Convergencia acumulada para el nacimiento inducido (ya existe) | 150 | km | Rango 100–200 (Gurnis et al. 2004; Li y Gurnis 2023) |
@@ -105,10 +112,7 @@ Se calibran contra los objetivos del §10, con 5 semillas.
 
 ### Rama A: muerte de placas
 
-**A1. Soldadura por borde inactivo.**
-- Si v_rel,pq < v_fus, entonces T_in,pq ← T_in,pq + Δt; si no, T_in,pq ← 0.
-- Si T_in,pq ≥ τ_fus, las dos placas se funden en una: la mayor absorbe a la menor. La corteza, el sedimento y la edad del fondo no se mueven, solo cambian de placa, así que todo se conserva por construcción.
-- No se funden si el borde común incluye una fosa activa o un rift en fase de estiramiento.
+**A1. Soldadura por borde inactivo.** Retirada en la versión 2: no actuaba nunca.
 
 **A2. Captura de microplacas.**
 - Si A_p < A_micro y la placa p no tiene fosa activa propia, T_sf,p ← T_sf,p + Δt; si la tiene, T_sf,p ← 0.
@@ -119,6 +123,19 @@ Esta regla sustituye a la protección actual de las microplacas, que no se absor
 ### Rama B: invasión solo por bordes transformantes
 
 La invasión (nota_ciclo_fosas.md, 6.4) avanza solo a lo largo de fallas transformantes entre placas, no por márgenes pasivos dentro de una placa, como en los casos observados. El cierre de los océanos viejos queda a cargo sobre todo de los rifts y de la reorganización de las placas, que son lo que hizo bajar la edad del fondo de 119 a 88 Myr.
+
+### Rama D: subducción de dorsales y muerte de placas oceánicas (versión 2)
+
+En la Tierra, una placa oceánica grande muere cuando la dorsal que la alimenta llega a la fosa que la consume. El fondo junto a la dorsal es tan joven y caliente que flota y no se hunde bien: la dorsal deja de abrirse en ese tramo, la fosa se apaga y la placa que quedaba entre ambas se rompe en microplacas, que la placa del otro lado de la dorsal acaba capturando. Así desapareció la placa de Farallón frente a Norteamérica: sus restos pasaron a la placa del Pacífico, y la fosa se convirtió en la falla de San Andrés. Así desaparecieron también Kula y otras placas del Pacífico.
+
+Regla, para cada tramo de dorsal activa entre las placas p y r:
+- Si a menos de d_dc del tramo hay una fosa activa en la que se hunde p, es decir, si la franja de p entre la dorsal y la fosa es más estrecha que d_dc:
+  1. el tramo de dorsal muere y deja de crear fondo;
+  2. la franja de p entre la dorsal muerta y la fosa se separa y pasa a la placa r, con la misma conservación que A2;
+  3. el tramo de fosa frente a ella muere, y el borde nuevo entre r y la placa de arriba se clasifica según su movimiento (a menudo, transformante).
+- Si p se queda sin área, se retira como placa, igual que las fantasma.
+
+Todo se recorre en un orden fijo de tramos.
 
 ### Rama C: nacimiento inducido más exigente
 
@@ -154,7 +171,8 @@ Las reglas A1 y A2 se aplican al final del paso, después de los rifts, para que
 | Convergencia difusa | ≈17 400 km ± 50 % (Bird OCB) | — |
 | Choques | ≈23 000 km ± 25 % (Bird CCB) | 21 200 |
 | Placas | Distribución acumulada de áreas parecida a la de Bird en la malla: las 15 mayores, una fracción del planeta parecida ± 10 puntos | — |
-| Tierra por encima de 2 km | ~11 % (ETOPO) | 28 % |
+| Tierra por encima de 2 km | 5,3 % (ETOPO sin hielo) | 15 % |
+| Placas de al menos el 1 % del planeta | ~13 (Bird) | ~20 |
 | Velocidad media de las placas | 4,39 cm/año ± 25 %, sin reajustar fuerzas | — |
 | Edad media del fondo | no peor que 88 Myr (Tierra, 64) | 88 |
 | Placas rápidas = las de mucha fosa (Forsyth y Uyeda) | se mantiene | sí |

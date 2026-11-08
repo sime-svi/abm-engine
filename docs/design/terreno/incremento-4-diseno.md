@@ -1740,3 +1740,69 @@ Informe completo, con todas las tablas: `docs/informes/2026-11-08_demografia_pla
   - medir la rama C sin su señal;
   - revisar A.
 - **Tabla de cierre con las filas de relieve** (§7 del informe). La tierra por encima de 2 000 m es el 15 %, frente al 5,3 % de la roca de ETOPO sin hielo. El ~11 % de la nota incluye el hielo de Antártida y Groenlandia.
+
+## 67. La Tierra real con la regla del modelo: los continentes (2026-11-08, segunda ronda)
+
+Encargo del responsable: meter el grosor real de la corteza (CRUST1.0) y su sedimento en la isostasia del modelo, con su nivel del mar, y comparar con ETOPO sin hielo. «Si con la corteza real no sale el relieve real, para y tráemelo.» **No sale; la ronda se para.**
+
+- Informe completo: `docs/informes/2026-11-08_corteza_real_en_la_regla.md`.
+- Herramienta: `herramientas/analisis/tierra_corteza_regla.py`, con salida en `config/referencias/tierra_corteza.toml`.
+
+**Cómo se mide.**
+- CRUST1.0 (Laske et al. 2013): `h` son las tres capas cristalinas y `s` los tres sedimentos. Se interpola bilinealmente de 1° a las celdas de nivel 3 (~26 km), solo entre celdas de tipo continental en las continentales.
+- Continental es lo que no tiene edad de Seton (como §46). El fondo oceánico va con la curva adoptada y GlobSed (§46).
+- Regla: `isostasia::altura`, con `ρ_c` 2 800, `ρ_m` 3 300, `ρ_s` 2 400 y `h_nivel` 32 km; nivel del mar con `gel_m`.
+- Se mide como `referencia_tierra.py`. La pendiente y la plataforma se comparan también con ETOPO a 1°.
+
+| | Tierra | Tierra a 1° | Regla, océano real | **Regla** | Planeta (rama A) |
+|---|---|---|---|---|---|
+| Nivel del mar (m) | 0 | 0 | −84 | **−221** | −98 |
+| Tierra emergida | 0,284 | 0,282 | 0,313 | **0,323** | 0,333 |
+| Altura media de la tierra (m) | 671 | 658 | 1 293 | **1 389** | 1 136 |
+| < 200 m | 0,283 | 0,268 | 0,065 | **0,047** | 0,081 |
+| > 2 000 m | 0,053 | 0,046 | 0,167 | **0,197** | 0,150 |
+| Pendiente (±25 km) | 0,0052 | 0,0029 | 0,0046 | **0,0048** | 0,0153 |
+| Plataforma (km) | 42,8 | 53,5 | 19,6 | **17,4** | 8,8 |
+
+**Lo que sale.**
+1. **La regla no da el relieve real con la corteza real:** la tierra sale al doble de altura, con ×3,7 de tierra por encima de 2 km y 1/6 de la tierra baja. Sale más alta que la del propio planeta.
+2. **No lo arreglan:**
+   - las densidades de cada capa de CRUST1.0 (1 393 m): su corteza en tierra tiene 2 816 kg/m³;
+   - quitar el sedimento o contarlo como corteza (~1 350 m, 15,6 % por encima de 2 km);
+   - mover el cero: con `h_nivel` 47 km se hunden los márgenes y la tierra se queda en el 10 % del planeta.
+3. **La pendiente de la regla es el doble de la real.**
+   - Regla: 152 m por km de corteza y 273 m por km de sedimento.
+   - Rectas de la altura real en la tierra: `−2 095 + 74·h − 21·s` (r² 0,39). Con un término por tipo de corteza: `−1 985 + 65·h − 17·s`, más +107 (Fanerozoico), +765 (orógenos), +467 (arcos), +611 (rifts y corteza estirada) y +241 (márgenes), respecto a escudos y plataformas (r² 0,53).
+4. **Por tipo de corteza (real − regla):**
+   - escudos y plataformas, −981 m (el 61 % de la tierra);
+   - Fanerozoico, −643; orógenos, −669; arcos, +19; rifts y corteza estirada, +263.
+   - Por sedimento: de −470 m (menos de 0,5 km) a −1 580 m (4–8 km).
+   - Es el patrón de la isostasia térmica (Lachenbruch y Morgan 1990; Hasterok y Chapman 2007) y de la subsidencia de las cuencas (McKenzie 1978).
+5. **El grosor de la litosfera de LITHO1.0 explica poco:** −2,3 m por km de manto litosférico (r² de 0,39 a 0,44).
+   - Bajo 50 km, el residuo es la mitad (−434 m, frente a −900/−1 000).
+   - Más allá, no ordena: la depleción del manto de los escudos compensa su frío (Jordan 1978).
+6. **La plataforma real emerge.** Con la regla, el 69 % de la plataforma real (28,8 km de corteza, 2,5 de sedimento) queda en tierra: el sedimento levanta la columna.
+7. **Lo más que arreglaría un término por tipo** (la regla más el residuo medio de su tipo):
+   - la tierra por encima de 2 km pasaría al 7,2 % y la altura media a 904 m;
+   - la tierra baja se quedaría en el 13,9 %, frente al 28,3 %.
+8. **La corteza del planeta en tierra frente a CRUST1.0:**
+   - la mediana es la misma (37,7 y 37,3 km);
+   - pero tiene más de 45 km en el 20,0 % (9,1 %) y más de 50 en el 10,1 % (3,7 %);
+   - sedimento, 0,45 km (1,24); corteza continental sumergida, el 3,5 % del planeta (9,2 %).
+
+**Consecuencia.** El exceso de relieve del planeta viene sobre todo de la regla, que es la base, y en segundo lugar de la cola gruesa de su corteza. Bajar el relieve con la erosión o el engrosamiento sería forzar parámetros contra una base irreal (CLAUDE §2.8).
+
+## 68. Pendientes (2026-11-08, segunda ronda; decide el responsable)
+
+1. **La base de la isostasia continental** (§67; opciones en el §6 del informe):
+   - **recomendada:** isostasia térmica de la litosfera continental según su edad termotectónica, con su curva calibrada con CRUST1.0 y ETOPO por tipo, y el flujo de calor si hace falta. Después, revisar `h_nivel`, `E_1` y el nivel del mar;
+   - corteza inferior que se densifica al engrosarse (orógenos);
+   - como apaño provisional, la relación medida;
+   - o seguir con la regla actual.
+2. **En espera, sin empezar:**
+   - la nota de demografía de placas v2: fuera A1; A2 y las placas fantasma se quedan; rama D, con `d_dc` 300 km, y D6;
+   - la nota de rifts v2: reloj por bloque, `τ_ais` 100 Myr; `λ_A` y `τ_ais` con las placas de ≥ 1 % y la duración de los supercontinentes;
+   - el tiempo del planeta (298 s con la rama A; presupuesto 275);
+   - la tabla de cierre con 5 semillas.
+   - La rama D y los rifts no dependen de la isostasia.
+3. Lo que sigue de §65.

@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-08 — relieve tectónico (incremento 4 del terreno): adenda v9 y nota de rifts en `main`; sigue la nota de demografía de placas (exceso de fosas)
+Última actualización: 2026-11-08 (segunda ronda) — relieve tectónico (incremento 4 del terreno): la corteza real (CRUST1.0) en la regla del modelo no da el relieve real; la ronda se para y decide el responsable (la nota de demografía de placas v2 y la de rifts v2 esperan)
 
 ---
 
@@ -32,6 +32,7 @@ abm/
 │   │   ├── [x] tierra_relieve.toml # Tablas de la Tierra (ETOPO 2022, Paxman 2022, Seton 2020, Bird 2003) a las resoluciones del planeta
 │   │   ├── [x] tierra_bordes.toml  # Bordes de placa de Bird (2003) medidos en la malla tectónica como los del modelo (+ convergencia de las fosas)
 │   │   ├── [x] tierra_nivel_mar.toml # La Tierra real con la regla del modelo: nivel del mar, zócalo por edad y curvas de placa ajustadas; escalones de edad (zonas de fractura)
+│   │   ├── [x] tierra_corteza.toml # La corteza real (CRUST1.0) con la isostasia del modelo: relieve, por grosor y por tipo de corteza, residuo frente a LITHO1.0
 │   │   └── [x] tierra_lluvia.toml  # Lluvia observada (WorldClim, CHELSA) a 26 km con las definiciones del planeta
 │   └── experiments/
 │       └── [x] terreno_relieve_ruido.toml # Relieve de ruido: referencia de la no regresión mientras se mide (se borra con el interruptor)
@@ -131,6 +132,7 @@ abm/
 │       ├── [x] h5mini.py          # Lector mínimo de HDF5 por peticiones parciales (rejillas de Paxman et al.)
 │       ├── [x] bordes_bird.py     # Bordes de Bird (2003) en la malla tectónica, medidos y clasificados como el modelo; convergencia de SUB, OCB y CCB
 │       ├── [x] tierra_regla_modelo.py # La Tierra real (Seton, GlobSed) con la curva de profundidad y la isostasia del modelo: nivel del mar y zonas de fractura
+│       ├── [x] tierra_corteza_regla.py # La corteza real (CRUST1.0, LITHO1.0) con la isostasia continental del modelo: relieve frente a ETOPO y corteza del planeta
 │       ├── [x] lluvia_observada.py # Lluvia observada de la Tierra a 26 km, frente a la del planeta
 │       └── [x] tiffmini.py        # Lector mínimo de GeoTIFF (tiras, Deflate) también por peticiones parciales
 │
@@ -147,7 +149,8 @@ abm/
 │
 ├── docs/
 │   ├── informes/                  # Un informe por ronda de medida, con sus tablas
-│   │   └── [x] 2026-11-08_demografia_placas.md # Diagnóstico de la demografía de placas (D1–D5), rama A y tabla de cierre con el relieve
+│   │   ├── [x] 2026-11-08_demografia_placas.md # Diagnóstico de la demografía de placas (D1–D5), rama A y tabla de cierre con el relieve
+│   │   └── [x] 2026-11-08_corteza_real_en_la_regla.md # La corteza real en la isostasia del modelo: no da el relieve real (la ronda se para)
 │   └── design/                    # Modelos matemáticos y ecuaciones (precede al código)
 │       ├── inicial/               # Una carpeta por fase (ver CLAUDE §8.1)
 │       │   ├── [x] README.md          # Explicación llana de la fase + consideraciones
@@ -265,6 +268,10 @@ metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
 **Pendiente (fases siguientes):**
 - **Pendientes obligatorios de realismo** (CLAUDE §2.8; responsable, 2026-11-05), en orden:
   - **relieve tectónico, lo que falta para que sea el de la Tierra** (hallazgos de `incremento-4-diseno.md` §6–§7):
+    0. **la isostasia continental** (decide el responsable; `incremento-4-diseno.md` §67–§68, `tierra_corteza_regla.py`).
+       - Con la corteza real de CRUST1.0, la regla del modelo pone la tierra al doble de altura: 1 389 m, frente a 671. Tiene el 19,7 % por encima de 2 km (5,3 %) y el 4,7 % por debajo de 200 m (28,3 %).
+       - Falta el manto litosférico: la isostasia térmica según la edad termotectónica, y la subsidencia de las cuencas y de los márgenes.
+       - Mientras no se arregle, el relieve, la erosión y el sedimento al mar del planeta se calibran sobre una base irreal;
     1. ~~adenda de balance~~ y ~~nota de bordes~~ hechas. **Siguen:** las fuerzas de las placas (las fosas miden 2 veces las de la Tierra con cualquier `L_borde` de 100–300 km; nota de bordes §11.2); la exportación al mar (3,1 AU, ≈1,8): no depende de `τ_ero`; falta la delaminación (0,05 AU, ≈1,1): ¿raíces de los arcos o erosión no lineal? (decide el responsable); rifts que estiren conservando (`F_rift` provisional); los 3 pasos de 500 que pasan la alarma de 80 km; después, calibrar `τ_del` y revisar `f_acr`;
     2. inicio de subducción en márgenes pasivos viejos (hoy sobrevive un 15 % de fondo de más de 200 Myr);
     3. **mecanismo pendiente: mesetas oceánicas, montes submarinos y puntos calientes**, unos 150 m de nivel del mar en la Tierra real.

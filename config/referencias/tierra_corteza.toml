@@ -1,0 +1,317 @@
+# La Tierra real con la regla del modelo, para los continentes: relieve y grosor de la corteza.
+# Generado por herramientas/analisis/tierra_corteza_regla.py: corteza y sedimento de CRUST1.0
+# (Laske et al. 2013, igppweb.ucsd.edu/~gabi/crust1.html), edades de Seton et al. (2020),
+# sedimento oceánico de GlobSed (Straume et al. 2019) y la roca sin hielo con su rebote de ETOPO 2022
+# y Paxman et al. (2022), en celdas de nivel 3 (~26 km), con la regla de config/terreno.toml.
+# "tierra": la roca real; "tierra_1grado": la misma a la resolución de CRUST1.0; "regla": toda la
+# Tierra con la isostasia y el nivel del mar del modelo; "regla_continentes": solo los continentes.
+
+[relieve.tierra]
+nivel_mar_m = 0
+tierra_frac = 0.28366
+altura_media_tierra_m = 670.604
+altura_mediana_tierra_m = 403.899
+tierra_bajo_200_frac = 0.282638
+tierra_sobre_2000_frac = 0.0531289
+hipsometria_frac = [0.282638, 0.296174, 0.208413, 0.159646, 0.0255136, 0.0231407, 0.00447456]
+pendiente_media_tierra = 0.00522728
+plataforma_km = 42.772
+profundidad_media_oceano_m = 3667.29
+
+[relieve.tierra_1grado]
+nivel_mar_m = 0
+tierra_frac = 0.281562
+altura_media_tierra_m = 657.734
+altura_mediana_tierra_m = 408.683
+tierra_bajo_200_frac = 0.26835
+tierra_sobre_2000_frac = 0.0461583
+hipsometria_frac = [0.26835, 0.30922, 0.21522, 0.161052, 0.0210586, 0.0215204, 0.00357937]
+pendiente_media_tierra = 0.00287389
+plataforma_km = 53.4822
+profundidad_media_oceano_m = 3650.3
+
+[relieve.regla_continentes]
+nivel_mar_m = -84.0265
+tierra_frac = 0.313187
+altura_media_tierra_m = 1292.86
+altura_mediana_tierra_m = 1159.82
+tierra_bajo_200_frac = 0.0645442
+tierra_sobre_2000_frac = 0.167347
+hipsometria_frac = [0.0645442, 0.116211, 0.243731, 0.408166, 0.131076, 0.0252778, 0.0109939]
+pendiente_media_tierra = 0.0045508
+plataforma_km = 19.5708
+profundidad_media_oceano_m = 3810.35
+
+[relieve.regla]
+nivel_mar_m = -220.916
+tierra_frac = 0.322739
+altura_media_tierra_m = 1388.99
+altura_mediana_tierra_m = 1279.51
+tierra_bajo_200_frac = 0.0467828
+tierra_sobre_2000_frac = 0.197261
+hipsometria_frac = [0.0467828, 0.105091, 0.228355, 0.422511, 0.155794, 0.0298773, 0.0115894]
+pendiente_media_tierra = 0.00477392
+plataforma_km = 17.3666
+profundidad_media_oceano_m = 3864.09
+
+[relieve.regla_densidades_crust1]
+nivel_mar_m = -303.217
+tierra_frac = 0.305429
+altura_media_tierra_m = 1393.42
+altura_mediana_tierra_m = 1225.93
+tierra_bajo_200_frac = 0.0416806
+tierra_sobre_2000_frac = 0.191659
+hipsometria_frac = [0.0416806, 0.0943039, 0.248674, 0.423682, 0.141748, 0.034632, 0.015279]
+pendiente_media_tierra = 0.00530901
+plataforma_km = 13.1935
+profundidad_media_oceano_m = 3767.79
+
+[relieve.regla_mesetas]
+nivel_mar_m = -142.071
+tierra_frac = 0.317992
+altura_media_tierra_m = 1332.34
+altura_mediana_tierra_m = 1206.85
+tierra_bajo_200_frac = 0.0561797
+tierra_sobre_2000_frac = 0.17932
+hipsometria_frac = [0.0561797, 0.11285, 0.239658, 0.411992, 0.141258, 0.0268426, 0.0112195]
+pendiente_media_tierra = 0.00459556
+plataforma_km = 18.2489
+profundidad_media_oceano_m = 3837.2
+
+[relieve.regla_sin_sedimento]
+nivel_mar_m = -376.975
+tierra_frac = 0.280646
+altura_media_tierra_m = 1349.74
+altura_mediana_tierra_m = 1209.83
+tierra_bajo_200_frac = 0.0451921
+tierra_sobre_2000_frac = 0.156414
+hipsometria_frac = [0.0451921, 0.0852432, 0.230467, 0.482684, 0.114648, 0.0281647, 0.0136012]
+pendiente_media_tierra = 0.00506032
+plataforma_km = 16.1964
+profundidad_media_oceano_m = 3637.99
+
+[relieve.regla_sedimento_como_corteza]
+nivel_mar_m = -276.895
+tierra_frac = 0.302114
+altura_media_tierra_m = 1348.2
+altura_mediana_tierra_m = 1251.09
+tierra_bajo_200_frac = 0.0481195
+tierra_sobre_2000_frac = 0.157374
+hipsometria_frac = [0.0481195, 0.0976928, 0.216759, 0.480055, 0.11888, 0.0260596, 0.0124345]
+pendiente_media_tierra = 0.00438455
+plataforma_km = 21.4791
+profundidad_media_oceano_m = 3749.9
+
+[relieve.regla_cero_movido]
+nivel_mar_m = -1110.1
+tierra_frac = 0.0976344
+altura_media_tierra_m = 928.436
+altura_mediana_tierra_m = 665.966
+tierra_bajo_200_frac = 0.176449
+tierra_sobre_2000_frac = 0.0930046
+hipsometria_frac = [0.176449, 0.230256, 0.254959, 0.245331, 0.0405688, 0.0471726, 0.00526332]
+pendiente_media_tierra = 0.0062371
+plataforma_km = 28.4031
+profundidad_media_oceano_m = 2900.15
+h_nivel_km = 46.9995
+
+[relieve.regla_mas_desvio_por_tipo]
+nivel_mar_m = -243.895
+tierra_frac = 0.275582
+altura_media_tierra_m = 903.655
+altura_mediana_tierra_m = 715.521
+tierra_bajo_200_frac = 0.139167
+tierra_sobre_2000_frac = 0.0717041
+hipsometria_frac = [0.139167, 0.216677, 0.319423, 0.253029, 0.0428416, 0.0204446, 0.00841786]
+pendiente_media_tierra = 0.00603846
+plataforma_km = 19.2726
+profundidad_media_oceano_m = 3612.56
+
+[relieve.recta_real_por_tipo]
+nivel_mar_m = 162.851
+tierra_frac = 0.283319
+altura_media_tierra_m = 562.529
+altura_mediana_tierra_m = 397.758
+tierra_bajo_200_frac = 0.211054
+tierra_sobre_2000_frac = 0.0289624
+hipsometria_frac = [0.211054, 0.404457, 0.236891, 0.118636, 0.0208225, 0.00813992, 0]
+pendiente_media_tierra = 0.00298903
+plataforma_km = 37.7481
+profundidad_media_oceano_m = 3651.56
+
+[corteza_crust1.continental]
+area_frac_planeta = 0.425731
+h_media_km = 32.5724
+h_p10_p25_p50_p75_p90_km = [17.8699, 27.4245, 34.5412, 38.8994, 42.8128]
+h_mas_de_km = [40, 45, 50, 60, 70]
+h_mas_de_frac = [0.192984, 0.0610495, 0.0247648, 0.010816, 0.00299006]
+s_media_km = 1.60855
+h_mas_s_media_km = 34.181
+
+[corteza_crust1.tierra]
+area_frac_planeta = 0.283247
+h_media_km = 37.7752
+h_p10_p25_p50_p75_p90_km = [30.6155, 34.057, 37.2801, 40.5815, 44.579]
+h_mas_de_km = [40, 45, 50, 60, 70]
+h_mas_de_frac = [0.285898, 0.0907164, 0.0370452, 0.0162568, 0.00449417]
+s_media_km = 1.24155
+h_mas_s_media_km = 39.0168
+
+[corteza_crust1.bajo_el_mar]
+area_frac_planeta = 0.142483
+h_media_km = 22.2296
+h_p10_p25_p50_p75_p90_km = [8.3416, 15.7475, 23.84, 28.4747, 32.2171]
+h_mas_de_km = [40, 45, 50, 60, 70]
+h_mas_de_frac = [0.00827591, 0.00207355, 0.000352292, 0, 0]
+s_media_km = 2.33812
+h_mas_s_media_km = 24.5677
+
+[corteza_crust1.bajo_el_mar_tipo_continental]
+area_frac_planeta = 0.0920835
+h_media_km = 26.1555
+h_p10_p25_p50_p75_p90_km = [17.7208, 22.4384, 26.9032, 29.89, 33.7966]
+h_mas_de_km = [40, 45, 50, 60, 70]
+h_mas_de_frac = [0.0122842, 0.00315837, 0.000545111, 0, 0]
+s_media_km = 2.49198
+h_mas_s_media_km = 28.6475
+
+[corteza_crust1.densidades]
+rho_corteza_tierra_kg_m3 = 2815.79
+rho_sedimento_tierra_kg_m3 = 2309.34
+
+[corteza_crust1.nivel_del_mar]
+h_tierra_de_menos100_a_100m_p10_p25_p50_p75_p90_km = [24.4561, 27.9097, 31.0085, 35.5305, 38.9527]
+recta_altura_real_m_por_km = 75.4571
+recta_r2 = 0.391464
+
+[altura_por_grosor]
+desde_km = [0, 10, 20, 25, 30, 32.5, 35, 37.5, 40, 42.5, 45, 47.5, 50, 55, 60, 65, 70]
+area_frac = [0.000192215, 0.0104752, 0.034936, 0.120372, 0.0937737, 0.132487, 0.187688, 0.173371, 0.107743, 0.0607714, 0.0304871, 0.0159784, 0.0122981, 0.00557125, 0.00478132, 0.00524427, 0.00383048]
+altura_media_real_m = [-44.7431, 29.0333, 33.4251, 95.8443, 263.333, 465.563, 536.379, 535.878, 566.547, 755.902, 969.121, 1289.64, 2358.26, 3538.1, 4130.06, 4663.19, 4869.09]
+altura_media_regla_m = [-4141.54, -1247.07, -221.25, 217.456, 581.434, 871.169, 1199.38, 1524.94, 1855.83, 2188.65, 2511.24, 2871.98, 3396.75, 4223.65, 4942.74, 5665.81, 6318.7]
+altura_media_regla_densidades_crust1_m = [-4025.95, -1381.24, -363.618, 60.1341, 502.029, 866.208, 1096.68, 1355.21, 1680.16, 2046.7, 2480.36, 2909.69, 3635.59, 4556.65, 5423.21, 6263.7, 7030.71]
+
+[plataforma_con_la_regla]
+area_plataforma_real_frac_planeta = 0.0490769
+con_la_regla_tierra_frac = 0.688576
+con_la_regla_plataforma_frac = 0.096919
+con_la_regla_mas_honda_frac = 0.214505
+plataforma_real_h_media_km = 28.811
+plataforma_real_s_media_km = 2.53083
+plataforma_real_altura_regla_media_m = 342.913
+sumergida_continental_altura_real_media_m = -500.773
+sumergida_continental_altura_regla_media_m = -200.542
+
+[residuo.por_manto_litosferico_litho1]
+desde = [0, 50, 100, 150, 200, 250]
+area_tierra_frac = [0.404708, 0.115536, 0.109679, 0.190457, 0.169486, 0.0101338]
+residuo_m = [-434.446, -902.111, -993.102, -962.272, -993.613, -974.466]
+h_media_km = [37.058, 40.4575, 38.1357, 37.2982, 37.9554, 37.8886]
+altura_real_m = [807.359, 938.551, 591.552, 484.924, 442.824, 353.622]
+manto_litosferico_km = [23.1505, 71.7698, 127.111, 177.663, 218.313, 257.448]
+
+[residuo.por_sedimento]
+desde = [0, 0.5, 1, 2, 4, 8]
+area_tierra_frac = [0.489568, 0.146575, 0.146954, 0.138851, 0.0695468, 0.00850544]
+residuo_m = [-469.691, -644.41, -920.406, -1174.72, -1579.77, -2102.85]
+h_media_km = [39.375, 37.2403, 37.1699, 35.9997, 33.7607, 27.1788]
+altura_real_m = [898.961, 540.573, 460.549, 419.415, 355.171, 129.533]
+manto_litosferico_km = [103.799, 99.1248, 99.5274, 109.913, 124.316, 137.619]
+
+[residuo.rectas]
+altura_h_s_m = [-2094.91, 73.9008, -20.6627]
+r2_h_s = 0.393217
+altura_h_s_l_m = [-1925.99, 75.3739, -10.8882, -2.25327]
+r2_h_s_l = 0.442307
+manto_litosferico_medio_km = 105.05
+altura_h_s_grupos_m = [-1984.72, 65.4209, -16.9946, 107.373, 764.89, 467.486, 611.418, 241.498, 687.661, 370.719]
+r2_h_s_grupos = 0.527647
+grupos = ["escudos y plataformas (Arcaico y Proterozoico)", "Fanerozoico", "orógenos", "arcos y antearcos", "corteza estirada y rifts", "plataformas, taludes y márgenes", "mesetas y cuencas intermedias", "tipo oceánico sin edad de Seton"]
+
+[por_tipo."escudos y plataformas (Arcaico y Proterozoico)"]
+area_tierra_frac = 0.614297
+h_media_km = 37.6542
+s_media_km = 1.33296
+rho_corteza_media = 2825.47
+altura_real_m = 456.006
+altura_regla_m = 1436.68
+altura_regla_densidades_m = 1245.19
+sobre_2000_real_frac = 0.00470036
+sobre_2000_regla_frac = 0.182657
+
+[por_tipo."Fanerozoico"]
+area_tierra_frac = 0.0761702
+h_media_km = 35.5793
+s_media_km = 1.1567
+rho_corteza_media = 2790.41
+altura_real_m = 430.629
+altura_regla_m = 1073.68
+altura_regla_densidades_m = 1302.41
+sobre_2000_real_frac = 0.0017604
+sobre_2000_regla_frac = 0.0755065
+
+[por_tipo."orógenos"]
+area_tierra_frac = 0.165513
+h_media_km = 44.2243
+s_media_km = 0.940021
+rho_corteza_media = 2795.13
+altura_real_m = 1657.4
+altura_regla_m = 2326.4
+altura_regla_densidades_m = 2516.89
+sobre_2000_real_frac = 0.259704
+sobre_2000_regla_frac = 0.552697
+
+[por_tipo."arcos y antearcos"]
+area_tierra_frac = 0.0521814
+h_media_km = 32.6684
+s_media_km = 1.18357
+rho_corteza_media = 2781.6
+altura_real_m = 599.852
+altura_regla_m = 580.875
+altura_regla_densidades_m = 955.741
+sobre_2000_real_frac = 0.054064
+sobre_2000_regla_frac = 0.0596441
+
+[por_tipo."corteza estirada y rifts"]
+area_tierra_frac = 0.0634843
+h_media_km = 32.2843
+s_media_km = 0.929533
+rho_corteza_media = 2817.34
+altura_real_m = 722.975
+altura_regla_m = 459.689
+altura_regla_densidades_m = 362.799
+sobre_2000_real_frac = 0.062154
+sobre_2000_regla_frac = 0.0219467
+
+[por_tipo."plataformas, taludes y márgenes"]
+area_tierra_frac = 0.0259088
+h_media_km = 30.7921
+s_media_km = 1.55404
+rho_corteza_media = 2858.67
+altura_real_m = 244.817
+altura_regla_m = 383.463
+altura_regla_densidades_m = -46.9731
+sobre_2000_real_frac = 0.0160345
+sobre_2000_regla_frac = 0.0285844
+
+[por_tipo."mesetas y cuencas intermedias"]
+area_tierra_frac = 0.00135561
+h_media_km = 24.0081
+s_media_km = 12.2792
+rho_corteza_media = 2877.15
+altura_real_m = 64.9005
+altura_regla_m = 2346.3
+altura_regla_densidades_m = 1481.34
+sobre_2000_real_frac = 0
+sobre_2000_regla_frac = 0.784529
+
+[por_tipo."tipo oceánico sin edad de Seton"]
+area_tierra_frac = 0.00108948
+h_media_km = 27.5186
+s_media_km = 1.24044
+rho_corteza_media = 2825.14
+altura_real_m = 165.216
+altura_regla_m = -378.171
+altura_regla_densidades_m = -360.038
+sobre_2000_real_frac = 0
+sobre_2000_regla_frac = 0.0286195

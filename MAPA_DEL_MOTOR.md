@@ -7,7 +7,7 @@
 > Complementa a `TREE.md` (qué archivos hay) y a los documentos de `docs/design/` (el porqué de cada
 > regla). Se actualiza en cada ronda que añade, quita o reordena una regla.
 
-Última actualización: 2026-11-08 — nota de demografía de placas: la rama A (soldadura de placas y captura de microplacas) está en la rama `terreno-demografia-placas`, sin fusionar con `main`. En `main`, la etapa 12 tiene la absorción de toda placa de menos de `A_min` sin losa en lugar de la soldadura y la captura.
+Última actualización: 2026-11-08 (segunda ronda) — la Tierra real en la regla del modelo, para los continentes: con la corteza real (CRUST1.0), la isostasia continental no da el relieve real (informe `docs/informes/2026-11-08_corteza_real_en_la_regla.md`). Ningún cambio en el motor; la ronda está parada hasta que decida el responsable. Sigue igual lo de la ronda anterior: la rama A (soldadura de placas y captura de microplacas) está en la rama `terreno-demografia-placas`, sin fusionar con `main`; en `main`, la etapa 12 tiene la absorción de toda placa de menos de `A_min` sin losa en lugar de la soldadura y la captura.
 
 Leyenda del estado de un parámetro (CLAUDE §2.8):
 - **medido**: lleva su valor físico real;
@@ -88,6 +88,7 @@ conservan exactamente: la deriva nunca copia corteza.
 |---|---|---|
 | Planeta y agua | `gel_m` 2 617 m, `f_cont` 0,40 al empezar | medido; supuesto |
 | Isostasia y fondo | densidades; curva de profundidad (`d_inf` 5 310, `a_pl` 2 373, `τ_pl` 31) | medido; ajustado al zócalo real (Seton, GlobSed) |
+| Isostasia continental | `h_nivel` 32 km (corteza a nivel del mar), con `ρ_c`, `ρ_s` y `ρ_m` | supuesto (relación empírica). **Con la corteza real de CRUST1.0 no da el relieve real**: la tierra sale al doble de altura y con ×3,7 de tierra por encima de 2 km. Falta el manto litosférico (la isostasia térmica según la edad termotectónica); ver el informe de la segunda ronda del 2026-11-08 |
 | Fuerzas | `f_sp`, `f_rp`; `c_col` 90 000; `v_obj` 4,39 cm/año | supuesto; calibrado (India–Asia); medido (NNR-MORVEL56) |
 | Bordes | `θ_tr` 20°; `L_borde` 150 km | medido (Bird); calibrado (longitudes de Bird) |
 | Fosas | `X_ini` 150 km; `τ_muerte` 10; `λ_esp` 4·10⁻⁶; `v_inv` 25 km/Myr; `a_inv` 60; `t_rot` 10–25 Myr | supuesto (rango de modelos); supuesto; calibrado (vida de los márgenes) |
@@ -135,12 +136,13 @@ Rebrote, orden, forrajeo, reproducción, mortalidad y aplicación de cambios
 ## 5. Dónde está cada cosa
 
 - **Parámetros:** `config/*.toml`; los experimentos, con `--set`.
-- **La Tierra para comparar:** `config/referencias/`: relieve (ETOPO, Paxman), bordes de Bird medidos en la malla, nivel del mar con la regla del modelo y lluvia.
+- **La Tierra para comparar:** `config/referencias/`: relieve (ETOPO, Paxman), bordes de Bird medidos en la malla, nivel del mar con la regla del modelo, la corteza real (CRUST1.0) con la regla del modelo y lluvia.
 - **Medir y verificar:** `herramientas/`:
   - `verificar.sh` (CLAUDE §10);
   - `escenarios.py` (batería);
   - `no_regresion.sh`;
   - `planeta_semillas.py` (tabla de cierre con 5 semillas);
+  - `analisis/tierra_regla_modelo.py` y `analisis/tierra_corteza_regla.py` (la Tierra real con la regla del modelo: el océano y los continentes);
   - `analisis/`.
 - **Diagnósticos de la tectónica:** las pruebas `#[ignore]` de `crates/abm-terreno/tests/tectonica.rs`:
   - `deriva_en_varias_semillas`;
@@ -158,5 +160,6 @@ Rebrote, orden, forrajeo, reproducción, mortalidad y aplicación de cambios
 - **Agentes:** incremento 1 y revisión 1 hechos; siguen las cohortes y los individuos persistentes.
 - **Terreno:** incrementos 1–3 cerrados.
   - El 4 (relieve tectónico) está en medida: antes de congelarlo se arregla el exceso de fosas (nota de demografía de placas).
+  - **La base de la isostasia continental falla con la corteza real** (segunda ronda del 2026-11-08). La ronda se paró y decide el responsable. Esperan la nota de demografía v2 (rama D) y la de rifts v2.
   - Lejos de la Tierra quedan la longitud de fosa y el fondo que se hunde, el relieve demasiado alto, el sedimento al mar, la pérdida en los choques y los márgenes pasivos del estado inicial.
   - Ver `docs/design/terreno/incremento-4-diseno.md` §65 y el informe de la ronda en `docs/informes/`.
