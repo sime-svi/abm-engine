@@ -376,6 +376,7 @@ impl Deriva {
                         c.sumar_hc(dh, 0.0, Origen::NUEVA, rs, rc, h_cont_min, via::INTRAPLACA);
                         c.edad_tt = 0.0;
                         c.beta = 1.0;
+                        c.causa_tt = reinicio::ERUPCION;
                         paso.cfb_km3 += dh * a;
                         reinicio += a;
                     } else {

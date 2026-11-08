@@ -41,7 +41,7 @@ CERRADO_KM = 300.0
 ACTIVO_FRAC = 0.25
 DESTINOS = ['sigue pasivo', 'activo por invasión (fosa o difusa cerca)', 'activo por choque',
             'ya no es margen, sin borde convergente cerca', 'su muestra ya no está']
-FUERZAS = ['tirón de la losa', 'empuje (dorsales y resto)', 'choques', 'arrastre basal']
+FUERZAS = ['tirón de la losa', 'empuje (dorsales y resto)', 'choques', 'arrastre basal', 'succión de las losas']
 
 
 def leer(directorio, semilla):
@@ -147,23 +147,24 @@ def analizar(t, lado_km):
         r[f'margen_rift_{c}_frac'] = sum(m['causa'] == c for m in fin) / len(fin) if fin else 0.0
     r['vida_margen_rift_myr'] = media([m['fin_myr'] - m['rotura_myr'] for m in fin])
     # 5. Fuerzas de las placas con continente y continentes hacia las fosas.
-    pot = [0.0] * 4
-    pot_pos = [0.0] * 4
+    pot = [0.0] * 5
+    pot_pos = [0.0] * 5
     n_placas, con_tiron, v_cont = 0, 0, []
     hacia_placa = []
     for f in tras:
         for p in f['placas']:
             n_placas += 1
-            for i in range(4):
+            for i in range(len(p['potencias'])):
                 pot[i] += p['potencias'][i]
                 pot_pos[i] += max(p['potencias'][i], 0.0)
             if p['potencias'][0] > 0.0:
                 con_tiron += 1
             v_cont.append(p['v_cm_anio'])
             hacia_placa.append(p['v_hacia_fosa_cm_anio'])
-    motor = pot_pos[0] + pot_pos[1]
+    motor = pot_pos[0] + pot_pos[1] + pot_pos[4]
     r['potencia_tiron_frac'] = pot_pos[0] / motor if motor > 0 else 0.0
     r['potencia_empuje_frac'] = pot_pos[1] / motor if motor > 0 else 0.0
+    r['potencia_succion_frac'] = pot_pos[4] / motor if motor > 0 else 0.0
     freno = -(pot[2] + pot[3])
     r['freno_choques_frac'] = -pot[2] / freno if freno > 0 else 0.0
     r['freno_arrastre_frac'] = -pot[3] / freno if freno > 0 else 0.0
@@ -212,6 +213,7 @@ FILAS = [
     ('placas_cont_con_tiron_frac', 'Placas con continente que tienen losa propia (fracción)', '{:.2f}'),
     ('potencia_tiron_frac', 'Su motor: tirón de la losa (fracción de la potencia)', '{:.2f}'),
     ('potencia_empuje_frac', 'Su motor: empuje (fracción)', '{:.2f}'),
+    ('potencia_succion_frac', 'Su motor: succión de las losas (fracción)', '{:.2f}'),
     ('freno_arrastre_frac', 'Su freno: arrastre basal (fracción)', '{:.2f}'),
     ('freno_choques_frac', 'Su freno: choques (fracción)', '{:.2f}'),
     ('hacia_fosa_frac', 'Continente que se acerca a la fosa activa más cercana (fracción)', '{:.2f}'),

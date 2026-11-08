@@ -3028,8 +3028,14 @@ fn en_un_choque_se_pierde_la_corteza_fina_y_se_queda_la_gruesa() {
 fn la_losa_sigue_tirando_tras_el_choque_y_se_rompe_a_los_t_rot() {
     // Nota de fosas v4 §10, prueba 6: en el choque India–Asia, la losa del Tetis (fondo de 80 Myr)
     // sigue colgando y tirando bajo la India durante t_rot = 10 + 15·0,8 = 22 Myr desde el inicio
-    // del choque, y después se rompe y deja de tirar.
-    let cfg = cfg_india_asia();
+    // del choque, y después se rompe y deja de tirar. Sin la succión de las losas: aquí se mide la
+    // rotura de la losa; con la succión (ε_suc 0,05), la India llega por otro camino y el tramo que
+    // se rompe mezcla fondo de otra edad (rompe a los 25 Myr). Que la India no se acelere tras la
+    // rotura con la succión se comprueba en `dos_continentes_chocan_frenan_y_levantan_una_cordillera`.
+    let cfg = TectonicaCfg {
+        eps_suc: 0.0,
+        ..cfg_india_asia()
+    };
     let t_rot = cfg.t_rot_joven_myr + (cfg.t_rot_viejo_myr - cfg.t_rot_joven_myr) * 0.8;
     let mut d = choque_india_asia(&cfg, 1, 48);
     // La India y Asia, por su posición (sus índices pueden cambiar si se parte otra placa).
@@ -4161,6 +4167,8 @@ fn diagnosticar_demografia(semilla: u64, variante: &str) -> InformeDemografia {
         for i in 0..4 {
             pot[i] += x[i];
         }
+        // La succión de las losas (nota de succión) cuenta como motor, con el empuje.
+        pot[1] += x[4];
     }
     let motriz = pot[0] + pot[1];
     if motriz > 0.0 {
@@ -5128,4 +5136,166 @@ fn el_magmatismo_intraplaca_entra_en_el_balance_y_es_determinista() {
     };
     assert_eq!(ev(&a), ev(&b), "mismos puntos calientes y erupciones");
     assert_eq!(a.cuentas.intraplaca_km3, b.cuentas.intraplaca_km3);
+}
+
+#[test]
+#[ignore = "exploratoria: la India de India–Asia (antes del choque, con la losa colgando y tras romperse) con varios ε_suc (EPS=0,0.1,0.3,1)"]
+fn diagnostico_succion_india() {
+    let eps: Vec<f64> = std::env::var("EPS")
+        .unwrap_or_else(|_| "0,0.1,0.3,1".into())
+        .split(',')
+        .filter_map(|x| x.trim().parse().ok())
+        .collect();
+    let base = TectonicaCfg::default();
+    let t_rot = base.t_rot_joven_myr + (base.t_rot_viejo_myr - base.t_rot_joven_myr) * 0.8;
+    std::thread::scope(|sc| {
+        let hilos: Vec<_> = eps
+            .iter()
+            .map(|&e| {
+                sc.spawn(move || {
+                    let cfg = TectonicaCfg {
+                        eps_suc: e,
+                        ..cfg_india_asia()
+                    };
+                    let r = india_asia_con(&cfg, 1, 24, 50);
+                    let antes = r
+                        .iter()
+                        .take(6)
+                        .map(|x| x.0)
+                        .fold(f64::NEG_INFINITY, f64::max);
+                    let i_choque = r.iter().position(|x| x.1 > 0.0).unwrap_or(0);
+                    let i_rotura = (i_choque + t_rot.round() as usize).min(r.len() - 5);
+                    let media = |v: &[(f64, f64, f64)]| {
+                        v.iter().map(|x| x.0).sum::<f64>() / v.len().max(1) as f64
+                    };
+                    let durante = media(&r[(i_choque + 4).min(i_rotura)..i_rotura]);
+                    let despues = media(&r[i_rotura + 4..]);
+                    (e, antes, durante, despues)
+                })
+            })
+            .collect();
+        for h in hilos {
+            let (e, a, d, p) = h.join().expect("hilo");
+            println!(
+                "ε_suc {e}: antes {a:.1}, con la losa colgando {d:.1}, tras romperse {p:.1} cm/año (cocientes {:.2} y {:.2})",
+                d / a,
+                p / a
+            );
+        }
+    });
+}
+
+// --- Succión de las losas y soldadura (nota_succion_losas.md §10) ----------------------------------
+
+#[test]
+fn una_fosa_con_losa_profunda_arrastra_a_la_placa_de_arriba_hacia_ella() {
+    // §10, prueba 1: con la losa del Tetis ya en el manto inferior (3·L_losa), la succión empuja a
+    // Asia, la placa de arriba, hacia su fosa: la fosa retrocede. Sin succión, mucho menos.
+    let retroceso = |eps: f64| {
+        let cfg = TectonicaCfg {
+            eps_suc: eps,
+            ..cfg_india_asia()
+        };
+        let mut d = choque_india_asia(&cfg, 1, 48);
+        let l = 3.0 * d.cfg.l_losa_km;
+        d.activar_fosas(l);
+        d.dar_paso();
+        let m = d.metricas.last().expect("métrica");
+        (m.fosa_retroceso_cm_anio, m.fosa_retrocede_frac)
+    };
+    let (sin, _) = retroceso(0.0);
+    let (con, frac) = retroceso(1.0);
+    assert!(
+        con > sin + 0.3 && frac > 0.5,
+        "la placa de arriba va hacia su fosa: retroceso {con:.2} cm/año ({frac:.2} de la fosa) con succión, {sin:.2} sin ella"
+    );
+}
+
+#[test]
+fn un_resto_de_losa_atrae_a_las_placas_cercanas_hasta_que_toca_fondo() {
+    // §10, prueba 2: sin fosa, un resto de losa junto al borde entre dos placas tira de la base de
+    // la placa de al lado mientras baja (t_s < τ_hund) y después deja de tirar.
+    let cfg = TectonicaCfg {
+        n_hs: 0,
+        ..TectonicaCfg::default()
+    };
+    let malla = Malla::new(48, 1, 6371.0);
+    let dirs = malla.dir.clone();
+    let mut d = Deriva::desde(&cfg, 3, malla, 0.0, &[1, 2], |k| {
+        if dirs[k][0] > 0.0 {
+            (0, corteza(false, 7.0, 80.0))
+        } else {
+            (1, corteza(false, 7.0, 80.0))
+        }
+    });
+    // Un resto de ~1 000 km a lo largo del borde, 300 km dentro de la placa 1.
+    let th: f64 = 300.0 / 6371.0;
+    let puntos: Vec<([f64; 3], f64, f64)> = (-10..=10)
+        .map(|i| {
+            let z = (i as f64 * 50.0 / 6371.0).sin();
+            let x = -th.sin() * (1.0 - z * z).sqrt();
+            let y = th.cos() * (1.0 - z * z).sqrt();
+            ([x, y, z], 1.0, 50.0)
+        })
+        .collect();
+    d.poner_resto_de_losa(puntos);
+    let par = d.pares_de_succion();
+    let modulo = |v: [f64; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    assert!(modulo(par[0]) > 0.0, "tira de la placa de al lado");
+    for _ in 0..183 {
+        d.envejecer_restos();
+    }
+    assert_eq!(d.restos.len(), 1, "a los 183 Myr aún tira");
+    d.envejecer_restos();
+    assert!(d.restos.is_empty(), "a los τ_hund (~183 Myr) ya no");
+    let par = d.pares_de_succion();
+    assert_eq!(modulo(par[0]) + modulo(par[1]), 0.0, "ya no tira");
+}
+
+#[test]
+fn un_choque_agotado_suelda_sus_placas_y_lo_conserva_todo() {
+    // §10, prueba 3: dos continentes en contacto que convergen a 0,2 cm/año (menos que v_sold), sin
+    // losa entre ellos: a los τ_sold se sueldan en una placa, sin perder corteza. A 3 cm/año, no.
+    let soldar = |v_cm_anio: f64| {
+        let cfg = TectonicaCfg {
+            n_hs: 0,
+            eps_suc: 0.0,
+            ..TectonicaCfg::default()
+        };
+        let malla = Malla::new(48, 1, 6371.0);
+        let dirs = malla.dir.clone();
+        let mut d = Deriva::desde(&cfg, 3, malla, 0.0, &[1, 2], |k| {
+            if dirs[k][1] > 0.0 {
+                (0, corteza(true, 35.0, 0.0))
+            } else {
+                (1, corteza(true, 35.0, 0.0))
+            }
+        });
+        // La placa 0 gira alrededor del eje x: cerca de los polos va hacia la placa 1.
+        d.arrancar_con(&[[v_cm_anio * 10.0 / 6371.0, 0.0, 0.0], [0.0; 3]]);
+        let mut paso_soldado = None;
+        for paso in 1..=40u32 {
+            d.paso_cinematico();
+            let v0 = d.inventario_continental();
+            if d.comprobar_soldaduras() {
+                let v1 = d.inventario_continental();
+                assert!(
+                    (v1 - v0).abs() <= 1e-9 * v0,
+                    "la soldadura conserva la corteza"
+                );
+                paso_soldado = Some(paso);
+                break;
+            }
+        }
+        (paso_soldado, d.placas.iter().filter(|p| p.viva).count())
+    };
+    let (lento, vivas) = soldar(0.2);
+    let t_sold = TectonicaCfg::default().t_sutura_myr;
+    assert!(
+        lento.is_some_and(|p| p as f64 >= t_sold),
+        "a 0,2 cm/año se sueldan tras τ_sold ({t_sold} Myr): en el paso {lento:?}"
+    );
+    assert_eq!(vivas, 1, "queda una sola placa");
+    let (rapido, _) = soldar(3.0);
+    assert_eq!(rapido, None, "a 3 cm/año no se sueldan");
 }

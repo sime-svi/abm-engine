@@ -250,6 +250,32 @@ pub struct MetricaMyr {
     pub margen_beta_area_km2: [[f64; 6]; 3],
     #[serde(default)]
     pub ancho_plataforma_km: f64,
+    /// Nota de succión de las losas §8: losas profundas y restos que tiran (cuántos) y el peso de los
+    /// restos (unidades del tirón); reparto de la potencia que mueve las placas (tirón, succión y
+    /// empuje); fracción de la longitud de fosa que retrocede respecto al manto y velocidad media de
+    /// retroceso (cm/año); fracción de los frentes de choque que convergen a menos de `v_sold`.
+    #[serde(default)]
+    pub losas_profundas: u32,
+    #[serde(default)]
+    pub restos_losa: u32,
+    #[serde(default)]
+    pub peso_restos: f64,
+    #[serde(default)]
+    pub potencia_frac: [f64; 3],
+    #[serde(default)]
+    pub fosa_retrocede_frac: f64,
+    #[serde(default)]
+    pub fosa_retroceso_cm_anio: f64,
+    #[serde(default)]
+    pub choques_lentos_frac: f64,
+    /// La tierra de menos de 500 Myr por lo que reinició por última vez su edad (km²): ninguno desde
+    /// el principio, rift, arco, choque, delaminación y gran erupción. Y la convergencia de los
+    /// frentes de choque por la edad del choque (0–10, 10–20, 20–40, 40–80 y más de 80 Myr):
+    /// Σ v·longitud (cm/año·km) y Σ longitud (km).
+    #[serde(default)]
+    pub tierra_joven_causa_km2: [f64; 6],
+    #[serde(default)]
+    pub choque_conv_por_edad: [[f64; 2]; 5],
 }
 
 /// Cuentas del material continental (km³) a lo largo de la deriva (adenda de balance §6 y §8).
@@ -485,8 +511,8 @@ pub struct PlacaConContinente {
     /// Velocidad media cuadrática de la placa (cm/año).
     pub v_cm_anio: f64,
     /// Potencias (par·ω, unidades del modelo) del tirón de sus losas, del empuje (dorsales y resto
-    /// del par de borde), de los choques y del arrastre basal.
-    pub potencias: [f64; 4],
+    /// del par de borde), de los choques, del arrastre basal y de la succión de las losas.
+    pub potencias: [f64; 5],
     /// Su continente frente a la fosa activa más cercana: velocidad media hacia ella (cm/año) y
     /// fracción que se acerca.
     pub v_hacia_fosa_cm_anio: f64,
@@ -679,4 +705,30 @@ pub struct BalanceMedio {
     pub oceano_prof_mediana_final_m: f64,
     #[serde(default)]
     pub islas_final_km2: f64,
+    /// Nota de succión de las losas: medias tras el rodaje del reparto de la potencia (tirón,
+    /// succión, empuje), del retroceso de las fosas (fracción y cm/año), de los restos que tiran y de
+    /// los frentes de choque lentos; soldaduras por 100 Myr y su duración media (Myr), y fracción de
+    /// los choques largos (de al menos `t_sutura`) que llegan a estar `t_sutura` seguidos por debajo
+    /// de `v_sold`.
+    #[serde(default)]
+    pub potencia_frac: [f64; 3],
+    #[serde(default)]
+    pub fosa_retrocede_frac: f64,
+    #[serde(default)]
+    pub fosa_retroceso_cm_anio: f64,
+    #[serde(default)]
+    pub restos_losa: f64,
+    #[serde(default)]
+    pub choques_lentos_frac: f64,
+    #[serde(default)]
+    pub soldaduras_100myr: f64,
+    #[serde(default)]
+    pub duracion_media_soldadura_myr: f64,
+    /// La tierra de menos de 500 Myr al final por lo que reinició su edad (fracción): ninguno, rift,
+    /// arco, choque, delaminación y gran erupción. Convergencia media de los choques por su edad
+    /// (cm/año; 0–10, 10–20, 20–40, 40–80 y más de 80 Myr) en toda la deriva tras el rodaje.
+    #[serde(default)]
+    pub tierra_joven_causa_final_frac: [f64; 6],
+    #[serde(default)]
+    pub choque_conv_por_edad_cm_anio: [f64; 5],
 }

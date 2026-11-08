@@ -34,17 +34,18 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RAIZ, 'herramientas', 'analisis'))
 import terreno as an_t  # noqa: E402
 
-SALIDA = 'output/semillas'
+SALIDA = 'output/semillas'  # se cambia con --salida
 
 
 # Copia del binario con que corre la tanda: si se recompila mientras corre, los procesos no cargan a
 # medias el binario nuevo (pasó el 2026-11-08: una semilla salió distinta en la novena cifra).
-BINARIO = os.path.join(RAIZ, SALIDA, 'terreno_de_la_tanda')
+def binario():
+    return os.path.join(RAIZ, SALIDA, 'terreno_de_la_tanda')
 
 
 def correr(semilla, ajustes):
     nombre = f'semilla_{semilla}'
-    args = [BINARIO, 'config/terreno.toml',
+    args = [binario(), 'config/terreno.toml',
             '--set', f'run.name="{nombre}"', '--set', f'run.output_path="{SALIDA}"',
             '--set', f'run.seed={semilla}', '--set', 'run.genesis_cache=""',
             '--set', 'run.dump_world=true', '--set', 'run.dump_climate=true']
@@ -101,7 +102,22 @@ def correr(semilla, ajustes):
     m['tect_mesetas_final_mkm2'] = b['mesetas_final_km2'] / 1e6
     m['tect_islas_final_km2'] = b['islas_final_km2']
     m['oceano_media_menos_mediana_m'] = m['profundidad_media_oceano_m'] - mediana_franjas(m['rel_hipsometria_oceano_frac'])
+    # Nota de succión de las losas §10.
+    for i, c in enumerate(['tiron', 'succion', 'empuje']):
+        m[f'tect_potencia_{c}_frac'] = b['potencia_frac'][i]
+    for c in ('fosa_retrocede_frac', 'fosa_retroceso_cm_anio', 'restos_losa', 'choques_lentos_frac',
+              'soldaduras_100myr', 'duracion_media_soldadura_myr'):
+        m[f'tect_bal_{c}'] = b[c]
+    for i, c in enumerate(CAUSAS_TT):
+        m[f'tect_tierra_joven_{c}_frac'] = b['tierra_joven_causa_final_frac'][i]
+    for i, c in enumerate(EDADES_CHOQUE):
+        m[f'tect_choque_conv_{i}_cm_anio'] = b['choque_conv_por_edad_cm_anio'][i]
     return m
+
+
+# Lo que reinició la edad de la tierra joven y las edades de los choques.
+CAUSAS_TT = ['sin_reinicio', 'rift', 'arco', 'choque', 'delaminacion', 'erupcion']
+EDADES_CHOQUE = ['0–10', '10–20', '20–40', '40–80', '> 80']
 
 
 # Franjas de la hipsometría del océano (m) del análisis y de la referencia de ETOPO.
@@ -256,19 +272,41 @@ FILAS += [
     ('tect_mesetas_final_mkm2', '… su área (Mkm²)', None, None),
     ('tect_islas_final_km2', 'Islas volcánicas emergidas, al final (km²)', None, None),
 ]
+# Nota de succión de las losas §10.
+FILAS += [
+    ('tect_potencia_tiron_frac', 'Potencia que mueve las placas: tirón de la losa (fracción)', '~0,50 (Conrad y Lithgow-Bertelloni 2002)',
+     lambda x: 0.4 <= x <= 0.6),
+    ('tect_potencia_succion_frac', '… succión de las losas', None, None),
+    ('tect_potencia_empuje_frac', '… empuje de las dorsales y resto', None, None),
+    ('tect_bal_fosa_retrocede_frac', 'Fosas que retroceden respecto al manto (fracción de la longitud)', '0,62–0,78 (Schellart et al. 2008)',
+     lambda x: 0.62 <= x <= 0.78),
+    ('tect_bal_fosa_retroceso_cm_anio', 'Velocidad media de retroceso de las fosas (cm/año)', '1,3–1,5 (Schellart et al. 2008)',
+     lambda x: 1.3 <= x <= 1.5),
+    ('tect_bal_restos_losa', 'Restos de losa que tiran (media)', None, None),
+    ('tect_bal_choques_lentos_frac', 'Frentes de choque por debajo de v_sold (fracción, media)', None, None),
+    ('tect_bal_soldaduras_100myr', 'Soldaduras tras un choque agotado por 100 Myr', None, None),
+    ('tect_bal_duracion_media_soldadura_myr', 'Duración media del choque hasta soldarse (Myr)', None, None),
+]
+FILAS += [(f'tect_tierra_joven_{c}_frac', f'Tierra de menos de 500 Myr reiniciada por: {c.replace("_", " ")} (fracción)', None, None)
+          for c in CAUSAS_TT]
+FILAS += [(f'tect_choque_conv_{i}_cm_anio', f'Convergencia de los choques de {c} Myr (cm/año)', None, None)
+          for i, c in enumerate(EDADES_CHOQUE)]
 
 
 def main():
+    global SALIDA
     ap = argparse.ArgumentParser(description='El planeta con varias semillas: tabla de cierre.')
     ap.add_argument('--semillas', default='42,1,2,3,4')
     ap.add_argument('--set', action='append', default=[], help='ajuste de la config (como en el binario)')
     ap.add_argument('--sin-compilar', action='store_true')
+    ap.add_argument('--salida', default=SALIDA, help='carpeta de las corridas (para varias tandas a la vez)')
     a = ap.parse_args()
+    SALIDA = a.salida
     semillas = [int(x) for x in a.semillas.split(',')]
     if not a.sin_compilar:
         subprocess.run(['cargo', 'build', '--release', '--quiet', '--bin', 'terreno'], cwd=RAIZ, check=True)
     os.makedirs(os.path.join(RAIZ, SALIDA), exist_ok=True)
-    shutil.copy2(os.path.join(RAIZ, 'target', 'release', 'terreno'), BINARIO)
+    shutil.copy2(os.path.join(RAIZ, 'target', 'release', 'terreno'), binario())
     inicio = time.monotonic()
     with ThreadPoolExecutor(max_workers=len(semillas)) as ex:
         res = list(ex.map(lambda s: correr(s, a.set), semillas))

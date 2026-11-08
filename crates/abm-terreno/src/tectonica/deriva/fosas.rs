@@ -717,6 +717,10 @@ impl Deriva {
                 },
             ));
         }
+        // Las losas de las fosas que mueren o se rompen pasan a ser restos (nota de succión de las
+        // losas §6.2), con el estado de antes de este paso (su longitud de losa).
+        let idx: Vec<usize> = muertas.iter().map(|m| m.0).collect();
+        self.nacen_restos(&idx);
         for (p, m) in nuevos.into_iter().enumerate() {
             self.placas[p].fosas = m;
         }

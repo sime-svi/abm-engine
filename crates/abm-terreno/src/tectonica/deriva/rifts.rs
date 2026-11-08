@@ -183,6 +183,7 @@ impl Deriva {
                                 arco: 0.0,
                                 edad_orog: 1000.0,
                                 edad_tt: 0.0,
+                                causa_tt: reinicio::RIFT,
                                 rift_id: lado.rift_id,
                                 ..*c
                             };
@@ -255,6 +256,7 @@ impl Deriva {
                         && c.cont
                     {
                         c.edad_tt = 0.0;
+                        c.causa_tt = reinicio::RIFT;
                         c.beta = if c.hc > 0.0 {
                             (lado.h0_km / c.hc).clamp(1.0, beta_max)
                         } else {

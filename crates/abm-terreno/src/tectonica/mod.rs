@@ -746,6 +746,37 @@ fn balance_medio(
         oceano_prof_media_final_m: ultima.oceano_prof_media_m,
         oceano_prof_mediana_final_m: ultima.oceano_prof_mediana_m,
         islas_final_km2: ultima.islas_km2,
+        potencia_frac: std::array::from_fn(|i| {
+            val.iter().map(|m| m.potencia_frac[i]).sum::<f64>() / n
+        }),
+        fosa_retrocede_frac: media(|m| m.fosa_retrocede_frac),
+        fosa_retroceso_cm_anio: media(|m| m.fosa_retroceso_cm_anio),
+        restos_losa: media(|m| m.restos_losa as f64),
+        choques_lentos_frac: media(|m| m.choques_lentos_frac),
+        soldaduras_100myr: tras_rodaje("sutura").count() as f64 * 100.0 / n,
+        tierra_joven_causa_final_frac: {
+            let t: f64 = ultima.tierra_joven_causa_km2.iter().sum();
+            ultima
+                .tierra_joven_causa_km2
+                .map(|x| if t > 0.0 { x / t } else { 0.0 })
+        },
+        choque_conv_por_edad_cm_anio: std::array::from_fn(|i| {
+            let l: f64 = val.iter().map(|m| m.choque_conv_por_edad[i][1]).sum();
+            if l > 0.0 {
+                val.iter()
+                    .map(|m| m.choque_conv_por_edad[i][0])
+                    .sum::<f64>()
+                    / l
+            } else {
+                0.0
+            }
+        }),
+        duracion_media_soldadura_myr: {
+            let d: Vec<f64> = tras_rodaje("sutura")
+                .filter_map(|e| e.tiempo_choque_myr)
+                .collect();
+            media_de_lista(&d)
+        },
     }
 }
 

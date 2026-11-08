@@ -159,12 +159,21 @@ a_lip_max_mkm2 = 2.0
 h_lip_km     = 15.0        # corteza que añade en el océano (las mesetas tienen 20–35 km frente a 7; 10–25)
 h_cfb_km     = 3.0         # la que añade en un continente (calibrado con ~0,12 km³/año, Clift et al. 2009; 1–5)
 dt_lip_myr   = 2.0         # duración (la mayor parte del volumen sale en menos de 1–5 Myr)
-q_traza_km3_myr = 1.0e5    # caudal de cada traza (a calibrar con el magmatismo intraplaca oceánico, 1,3–1,7 km³/año; Crisp 1984)
+q_traza_km3_myr = 1.25e5   # caudal de cada traza, calibrado con el magmatismo intraplaca oceánico de trazas y mesetas (1,3–1,7 km³/año; Crisp 1984): con 1,0·10⁵, 1,20 AU (5 semillas)
 r_traza_km   = 100.0       # radio de la zona de la traza (dorsales volcánicas tipo Hawái de ~150–250 km; 50–150)
 h_sw_min_km  = 0.5         # altura de los abombamientos, uniforme en 0,5–1,2 km (Crough 1983)
 h_sw_max_km  = 1.2
 w_sw_min_km  = 1000.0      # anchura, uniforme en 1 000–1 500 km (Crough 1983)
 w_sw_max_km  = 1500.0
+# Succión de las losas profundas y de los restos de losa (nota_succion_losas.md): la parte de la losa
+# que pasa de L_losa, desplazada d_off hacia la placa de arriba, y los restos de las fosas que mueren o
+# se rompen, fijos en el marco del manto, tiran de la base de las placas a menos de W_suc:
+# τ = ε_suc·B·(1 − d/W)/W hacia su punto más cercano. eps_suc = 0 la apaga.
+d_off_km     = 500.0       # la losa llega a 660 km con inclinaciones de 45–65° (300–800)
+w_suc_km     = 1500.0      # del orden de la profundidad del manto inferior (1 000–3 000)
+eps_suc      = 0.05        # calibrado (3 semillas, 2026-11-08): el tirón de las losas, el 53 % de la potencia que mueve las placas (Conrad y Lithgow-Bertelloni 2002: ~50 %; con 0,1, 48 %; con 0,25, 27 %); las fosas retroceden en el 68 % de su longitud a 1,1 cm/año (Schellart et al. 2008: 62–78 % a 1,3–1,5)
+v_hund_cm_anio = 1.2       # hundimiento de las losas en el manto inferior: 1,2 ± 0,3 cm/año (van der Meer et al. 2010)
+prof_hund_km = 2200.0      # lo que les queda hasta el fondo del manto: τ_hund = 2 200 km / v_hund ≈ 183 Myr (120–250)
 # Edades tectonotérmicas de partida: la tierra de hoy de más de 500 Myr (55 %), menos 500, por clases
 # (tipos de corteza de CRUST1.0, alineados con las provincias de Artemieva y Mooney; nota_isostasia_s0.py).
 edad_tt_ini_bordes_myr = [0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0, 1750.0, 2000.0, 2250.0, 2500.0, 2750.0, 3000.0, 3250.0]
@@ -242,8 +251,8 @@ tau_ais_myr  = 100.0        # tiempo unido tras el que un bloque alcanza su prob
 a_trozo_min_mkm2 = 0.5      # continente mínimo de cada trozo (físico: Madagascar, ~0,6 Mkm², de los más pequeños separados por un rift)
 l_sut_min_km = 450.0        # longitud mínima de una sutura para guiar la ruptura (numérico: 3·L_borde)
 v_rift_cm_anio = 2.0
-v_sutura_cm_anio = 0.5
-t_sutura_myr = 10.0
+v_sutura_cm_anio = 0.5     # v_sold: un choque entre continentes, ya rota su losa, que converge a menos de esto (cm/año; supuesto, 0,2–1)…
+t_sutura_myr = 20.0        # …durante τ_sold suelda sus dos placas (nota_succion_losas.md §6.4; supuesto, 10–40; antes 10, sin pedir la losa rota)
 e1_km_myr    = 0.02        # erosión a 1 km sobre el mar (km/Myr; adenda v5 §6.7: E = E_1·(z/1 km)^n_ero). Recalibrado con la isostasia con litosfera (2026-11-08, cuarta ronda; incremento-4-diseno.md §73): relajación de India–Asia en 159 Myr (100–200; con 0,015, 205; con 0,03, 105). La exportación al mar sigue sin cumplir: 4,4 AU (5 semillas; objetivo ~1,8), porque a la larga se exporta lo que añaden los arcos y los choques (la base, §63)
 n_ero        = 2.5         # exponente de la erosión con la altura (rango 1,5–3; Montgomery y Brandon 2002). Con la misma relajación (~160–175 Myr): con 3 (E_1 = 0,01), la tierra a 948 m y 3,7 AU; con 2 (E_1 = 0,03), a 736 m y 4,7 AU, con más corteza máxima (85 km) y más pérdida de volumen (−12 %). Las diferencias con 2,5 quedan dentro de la dispersión entre semillas
 deformacion  = 0.06        # deformación de bordes de Voronoi, cratones y líneas de rift (fracción del radio)

@@ -27,6 +27,7 @@ mod diagnostico;
 mod fosas;
 mod rifts;
 mod suavizado;
+mod succion;
 use super::isostasia;
 use super::malla::{LADOS, Malla, Mat3, NADA, Quat, aplicar, aplicar_t, velocidad};
 use crate::config::TectonicaCfg;
@@ -37,6 +38,7 @@ pub use calientes::{IntraplacaPaso, PuntoCaliente};
 use fosas::Difusa;
 pub use fosas::{ConteoFosas, EstadoFosa};
 use suavizado::{TipoTramo, Vecindad};
+pub use succion::RestoLosa;
 
 /// Máximo de placas que se apuntan en una celda del mundo (más es rarísimo: se ignoran).
 const MAXC: usize = 4;
@@ -134,6 +136,9 @@ pub struct Corteza {
     /// hundimiento térmico de McKenzie (1978) que se suma a R4 sin contar dos veces.
     pub beta: f64,
     pub t_rot_myr: f64,
+    /// Qué reinició por última vez la edad tectonotérmica (diagnóstico, el modelo no lo lee):
+    /// [`reinicio`]. Al juntar corteza, el de la parte con más volumen.
+    pub causa_tt: u8,
     /// Margen de rift al que pertenece la muestra (diagnóstico, el modelo no lo lee): `2·id + lado`,
     /// con `id ≥ 1` el rift en el orden en que empezaron; 0 si ninguno.
     pub rift_id: u32,
@@ -148,6 +153,7 @@ struct Origen {
     edad_tt: f64,
     beta: f64,
     t_rot_myr: f64,
+    causa_tt: u8,
 }
 
 impl Origen {
@@ -156,6 +162,7 @@ impl Origen {
         edad_tt: 0.0,
         beta: 1.0,
         t_rot_myr: 0.0,
+        causa_tt: reinicio::NINGUNO,
     };
 
     fn de(c: &Corteza) -> Origen {
@@ -163,8 +170,21 @@ impl Origen {
             edad_tt: c.edad_tt,
             beta: c.beta,
             t_rot_myr: c.t_rot_myr,
+            causa_tt: c.causa_tt,
         }
     }
+}
+
+/// Qué reinició por última vez la edad tectonotérmica de una muestra ([`Corteza::causa_tt`]).
+pub mod reinicio {
+    /// Ninguno desde el principio de la deriva.
+    pub const NINGUNO: u8 = 0;
+    pub const RIFT: u8 = 1;
+    pub const ARCO: u8 = 2;
+    pub const CHOQUE: u8 = 3;
+    pub const DELAMINACION: u8 = 4;
+    pub const ERUPCION: u8 = 5;
+    pub const N: usize = 6;
 }
 
 /// Cómo nació una muestra ([`Procedencia::nace`]).
@@ -290,6 +310,7 @@ impl Corteza {
             edad_tt: 0.0,
             beta: 1.0,
             t_rot_myr: 0.0,
+            causa_tt: reinicio::NINGUNO,
             rift_id: 0,
             proc: Procedencia::default(),
         }
@@ -313,6 +334,7 @@ impl Corteza {
             edad_tt: 0.0,
             beta: 1.0,
             t_rot_myr: 0.0,
+            causa_tt: reinicio::NINGUNO,
             rift_id: 0,
             proc,
         }
@@ -399,6 +421,7 @@ impl Corteza {
         if dh > antes {
             self.beta = origen.beta;
             self.t_rot_myr = origen.t_rot_myr;
+            self.causa_tt = origen.causa_tt;
         }
         self.h += dh;
         self.hc += dh;
@@ -696,6 +719,9 @@ struct Par {
     /// Último Myr con contacto convergente entre las dos.
     contacto_myr: f64,
     choque_visto_myr: f64,
+    /// Lo más que ha estado seguido el choque por debajo de `v_sold` (Myr; diagnóstico, §11.3 de la
+    /// nota de succión de las losas).
+    sutura_max_myr: f64,
     sutura_myr: f64,
     habia_subduccion: bool,
     habia_colision: bool,
@@ -1231,7 +1257,7 @@ pub struct Deriva {
     /// Potencia de cada fuerza en cada placa en el último reparto de velocidades (nota de fosas
     /// §10, medida 3): índice de la placa, su área (km²) y `τ·ω` del tirón de la losa, el empuje de
     /// dorsal, la resistencia de los choques y el arrastre basal (en equilibrio suman cero).
-    pub potencias: Vec<(u32, f64, [f64; 4])>,
+    pub potencias: Vec<(u32, f64, [f64; 5])>,
     /// Espesor continental máximo (km) de las muestras que recibieron, en el último paso, dientes
     /// sin hueco de su placa y muestras sueltas de otra placa (diagnóstico de los picos).
     pub max_tras_dientes_km: [f64; 2],
@@ -1269,6 +1295,11 @@ pub struct Deriva {
     puntos_calientes_nacidos: u64,
     pub abombamiento_m: Vec<f64>,
     intraplaca_paso: IntraplacaPaso,
+    /// Restos de losa que aún tiran (nota de succión de las losas §6.2), la malla gruesa de la
+    /// succión y lo medido en el paso (losas profundas, restos y su peso).
+    pub restos: Vec<RestoLosa>,
+    suc: Option<succion::MallaSuccion>,
+    succion_paso: (u32, u32, f64),
     /// Márgenes pasivos por sus celdas de costa (longitud, edad media y máxima) y su perfil (corteza
     /// en la costa y franja estirada): se calculan cada 25 Myr y en el último paso, y se repiten
     /// entre medias (solo se usan sus valores finales y sus medias).
@@ -1285,6 +1316,12 @@ pub struct Deriva {
     margen_de_rift: std::collections::BTreeMap<u32, usize>,
     /// Myr de la rotura de cada rift (por su número; NaN si aún no se ha roto; diagnóstico).
     pub rotura_rift_myr: Vec<f64>,
+    /// Convergencia media (cm/año) de cada frente de choque del paso (diagnóstico, §11.3 de la nota
+    /// de succión de las losas).
+    choque_conv_paso: Vec<f64>,
+    /// Convergencia de los frentes de choque del paso por la edad del choque (0–10, 10–20, 20–40,
+    /// 40–80 y más de 80 Myr): Σ v·longitud (cm/año·km) y Σ longitud (km).
+    choque_conv_por_edad: [[f64; 2]; 5],
     /// Muestras de margen pasivo de la foto anterior del diagnóstico del supercontinente (id de su
     /// placa y celda local).
     margenes_foto: Vec<(u64, u32)>,
@@ -1543,6 +1580,9 @@ impl Deriva {
             puntos_calientes_nacidos: 0,
             abombamiento_m: vec![0.0; num],
             intraplaca_paso: IntraplacaPaso::default(),
+            restos: Vec::new(),
+            suc: None,
+            succion_paso: (0, 0, 0.0),
             ultimos_margenes: (0.0, 0.0, 0.0),
             ultimo_perfil: (0.0, 0.0),
             ultima_plataforma_km: 0.0,
@@ -1550,6 +1590,8 @@ impl Deriva {
             margenes_rift: Vec::new(),
             margen_de_rift: Default::default(),
             rotura_rift_myr: vec![f64::NAN],
+            choque_conv_paso: Vec::new(),
+            choque_conv_por_edad: [[0.0; 2]; 5],
             margenes_foto: Vec::new(),
             fotos_supercontinente: Vec::new(),
             rifts_empezados: 0,
@@ -1587,8 +1629,11 @@ impl Deriva {
             self.traza_reloj = Some(std::time::Instant::now());
         }
         self.fosas_paso = ConteoFosas::default();
+        self.choque_conv_paso.clear();
+        self.choque_conv_por_edad = [[0.0; 2]; 5];
         self.envejecer_tt();
         self.vida_de_puntos_calientes();
+        self.envejecer_restos();
         let v0 = self.inventario_continental();
         let c0 = self.cuentas;
         self.velocidades();
@@ -1958,6 +2003,7 @@ impl Deriva {
                         choque_ultimo_myr: f64::NEG_INFINITY,
                         choque_avisado: false,
                         choque_inicio_myr: 0.0,
+                        sutura_max_myr: 0.0,
                         regimen: None,
                     },
                 );
@@ -2043,6 +2089,13 @@ impl Deriva {
                 t_tiron[p] = add(t_tiron[p], par);
             }
         }
+        // Succión de las losas profundas y de los restos (nota de succión de las losas §6.3): una
+        // tracción en la base de las placas, un par más que las mueve.
+        let t_succion = self.pares_de_succion();
+        let t_borde = t.clone();
+        for (tp, ts) in t.iter_mut().zip(&t_succion) {
+            *tp = add(*tp, *ts);
+        }
         // Sistema K ω = T / c_b, con K = R²·M (diagonal por placas) + acoplamientos.
         let vivas: Vec<usize> = (0..n).filter(|&i| self.placas[i].viva).collect();
         let mut pos = vec![usize::MAX; n];
@@ -2080,7 +2133,8 @@ impl Deriva {
             omega[p] = [sol[3 * i], sol[3 * i + 1], sol[3 * i + 2]];
         }
         // Potencias (τ·ω) de cada fuerza en cada placa, antes del marco sin rotación neta: tirón,
-        // empuje (el resto del par de borde), choques (−Σ acoplamientos) y arrastre (−R²·M·ω).
+        // empuje (el resto del par de borde), choques (−Σ acoplamientos), arrastre (−R²·M·ω) y
+        // succión de las losas.
         self.potencias.clear();
         let mut t_choque = vec![[0.0; 3]; n];
         for (p, q, gg) in &acop {
@@ -2094,11 +2148,17 @@ impl Deriva {
             let w = omega[p];
             let drag = esc(aplicar(&m[p], w), -r * r);
             let tiron = dot(t_tiron[p], w);
-            let empuje = dot(t[p], w) - tiron;
+            let empuje = dot(t_borde[p], w) - tiron;
             self.potencias.push((
                 p as u32,
                 area_p[p],
-                [tiron, empuje, dot(t_choque[p], w), dot(drag, w)],
+                [
+                    tiron,
+                    empuje,
+                    dot(t_choque[p], w),
+                    dot(drag, w),
+                    dot(t_succion[p], w),
+                ],
             ));
         }
         // Marco sin rotación neta: ω_net = (Σ M'_p)⁻¹ Σ M'_p ω_p.
@@ -3565,6 +3625,7 @@ impl Deriva {
                 }
                 c.edad_tt = 0.0;
                 c.beta = 1.0;
+                c.causa_tt = reinicio::ARCO;
             });
             self.cuentas.arcos_km3 += puesto;
             pasa_a_cont += a_cont;
@@ -4002,6 +4063,7 @@ impl Deriva {
                 }
                 c.edad_tt = 0.0;
                 c.beta = 1.0;
+                c.causa_tt = reinicio::CHOQUE;
             });
             self.cuentas.choque_engrosamiento_km3 += puesto;
             self.cuentas.choque_sin_sitio_km3 += vol - puesto;
@@ -4033,6 +4095,7 @@ impl Deriva {
                     if dh > cfg.eps_del_km {
                         c.edad_tt = 0.0;
                         c.beta = 1.0;
+                        c.causa_tt = reinicio::DELAMINACION;
                         if c.cont {
                             reinicio += a;
                         }
@@ -4910,18 +4973,39 @@ impl Deriva {
             }
         }
         let dt = self.cfg.dt_myr;
-        let mut fundir: Vec<(usize, usize, f64, V3)> = Vec::new();
+        let mut fundir: Vec<(usize, usize, f64, V3, f64)> = Vec::new();
+        // Nota de succión de las losas §6.4: solo con la losa del choque ya rota (sin ninguna losa
+        // que cuelgue entre las dos).
+        let cuelga = |x: u32, y: u32, d: &Deriva| {
+            d.bordes.iter().any(|b| {
+                ((b.p, b.q) == (x, y) || (b.p, b.q) == (y, x)) && b.p_subduce && b.losa > 0.0
+            })
+        };
         for &(x, y, vl, l, punto) in &frentes {
             let (ix, iy) = (self.placas[x as usize].id, self.placas[y as usize].id);
             let i = self.par_idx(ix, iy);
             let v_media = vl / l.max(1e-9);
+            // Diagnóstico (§11.3): la convergencia de cada choque a lo largo de su vida.
+            self.choque_conv_paso.push(v_media / CM_ANIO);
+            if self.pares[i].choque_avisado {
+                let edad = self.t_myr - self.pares[i].choque_inicio_myr;
+                let ie = [0.0, 10.0, 20.0, 40.0, 80.0]
+                    .partition_point(|&x| x <= edad)
+                    .max(1)
+                    - 1;
+                self.choque_conv_por_edad[ie][0] += v_media / CM_ANIO * l;
+                self.choque_conv_por_edad[ie][1] += l;
+            }
             if v_media < self.cfg.v_sutura_cm_anio * CM_ANIO {
                 self.pares[i].sutura_myr += dt;
             } else {
                 self.pares[i].sutura_myr = 0.0;
             }
-            if self.pares[i].sutura_myr >= self.cfg.t_sutura_myr {
-                fundir.push((x as usize, y as usize, 0.5 * l, punto));
+            self.pares[i].sutura_max_myr =
+                self.pares[i].sutura_max_myr.max(self.pares[i].sutura_myr);
+            if self.pares[i].sutura_myr >= self.cfg.t_sutura_myr && !cuelga(x, y, self) {
+                let duracion = self.t_myr - self.pares[i].choque_inicio_myr;
+                fundir.push((x as usize, y as usize, 0.5 * l, punto, duracion));
             }
         }
         if fundir.is_empty() {
@@ -4929,7 +5013,7 @@ impl Deriva {
         }
         let areas = self.area_placa();
         let mut cambio = false;
-        for (x, y, l, punto) in fundir {
+        for (x, y, l, punto, duracion) in fundir {
             if !self.placas[x].viva || !self.placas[y].viva {
                 continue;
             }
@@ -4941,10 +5025,26 @@ impl Deriva {
             self.estampar(b, lote::SUTURA);
             self.marcar_sutura(a, b);
             self.fundir(a, b);
-            self.evento("sutura", ids, l, 0.0, Some(punto));
+            self.evento_det(
+                "sutura",
+                ids,
+                l,
+                0.0,
+                Some(punto),
+                Detalle {
+                    tiempo_choque_myr: Some(duracion),
+                    ..Detalle::default()
+                },
+            );
             cambio = true;
         }
         cambio
+    }
+
+    /// La soldadura de los choques agotados, sola (pruebas con `paso_cinematico`): la comprueba y, si
+    /// toca, funde las placas. Devuelve si fundió alguna.
+    pub fn comprobar_soldaduras(&mut self) -> bool {
+        self.suturas()
     }
 
     /// Reloj de los rifts en una sutura entre las placas `a` y `b` (nota de rifts v2 §6.1): si las dos
@@ -5528,6 +5628,9 @@ impl Deriva {
         // 20 km) por tiempo desde la rotura.
         let zeta = self.zeta_m;
         let (mut a_edad, mut a_tierra_edad, mut z_tierra_edad) = ([0.0; 5], [0.0; 5], [0.0; 5]);
+        // La tierra de menos de 500 Myr por lo que reinició su edad (nota de isostasia; pedida por el
+        // responsable el 2026-11-08).
+        let mut joven_causa = [0.0; reinicio::N];
         let (mut prof_margen, mut tect_margen, mut a_margen) = ([0.0; 6], [0.0; 6], [0.0; 6]);
         // Nota de hundimiento de los márgenes §8: el basamento por clase de estiramiento.
         let (mut tect_beta, mut a_beta) = ([[0.0; 6]; 3], [[0.0; 6]; 3]);
@@ -5548,6 +5651,9 @@ impl Deriva {
                     if z >= 0.0 {
                         a_tierra_edad[ic] += a;
                         z_tierra_edad[ic] += z * a;
+                        if cz.edad_tt < 500.0 {
+                            joven_causa[(cz.causa_tt as usize).min(reinicio::N - 1)] += a;
+                        }
                     }
                     // Los márgenes estirados distales (corteza de menos de 20 km, ya rotos), por
                     // tiempo desde la rotura y por estiramiento.
@@ -5572,6 +5678,7 @@ impl Deriva {
                 }
             }
         }
+        let retro = self.retroceso_de_fosas();
         let t0 = std::time::Instant::now();
         // Los márgenes por sus celdas de costa y su perfil, cada 25 Myr y en el último paso.
         let cada = (25.0 / self.cfg.dt_myr).round().max(1.0) as u64;
@@ -5748,6 +5855,23 @@ impl Deriva {
             }),
             margen_beta_area_km2: a_beta,
             ancho_plataforma_km: self.ultima_plataforma_km,
+            losas_profundas: self.succion_paso.0,
+            restos_losa: self.succion_paso.1,
+            peso_restos: self.succion_paso.2,
+            potencia_frac: self.reparto_de_potencia(),
+            fosa_retrocede_frac: retro.0,
+            fosa_retroceso_cm_anio: retro.1,
+            tierra_joven_causa_km2: joven_causa,
+            choque_conv_por_edad: self.choque_conv_por_edad,
+            choques_lentos_frac: if self.choque_conv_paso.is_empty() {
+                0.0
+            } else {
+                self.choque_conv_paso
+                    .iter()
+                    .filter(|&&v| v < self.cfg.v_sutura_cm_anio)
+                    .count() as f64
+                    / self.choque_conv_paso.len() as f64
+            },
             costa_margen_km,
             franja_estirada_km,
         });
@@ -6111,6 +6235,7 @@ mod pruebas {
             edad_tt: 200.0,
             beta: 2.5,
             t_rot_myr: 40.0,
+            causa_tt: reinicio::RIFT,
         };
         c.sumar_hc(10.0, 0.0, origen, rs, rc, 20.0, via::CHOQUE);
         assert!((c.h - (h0 + roca + 10.0)).abs() < 1e-12);

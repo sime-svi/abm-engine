@@ -307,7 +307,7 @@ impl Deriva {
                 .potencias
                 .iter()
                 .find(|x| x.0 as usize == p)
-                .map_or([0.0; 4], |x| x.2);
+                .map_or([0.0; 5], |x| x.2);
             foto.placas.push(PlacaConContinente {
                 id: self.placas[p].id,
                 area_frac: a / a_tot,

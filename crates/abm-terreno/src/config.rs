@@ -206,6 +206,16 @@ pub struct TectonicaCfg {
     pub h_sw_max_km: f64,
     pub w_sw_min_km: f64,
     pub w_sw_max_km: f64,
+    // --- Succión de las losas (nota de succión de las losas §5) ---
+    /// Distancia de la fosa a su losa profunda, hacia la placa de arriba (km), alcance de la succión
+    /// (km) y fracción del peso de la losa profunda que llega a las placas como tracción (0 la apaga).
+    pub d_off_km: f64,
+    pub w_suc_km: f64,
+    pub eps_suc: f64,
+    /// Velocidad de hundimiento de las losas en el manto inferior (cm/año) y profundidad que les
+    /// queda hasta dejar de tirar (km): `τ_hund = prof/v_hund`.
+    pub v_hund_cm_anio: f64,
+    pub prof_hund_km: f64,
     /// Edades tectonotérmicas de la corteza continental al empezar la deriva: la distribución de la
     /// Tierra de hoy con las edades de más de 500 Myr, menos 500 (bordes de las clases, Myr, y área
     /// de cada clase). Las más viejas, en el interior de cada continente.
@@ -346,6 +356,9 @@ pub struct TectonicaCfg {
     /// punto triple (versión aceptada por el responsable el 2026-11-08).
     pub theta_dc_grados: f64,
     pub v_rift_cm_anio: f64,
+    /// Soldadura tras un choque agotado (nota de succión de las losas §6.4; antes, las suturas del
+    /// documento principal): un choque entre continentes, ya rota su losa, que converge a menos de
+    /// `v_sold` (cm/año) durante `τ_sold` (Myr) funde sus dos placas.
     pub v_sutura_cm_anio: f64,
     pub t_sutura_myr: f64,
     /// Erosión de la génesis (adenda de balance v5 §6.7): `E = E_1·(z/1 km)^n_ero` km/Myr en la
@@ -412,12 +425,17 @@ impl Default for TectonicaCfg {
             h_lip_km: 15.0,
             h_cfb_km: 3.0,
             dt_lip_myr: 2.0,
-            q_traza_km3_myr: 1.0e5,
+            q_traza_km3_myr: 1.25e5,
             r_traza_km: 100.0,
             h_sw_min_km: 0.5,
             h_sw_max_km: 1.2,
             w_sw_min_km: 1000.0,
             w_sw_max_km: 1500.0,
+            d_off_km: 500.0,
+            w_suc_km: 1500.0,
+            eps_suc: 0.05,
+            v_hund_cm_anio: 1.2,
+            prof_hund_km: 2200.0,
             edad_tt_ini_bordes_myr: vec![
                 0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0, 1750.0,
                 2000.0, 2250.0, 2500.0, 2750.0, 3000.0, 3250.0,
@@ -488,7 +506,7 @@ impl Default for TectonicaCfg {
             theta_dc_grados: 45.0,
             v_rift_cm_anio: 2.0,
             v_sutura_cm_anio: 0.5,
-            t_sutura_myr: 10.0,
+            t_sutura_myr: 20.0,
             e1_km_myr: 0.02,
             n_ero: 2.5,
             deformacion: 0.06,
@@ -1037,10 +1055,15 @@ impl TectonicaCfg {
             && self.h_sw_max_km >= self.h_sw_min_km
             && self.h_sw_min_km >= 0.0
             && self.w_sw_max_km >= self.w_sw_min_km
-            && self.w_sw_min_km > 0.0)
+            && self.w_sw_min_km > 0.0
+            && self.d_off_km >= 0.0
+            && self.w_suc_km > 0.0
+            && self.eps_suc >= 0.0
+            && self.v_hund_cm_anio > 0.0
+            && self.prof_hund_km > 0.0)
         {
             return Err(invalid(
-                "puntos calientes: se requiere t_hs, dt_lip, r_traza, w_sw_min > 0, rangos ordenados y el resto >= 0",
+                "puntos calientes y succión: se requiere t_hs, dt_lip, r_traza, w_sw_min, w_suc, v_hund, prof_hund > 0, rangos ordenados y el resto >= 0",
             ));
         }
         if self.edad_tt_ini_bordes_myr.len() != self.edad_tt_ini_frac.len() + 1
