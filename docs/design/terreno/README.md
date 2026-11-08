@@ -559,3 +559,25 @@ Iba a ser la última ronda del relieve tectónico. Antes de congelar la capa, el
 - la tierra demasiado alta;
 - los bordes de continente del principio, que nunca se estiraron;
 - la India del modelo, que se acelera tras romperse la losa, mientras que la real siguió frenando.
+
+### Por qué sobran fosas (08-11-2026, demografía de las placas)
+
+**La pregunta.** El modelo tiene casi el doble de fosas que la Tierra y hunde demasiado fondo oceánico. La nota de demografía de placas pedía mirar primero cómo nacen y mueren las placas, y elegir el arreglo según lo que saliera.
+
+**Lo que salió.**
+- **Sobran placas grandes.** El modelo tiene unas 20 placas de al menos el 1 % del planeta; la Tierra, 13. Las pequeñas están en número terrestre.
+- **Las grandes nacen y casi no mueren.** Nacen cuando un continente se parte (unas 5 cada 100 millones de años). Solo mueren cuando dos continentes chocan y se sueldan (unas 3). En la Tierra, las placas oceánicas grandes también desaparecen hundiéndose en las fosas, como la de Farallón frente a América. En el modelo, no.
+- **Con más placas hay más borde entre ellas, y más fosa.** Además, una parte mayor de ese borde es fosa: el 27 %, frente al 20 % de la Tierra.
+- **Las placas muertas seguían en la lista.** Una placa consumida entera no desaparecía del todo; al final había casi 30 vacías.
+
+**Lo que se probó: la rama A de la nota.**
+- **Soldar dos placas cuyo borde lleva tiempo quieto.** No ocurre nunca en el modelo: sus placas se mueven siempre unas respecto a otras.
+- **Que la vecina capture las microplacas sin fosa.** Retira las placas vacías, pero deja vivir más tiempo las microplacas que nacen al invadirse un margen. La fosa apenas baja.
+- **El planeta tarda más:** unos 300 segundos, frente a los 275 del presupuesto.
+
+**Lo que queda por decidir.** Ninguna de las ramas de la nota ataca la causa. El responsable decide entre:
+- una forma de que mueran las placas oceánicas grandes;
+- menos continentes que se parten cuando no forman un supercontinente;
+- probar a hacer más exigente el nacimiento de las fosas.
+
+**El relieve.** La tierra por encima de 2 000 m es el 15 % del planeta. En la Tierra sin hielo es el 5 % (el 11 % de la nota incluye el hielo de Antártida y Groenlandia).

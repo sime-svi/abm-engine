@@ -1713,3 +1713,30 @@ La capa tectónica queda congelada: no se le añaden más reglas. Lo que sigue q
 - Acepta la fracción de arco de lo que deja un choque fuera de un continente, `E_1` = 0,0075, la India como pendiente y `λ_A` = 4·10⁻⁴.
 - Sube el presupuesto del planeta a 275 s y actualiza `main` con esta ronda.
 - **La capa no se congela todavía:** antes se arregla el exceso de fosas (nota de demografía de placas, §66 en adelante).
+
+## 66. Nota de demografía de placas: diagnóstico, rama A y punto de decisión (2026-11-08)
+
+Informe completo, con todas las tablas: `docs/informes/2026-11-08_demografia_placas.md`. Rama `terreno-demografia-placas`, sin fusionar con `main`.
+
+- **Respuestas al §11.**
+  - La velocidad relativa ya se calculaba en cada celda de borde (`clasificar_bordes`), pero solo se guardaba su componente normal; ahora también el módulo (`Borde::v_rel`).
+  - Las microplacas solo se libraban de la absorción inmediata (toda placa de menos de `A_min`) si tenían una losa que tiraba.
+  - Una placa consumida entera no moría: sin área ni borde seguía «viva» (29 al final).
+- **Diagnóstico del §0** (`diagnostico_demografia_placas`, 5 semillas):
+  - **D1:** ~20 placas de al menos el 1 % del planeta frente a las 13 de Bird; nacen 21,3 por 100 Myr (rift 5,8; invasión 15,5) y mueren 19,3.
+  - **D2:** el nacimiento inducido crea el 85 % de la fosa y la invasión el 15 %. Se corrigió la longitud de sus eventos, que contaba los dos lados del borde.
+  - **D3:** fosa ×1,88, difusa ×0,75 y choque ×0,92 de Bird.
+  - **D4:** ~1 000 km de borde inactivo, siempre durante poco tiempo.
+  - **D5:** el exceso de fosa está en las placas iniciales y en las de rift.
+  - **Señales:** H1 sí (rama A); H2 y H3 no.
+- **Rama A** (`soldaduras`, `capturas`; tres pruebas de la nota):
+  - A1 no actúa nunca, ni con `v_fus` 0,5 y `τ_fus` 10: los bordes de las placas grandes nunca se quedan quietos;
+  - A2 retira las placas fantasma, pero deja vivir más microplacas de la invasión;
+  - la fosa baja un 7 % (dentro de la dispersión) y las placas grandes no bajan;
+  - el planeta tarda 298 s solo, frente a 243 (presupuesto 275), porque el reparto del sedimento al mar se encarece en todas las semillas por razones aún sin perfilar.
+- **Tras A, ninguna rama encaja; se para y decide el responsable.** La causa que muestra el diagnóstico es otra: las placas grandes nacen en los rifts (~5 por 100 Myr) y solo mueren en las suturas (~3). Opciones en el §8 del informe:
+  - una muerte de placas oceánicas grandes;
+  - menos rifts fuera de los supercontinentes;
+  - medir la rama C sin su señal;
+  - revisar A.
+- **Tabla de cierre con las filas de relieve** (§7 del informe). La tierra por encima de 2 000 m es el 15 %, frente al 5,3 % de la roca de ETOPO sin hielo. El ~11 % de la nota incluye el hielo de Antártida y Groenlandia.

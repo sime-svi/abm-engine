@@ -273,6 +273,15 @@ pub struct TectonicaCfg {
     pub a_trozo_min_mkm2: f64,
     /// Longitud mínima de una sutura para guiar la ruptura (km; 3·`L_borde`).
     pub l_sut_min_km: f64,
+    /// Muerte de placas (nota de demografía de placas, rama A). A1: dos placas cuyo borde común lleva
+    /// `τ_fus` Myr seguidos con la velocidad relativa máxima por debajo de `v_fus` (cm/año) se sueldan,
+    /// si entre ellas no hay una fosa activa ni un rift que se estira. A2: una microplaca (de menos de
+    /// `A_micro`, Mkm²) que lleva `τ_micro` Myr sin fosa activa propia pasa a la vecina con la que
+    /// comparte más borde.
+    pub v_fus_cm_anio: f64,
+    pub tau_fus_myr: f64,
+    pub a_micro_mkm2: f64,
+    pub tau_micro_myr: f64,
     pub v_rift_cm_anio: f64,
     pub v_sutura_cm_anio: f64,
     pub t_sutura_myr: f64,
@@ -373,6 +382,10 @@ impl Default for TectonicaCfg {
             lambda_a_rift: 4.0e-4,
             a_trozo_min_mkm2: 0.5,
             l_sut_min_km: 450.0,
+            v_fus_cm_anio: 0.2,
+            tau_fus_myr: 20.0,
+            a_micro_mkm2: 0.5,
+            tau_micro_myr: 10.0,
             v_rift_cm_anio: 2.0,
             v_sutura_cm_anio: 0.5,
             t_sutura_myr: 10.0,
@@ -890,6 +903,15 @@ impl TectonicaCfg {
         }
         if !(self.w_margen_km >= 0.0 && self.h_rot_km > 0.0) {
             return Err(invalid("se requiere w_margen_km >= 0 y h_rot_km > 0"));
+        }
+        if !(self.v_fus_cm_anio >= 0.0
+            && self.tau_fus_myr > 0.0
+            && self.a_micro_mkm2 >= 0.0
+            && self.tau_micro_myr >= 0.0)
+        {
+            return Err(invalid(
+                "se requiere v_fus_cm_anio, a_micro_mkm2, tau_micro_myr >= 0 y tau_fus_myr > 0",
+            ));
         }
         if !(self.lambda_a_rift >= 0.0 && self.a_trozo_min_mkm2 > 0.0 && self.l_sut_min_km >= 0.0) {
             return Err(invalid(

@@ -57,6 +57,11 @@ def correr(semilla, ajustes):
         t = json.load(f)['run']['tectonica']
     bins = t['edades_oceano']['frac_por_10_myr']
     m['tect_edad_mas_180_frac'] = sum(bins[18:])
+    # Nota de demografía de placas §10: placas al final y fracción del planeta en las 15 mayores.
+    areas = sorted((p['area_frac'] for p in t['placas_final']), reverse=True)
+    m['tect_placas_final'] = len(areas)
+    m['tect_15_mayores_frac'] = sum(areas[:15])
+    m['tect_placas_1pc'] = sum(1 for a in areas if a >= 0.01)
     return m
 
 
@@ -68,6 +73,7 @@ def referencia():
         'tierra_frac': roca['tierra_frac'],
         'altura_media_tierra_m': roca['altura_media_tierra_m'],
         'tierra_bajo_200_frac': roca['hipsometria_frac'][0],
+        'tierra_sobre_2000_frac': sum(roca['hipsometria_frac'][4:]),
         'rel_pendiente_media_tierra': r['pendientes_25km']['tierra_sobre_0']['media'],
         'rel_plataforma_km': r['plataforma']['nivel3']['anchura_media_km'],
     }
@@ -78,6 +84,7 @@ FILAS = [
     ('tierra_frac', 'Tierra emergida (fracción)', None, None),
     ('altura_media_tierra_m', 'Altura media de la tierra (m)', None, None),
     ('tierra_bajo_200_frac', 'Tierra por debajo de 200 m (fracción)', None, None),
+    ('tierra_sobre_2000_frac', 'Tierra por encima de 2 000 m (fracción)', None, None),
     ('rel_pendiente_media_tierra', 'Pendiente media de la tierra (a ±25 km)', None, None),
     ('rel_plataforma_km', 'Anchura media de la plataforma (km)', None, None),
     ('tect_nivel_mar_m', 'Nivel del mar al final de la deriva, respecto al dato (m)',
@@ -99,7 +106,11 @@ FILAS = [
      lambda x: abs(x - 104.0) <= 26.0),
     ('tect_bal_edad_max_margen_final_myr', 'Edad máxima de los márgenes pasivos al final (Myr)', '~180',
      lambda x: x <= 225.0),
-    ('tect_bal_colisiones_km', 'Choques: longitud (km)', 'CCB 23 000', None),
+    ('tect_bal_colisiones_km', 'Choques: longitud (km)', 'CCB 23 000 ± 25 %', lambda x: abs(x / 23003.0 - 1.0) <= 0.25),
+    ('tect_bal_difusas_km', 'Convergencia difusa: longitud (km)', 'OCB 17 400 ± 50 %', lambda x: abs(x / 17447.0 - 1.0) <= 0.5),
+    ('tect_placas_final', 'Placas al final', 'Bird 58 en la malla (13 de ≥1 %)', None),
+    ('tect_placas_1pc', 'Placas de al menos el 1 % del planeta, al final', 'Bird 13', lambda x: x <= 1.5 * 13),
+    ('tect_15_mayores_frac', 'Fracción del planeta en las 15 placas mayores, al final', 'Bird 0,958 ± 0,10', lambda x: abs(x - 0.958) <= 0.10),
     ('tect_bal_convergencia_media_choques_cm_anio', 'Choques: convergencia media (cm/año)', 'CCB 1,87', None),
     ('tect_bal_duracion_media_choques_myr', 'Choques: duración media de los que acaban (Myr)', None, None),
     ('tect_bal_choques_con_losa_au', 'Choques: pérdida con la losa colgando (AU)', None, None),
@@ -133,6 +144,7 @@ def main():
         res = list(ex.map(lambda s: correr(s, a.set), semillas))
     for m in res:
         m['tierra_bajo_200_frac'] = m['hipsometria_frac'][0]
+        m['tierra_sobre_2000_frac'] = sum(m['hipsometria_frac'][4:])
     ref = referencia()
     resumen = {'semillas': semillas, 'ajustes': a.set, 'filas': []}
     print(f'\n{len(semillas)} semillas ({", ".join(map(str, semillas))}) en {time.monotonic() - inicio:.0f} s de pared')

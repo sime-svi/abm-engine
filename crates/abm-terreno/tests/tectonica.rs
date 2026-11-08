@@ -3595,9 +3595,16 @@ struct InformeDemografia {
     semilla: u64,
     fotos: Vec<FotoDemografia>,
     /// D1, tras el rodaje, por 100 Myr: nacimientos (rift, invasión, salto de dorsal, espontáneo) y
-    /// muertes (consumida entera, soldada en un choque, absorbida).
+    /// muertes (consumida entera, soldada en un choque, absorbida; y con la rama A, soldada por borde
+    /// inactivo y microplaca capturada).
     nacen: [f64; 4],
-    mueren: [f64; 3],
+    mueren: [f64; 5],
+    /// §10, medias tras el rodaje: fondo que se hunde (km²/año), velocidad de las placas (cm/año),
+    /// edad media del fondo (Myr; media de los pasos y al final) y correlación de Forsyth y Uyeda.
+    a_sub: f64,
+    v_rms: f64,
+    edad_fondo: [f64; 2],
+    fu_fosa: f64,
     /// D2, tras el rodaje, por 100 Myr (km): fosa creada por nacimiento inducido, nacimiento
     /// espontáneo, invasión de transformantes y separación de márgenes invadidos; perdida por muerte
     /// sin convergencia y por choque; y el resto del cambio (geometría del borde, divisiones y
@@ -3676,6 +3683,9 @@ fn diagnosticar_demografia(semilla: u64, variante: &str) -> InformeDemografia {
                 }
                 "sutura" => cuenta(&mut inf.mueren[1]),
                 "absorcion" => cuenta(&mut inf.mueren[2]),
+                "soldadura" => cuenta(&mut inf.mueren[3]),
+                // Una placa sin área ya contó como consumida entera al quedarse sin ella.
+                "captura_microplaca" if e.area_km2 > 0.0 => cuenta(&mut inf.mueren[4]),
                 "nacimiento_fosa" if tras_rodaje => match e.clase.as_deref() {
                     Some("inducido") => inf.fosa_creada[0] += e.longitud_km,
                     Some("espontaneo_transformante") => inf.fosa_creada[1] += e.longitud_km,
@@ -3710,6 +3720,9 @@ fn diagnosticar_demografia(semilla: u64, variante: &str) -> InformeDemografia {
                 l_fosa_ini = Some(m.fosas_km);
             }
             n_val += 1.0;
+            inf.a_sub += m.area_subducida_km2_anio;
+            inf.v_rms += m.v_rms_cm_anio;
+            inf.edad_fondo[0] += m.edad_media_oceano_myr;
             inf.conv_media_km[0] += m.fosas_km;
             inf.conv_media_km[1] += m.difusas_km;
             inf.conv_media_km[2] += m.colisiones_km;
@@ -3835,6 +3848,11 @@ fn diagnosticar_demografia(semilla: u64, variante: &str) -> InformeDemografia {
     }
     inf.inactivo_medio_km /= n_val;
     inf.placas_media = placas_suma / n_val;
+    inf.a_sub /= n_val;
+    inf.v_rms /= n_val;
+    inf.edad_fondo[0] /= n_val;
+    inf.edad_fondo[1] = d.metricas.last().map_or(0.0, |m| m.edad_media_oceano_myr);
+    inf.fu_fosa = d.fu_fosa.0 / (d.fu_fosa.1.max(1) as f64);
     // Potencia de las fuerzas al final (nota de fosas §10, medida 3).
     let mut pot = [0.0; 4];
     for (_, _, x) in &d.potencias {
@@ -4025,7 +4043,7 @@ fn diagnostico_demografia_placas() {
             println!("  {:4.0} | {}", g[0].fotos[j].myr, celdas.join(" | "));
         }
         println!(
-            "D1, por 100 Myr tras el rodaje: nacen por rift {}, invasión {}, salto de dorsal {}, espontáneo {}; mueren consumidas enteras {}, soldadas {}, absorbidas {}; placas con área (media) {}",
+            "D1, por 100 Myr tras el rodaje: nacen por rift {}, invasión {}, salto de dorsal {}, espontáneo {}; mueren consumidas enteras {}, soldadas en un choque {}, absorbidas {}, soldadas por borde inactivo {}, microplacas capturadas {}; placas con área (media) {}",
             ms(&|i| i.nacen[0]),
             ms(&|i| i.nacen[1]),
             ms(&|i| i.nacen[2]),
@@ -4033,7 +4051,17 @@ fn diagnostico_demografia_placas() {
             ms(&|i| i.mueren[0]),
             ms(&|i| i.mueren[1]),
             ms(&|i| i.mueren[2]),
+            ms(&|i| i.mueren[3]),
+            ms(&|i| i.mueren[4]),
             ms(&|i| i.placas_media)
+        );
+        println!(
+            "§10, medias tras el rodaje: fondo que se hunde {} km²/año (2,7–3,4); velocidad de las placas {} cm/año (4,39 ± 25 %); edad media del fondo {} Myr en la deriva y {} al final (no peor que 88); Forsyth–Uyeda fosa {}",
+            ms(&|i| i.a_sub),
+            ms(&|i| i.v_rms),
+            ms(&|i| i.edad_fondo[0]),
+            ms(&|i| i.edad_fondo[1]),
+            ms(&|i| i.fu_fosa)
         );
         println!(
             "D2, km de fosa por 100 Myr tras el rodaje: creada por nacimiento inducido {}, espontáneo {}, invasión de transformantes {}, separación de márgenes invadidos {}; perdida sin convergencia {}, por choque {}; resto (geometría, divisiones y fusiones) {}",
@@ -4060,4 +4088,142 @@ fn diagnostico_demografia_placas() {
             ms(&|i| i.potencia[3])
         );
     }
+}
+
+// --- Muerte de placas (nota_demografia_placas.md §10, rama A) ------------------------------------
+
+/// Configuración de las pruebas de la rama A: sin rifts ni saltos de dorsal, sin erosión ni
+/// nacimientos espontáneos.
+fn cfg_muerte() -> TectonicaCfg {
+    TectonicaCfg {
+        lambda_a_rift: 0.0,
+        n_min: 1,
+        lambda_esp: 0.0,
+        e1_km_myr: 1e-12,
+        ..TectonicaCfg::default()
+    }
+}
+
+#[test]
+fn dos_placas_que_se_mueven_igual_se_sueldan_conservando_la_corteza() {
+    // Nota de demografía §10, prueba 1: dos placas quietas (velocidad relativa nula) se sueldan al
+    // cumplir τ_fus, y la corteza y el sedimento se conservan.
+    let cfg = cfg_muerte();
+    let malla = Malla::new(48, 1, 6371.0);
+    let dirs = malla.dir.clone();
+    let mut d = Deriva::desde(&cfg, 3, malla, 0.0, &[10, 20], |k| {
+        let x = dirs[k];
+        let cont = x[0] > 30f64.to_radians().cos();
+        let mut c = corteza(cont, if cont { 35.0 } else { 7.0 }, 60.0);
+        c.sed = 0.5;
+        (usize::from(x[2] < 0.0), c)
+    });
+    d.arrancar_con(&[[0.0; 3], [0.0; 3]]);
+    let v0 = d.inventario_continental();
+    let t_fus = cfg.tau_fus_myr.round() as usize;
+    for _ in 0..t_fus - 2 {
+        d.dar_paso();
+    }
+    assert!(
+        !d.eventos.iter().any(|e| e.tipo == "soldadura"),
+        "antes de τ_fus no se sueldan"
+    );
+    for _ in 0..4 {
+        d.dar_paso();
+    }
+    let sold: Vec<_> = d.eventos.iter().filter(|e| e.tipo == "soldadura").collect();
+    assert_eq!(sold.len(), 1, "se sueldan una vez al cumplir τ_fus");
+    assert_eq!(
+        d.placas.iter().filter(|p| p.viva).count(),
+        1,
+        "queda una sola placa"
+    );
+    let dv = (d.inventario_continental() - v0).abs() / v0;
+    assert!(
+        dv < 1e-9,
+        "la corteza y el sedimento se conservan: {dv:.2e}"
+    );
+}
+
+#[test]
+fn dos_placas_con_una_fosa_activa_no_se_sueldan() {
+    // Nota de demografía §10, prueba 2: con `v_fus` enorme todo borde cuenta como inactivo; aun así,
+    // dos placas con una fosa activa entre ellas no se sueldan.
+    let cfg = TectonicaCfg {
+        v_fus_cm_anio: 1e3,
+        tau_fus_myr: 3.0,
+        ..cfg_muerte()
+    };
+    let malla = Malla::new(48, 1, 6371.0);
+    let dirs = malla.dir.clone();
+    let mut d = Deriva::desde(&cfg, 5, malla, 0.0, &[1, 2], |k| {
+        let (la, lo) = lat_lon(dirs[k]);
+        let (la, lo) = (la.to_degrees(), lo.to_degrees());
+        if la.abs() < 10.0 && lo > -60.0 && lo < 0.0 {
+            (0, corteza(false, 7.0, 120.0))
+        } else {
+            (1, corteza(false, 7.0, 40.0))
+        }
+    });
+    d.arrancar_con(&[[0.0, 0.0, 5.0 * 10.0 / 6371.0], [0.0; 3]]);
+    let l = d.cfg.l_losa_km;
+    d.activar_fosas(l);
+    for _ in 0..8 {
+        d.dar_paso();
+    }
+    assert!(
+        d.bordes
+            .iter()
+            .any(|b| b.tipo == TipoBorde::Subduccion && b.p_subduce),
+        "la fosa sigue activa"
+    );
+    assert!(
+        !d.eventos.iter().any(|e| e.tipo == "soldadura"),
+        "con una fosa activa entre ellas no se sueldan"
+    );
+}
+
+#[test]
+fn una_microplaca_sin_fosa_la_captura_la_vecina_con_mas_borde() {
+    // Nota de demografía §10, prueba 3: una microplaca (casquete de 3°, ~0,35 Mkm²) sin fosa la
+    // captura, a los τ_micro, la vecina con la que comparte más borde: la placa del norte, donde cae
+    // la mayor parte de su borde.
+    let cfg = cfg_muerte();
+    let malla = Malla::new(48, 1, 6371.0);
+    let dirs = malla.dir.clone();
+    let centro = [1.0f64.to_radians().sin(), 0.0, 1.0f64.to_radians().cos()];
+    let centro = [centro[2], 0.0, centro[0]];
+    let mut d = Deriva::desde(&cfg, 6, malla, 0.0, &[100, 200, 300], |k| {
+        let x = dirs[k];
+        if dot(x, centro) > 3f64.to_radians().cos() {
+            (2, corteza(false, 7.0, 30.0))
+        } else if x[2] >= 0.0 {
+            (0, corteza(false, 7.0, 60.0))
+        } else {
+            (1, corteza(false, 7.0, 60.0))
+        }
+    });
+    d.arrancar_con(&[[0.0; 3], [0.0; 3], [0.0; 3]]);
+    let t_micro = cfg.tau_micro_myr.round() as usize;
+    for _ in 0..t_micro - 2 {
+        d.dar_paso();
+    }
+    assert!(
+        d.placas.iter().any(|p| p.viva && p.id == 300),
+        "antes de τ_micro sigue viva"
+    );
+    for _ in 0..4 {
+        d.dar_paso();
+    }
+    let cap = d
+        .eventos
+        .iter()
+        .find(|e| e.tipo == "captura_microplaca")
+        .expect("la microplaca es capturada");
+    assert_eq!(
+        cap.placas,
+        vec![300, 100],
+        "la captura la vecina con más borde"
+    );
+    assert!(!d.placas.iter().any(|p| p.viva && p.id == 300));
 }

@@ -18,8 +18,8 @@ use super::*;
 #[derive(Debug, Clone)]
 pub(super) struct LadoRift {
     /// Placa (id) de este lado y la del otro.
-    placa: u64,
-    otra: u64,
+    pub(super) placa: u64,
+    pub(super) otra: u64,
     /// Celdas locales de la franja: la corteza continental de partida y la que rellena la abertura.
     celdas: Vec<u32>,
     /// Espesor de partida (km), anchura de la franja de partida `W_0` (km) y longitud del rift (km).

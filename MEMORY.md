@@ -1425,3 +1425,35 @@ Formato de entrada:
   - pide actualizar `main` y subir cada commit a GitHub en cuanto se haga (CLAUDE.md §9);
   - la capa no se congela todavía: antes se arregla el exceso de fosas (nota de demografía de placas).
 - **Pendiente** (§65, en orden): la fosa y el área que se hunde; el relieve alto; los márgenes del estado inicial; la pérdida en choques; los artefactos de representación; la India que se acelera; el mar del escenario de relajación; las ampliaciones de la nota de rifts; lo que sigue de §58; el tiempo (243 s solo, 250,4 en la batería).
+
+## [2026-11-08] Nota de demografía de placas: diagnóstico D1–D5, rama A y punto de decisión (sin fusionar)
+
+- **Qué pidió el responsable.**
+  - Subir el presupuesto del planeta a 275 s, actualizar `main` con la ronda anterior y subir la rama.
+  - Aceptó la fracción de arco fuera de los continentes, `E_1` = 0,0075, la India como pendiente y `λ_A` = 4·10⁻⁴.
+  - En CLAUDE.md §9: cada commit se sube en el acto, y Claude commitea cuando lo considera.
+  - Con la nota de demografía de placas: diagnóstico del §0 (D1–D5, 5 semillas) y respuestas al §11; aplicar las ramas A, B y C que correspondan, midiendo tras cada una, y calibrarlas contra el §10. Si apunta a H4, parar y traer el diagnóstico.
+  - Tabla de cierre con las filas de relieve, informe en `docs/informes/` y `MAPA_DEL_MOTOR.md`.
+- **Hecho.**
+  - `main` = 7c54bbd (la ronda g con el presupuesto de 275 s), verificado en verde y subido.
+  - Rama nueva `terreno-demografia-placas`.
+  - Diagnóstico `diagnostico_demografia_placas` (055da72), con lo que necesita en el modelo:
+    - `Borde::v_rel`;
+    - `Deriva::hundido_paso`;
+    - `fosas_activas()`;
+    - la longitud del evento de nacimiento inducido, que contaba los dos lados del borde.
+  - Rama A (`soldaduras`, `capturas`; parámetros `v_fus`, `τ_fus`, `A_micro`, `τ_micro`) con tres pruebas.
+  - Informe `docs/informes/2026-11-08_demografia_placas.md`.
+  - `MAPA_DEL_MOTOR.md` creado (no existía).
+- **Diagnóstico.**
+  - Sobran placas grandes: ~20 de ≥1 % frente a 13 (H1). Nacen 21,3 por 100 Myr y mueren 19,3.
+  - La invasión aporta el 15 % de la fosa creada (sin H2) y la difusa es ×0,75 de OCB (sin H3).
+  - Borde inactivo, ~1 000 km. Las placas consumidas enteras seguían «vivas»: 29 al final.
+- **Rama A.**
+  - A1 no actúa nunca, ni en los extremos de su rango.
+  - A2 retira las placas fantasma pero deja vivir más microplacas de la invasión.
+  - La fosa baja un 7 %, dentro de la dispersión.
+  - El planeta tarda 298 s solo, frente a 243: el reparto del sedimento al mar se encarece en todas las semillas, sin perfilar.
+- **Se para:** tras A, ninguna rama encaja con la causa. Las placas grandes nacen en los rifts (~5 por 100 Myr) y solo mueren en las suturas (~3); las oceánicas grandes no se consumen enteras. Opciones para el responsable, en el informe (§8).
+- **Tabla de cierre:** la tierra por encima de 2 000 m es el 15 %, frente al 5,3 % de la roca de ETOPO sin hielo (el ~11 % de la nota incluye el hielo).
+- **`main` no se toca:** la rama A no mejora el exceso y se pasa del presupuesto de tiempo. Decide el responsable.

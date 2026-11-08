@@ -16,6 +16,7 @@ abm/
 ├── [x] MEMORY.md                  # Histórico append-only del proyecto
 ├── [x] DATABASE_SCHEMA.md         # Arquitectura de la BD
 ├── [x] TREE.md                    # Este archivo
+├── [x] MAPA_DEL_MOTOR.md          # Qué calcula cada binario, en qué orden, con qué reglas y parámetros, y en qué estado
 ├── [x] README.md                  # Puesta en marcha para humanos
 ├── [x] LICENSE                    # Licencia propietaria: todos los derechos reservados (los datos de terceros conservan las suyas)
 ├── [x] Cargo.toml                 # Workspace: miembros + versiones de dependencias ([workspace.dependencies])
@@ -77,7 +78,7 @@ abm/
 │   │   │   └── tectonica/           # Relieve tectónico (incremento 4): deriva de placas → relieve de nacimiento
 │   │   │       ├── [x] mod.rs       # Génesis tectónica, estado final, interpolación a las celdas del terreno
 │   │   │       ├── [x] malla.rs     # Malla tectónica (nivel 2 del cubo) y cuaterniones
-│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques con η según el grosor (adenda v7) y el origen de arco por fracción (adenda v9), delaminación, flujo lateral cúbico (adenda v6; la red se amplía en vez de rehacerse), erosión, sedimento (solo al océano mundial), eventos, márgenes pasivos y su perfil; procedencia de cada muestra (diagnóstico: cómo nació, lote, vías de su corteza continental)
+│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques con η según el grosor (adenda v7) y el origen de arco por fracción (adenda v9), delaminación, flujo lateral cúbico (adenda v6; la red se amplía en vez de rehacerse), erosión, sedimento (solo al océano mundial), eventos (con la soldadura de placas y la captura de microplacas de la nota de demografía, en su rama), márgenes pasivos y su perfil; procedencia de cada muestra (diagnóstico: cómo nació, lote, vías de su corteza continental)
 │   │   │       ├── [x] deriva/suavizado.rs # Borde suavizado (nota de bordes): pertenencia φ, normal, tipo de tramo, suavizado de la pertenencia, islas
 │   │   │       ├── [x] deriva/fosas.rs     # Ciclo de las fosas (nota de fosas v6): tramos difusos y activos, nacimientos (espontáneos solo en transformantes), invasión de transformantes y márgenes pasivos, polaridad, losa, rotura de la losa tras un choque, convergencia difusa
 │   │   │       ├── [x] deriva/rifts.rs     # Rifts (nota de rifts): suturas como líneas, bloques continentales, ruptura por área (λ_A), trazado por la sutura más larga o un círculo, división por cualquier corte; adelgazamiento de los márgenes (adenda v8 §6.10): la abertura se rellena estirando la corteza en rampa, conservando el volumen, hasta la rotura
@@ -86,7 +87,7 @@ abm/
 │   │   └── tests/
 │   │       ├── [x] terreno.rs       # incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación…) + lluvia y w vs resolución + diagnóstico
 │   │       ├── [x] erosion.rs       # incr. 3 (material, hondonadas, camino, tope, caché…) + relieve orográfico + mundo plano
-│   │       └── [x] tectonica.rs     # incr. 4: determinismo, giro rígido, sin continentes, India–Asia, rifts (por la sutura, bloque pequeño, determinismo), caché (+ exploratorias: deriva_en_varias_semillas, calibraciones, diagnostico_pilas, diagnostico_fondo_viejo)
+│   │       └── [x] tectonica.rs     # incr. 4: determinismo, giro rígido, sin continentes, India–Asia, rifts (por la sutura, bloque pequeño, determinismo), soldadura y captura de placas, caché (+ exploratorias: deriva_en_varias_semillas, diagnostico_demografia_placas, calibraciones, diagnostico_pilas, diagnostico_fondo_viejo)
 │   │
 │   ├── abm-metrics/               # OBSERVADORES + LOD de almacenamiento (→ core, ruleset, persistence)
 │   │   ├── [x] Cargo.toml
@@ -145,6 +146,8 @@ abm/
 │       └── [x] V1__initial.sql    # simulation_runs + metrics (hypertable)
 │
 ├── docs/
+│   ├── informes/                  # Un informe por ronda de medida, con sus tablas
+│   │   └── [x] 2026-11-08_demografia_placas.md # Diagnóstico de la demografía de placas (D1–D5), rama A y tabla de cierre con el relieve
 │   └── design/                    # Modelos matemáticos y ecuaciones (precede al código)
 │       ├── inicial/               # Una carpeta por fase (ver CLAUDE §8.1)
 │       │   ├── [x] README.md          # Explicación llana de la fase + consideraciones
@@ -166,7 +169,8 @@ abm/
 │       │   ├── [x] adenda_balance_corteza.md              # Adenda del responsable (v9): balance de la corteza, flujo lateral, erosión con la altura, η según el grosor, rifts que estiran, origen de arco por fracción (IMPLEMENTADA; incremento-4-diseno.md §9, §13, §23, §28, §47, §51 y §60)
 │       │   ├── [x] nota_bordes_placa.md                   # Nota del responsable: borde suavizado, dientes, 20°, islas (IMPLEMENTADA; incremento-4-diseno.md §12)
 │       │   ├── [x] nota_ciclo_fosas.md                    # Nota del responsable (v6): nacimiento, vida y muerte de las fosas (IMPLEMENTADA; incremento-4-diseno.md §24–§27, §31, §40 y §51)
-│       │   └── [x] nota_rifts.md                          # Nota del responsable: rifts por área y por suturas, ciclo de Wilson; la última de la tectónica (IMPLEMENTADA; incremento-4-diseno.md §59–§65)
+│       │   ├── [x] nota_rifts.md                          # Nota del responsable: rifts por área y por suturas, ciclo de Wilson (IMPLEMENTADA; incremento-4-diseno.md §59–§65)
+│       │   └── [x] nota_demografia_placas.md              # Nota del responsable: demografía de placas y exceso de fosas (DIAGNÓSTICO y rama A en la rama terreno-demografia-placas; ninguna rama encaja: decide el responsable; §66)
 │       ├── paquetes/              # Fase: código dividido en el workspace de paquetes
 │       │   └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)

@@ -144,7 +144,11 @@ pub mod lote {
     pub const SUAVIZADO: u8 = 7;
     /// Separación de un océano por la invasión de un margen pasivo (v4 §6.4).
     pub const INVASION: u8 = 8;
-    pub const NOMBRES: [&str; 9] = [
+    /// Soldadura de dos placas con el borde inactivo y captura de una microplaca (nota de demografía
+    /// de placas, rama A).
+    pub const SOLDADURA: u8 = 9;
+    pub const CAPTURA: u8 = 10;
+    pub const NOMBRES: [&str; 11] = [
         "ninguno",
         "sutura",
         "absorción",
@@ -154,6 +158,8 @@ pub mod lote {
         "isla absorbida",
         "suavizado de la pertenencia",
         "invasión",
+        "soldadura",
+        "captura de microplaca",
     ];
 }
 
@@ -384,6 +390,9 @@ pub struct Placa {
     pub invadidas: HashMap<u32, Invadida>,
     /// Longitud invadida (km) en el último intento de separar el océano de delante.
     pub inv_intento_km: f64,
+    /// Tiempo seguido sin ninguna fosa activa propia, ni como placa que baja ni como placa de arriba
+    /// (`T_sf`, nota de demografía de placas A2, Myr).
+    pub sin_fosa_myr: f64,
 }
 
 /// Una celda de margen pasivo por la que ya ha pasado el frente de una fosa que invade (v4 §6.4):
@@ -416,6 +425,7 @@ impl Placa {
             ancestros: Vec::new(),
             invadidas: HashMap::new(),
             inv_intento_km: 0.0,
+            sin_fosa_myr: 0.0,
         }
     }
 
@@ -617,6 +627,8 @@ struct Par {
     choque_inicio_myr: f64,
     /// Régimen del margen en el último paso con subducción: (id de la placa de arriba, ¿erosivo?).
     regimen: Option<(u64, bool)>,
+    /// Tiempo seguido con el borde común inactivo (`T_in`, nota de demografía de placas A1, Myr).
+    inactivo_myr: f64,
 }
 
 /// Un tramo de fosa del paso (adenda de balance §3): la celda del mundo donde la placa de abajo
@@ -1349,7 +1361,9 @@ impl Deriva {
         self.trazar("erosion_y_sedimento");
         let mut cambio = self.suturas();
         cambio |= self.rifts();
-        cambio |= self.absorciones();
+        // Muerte de placas (nota de demografía de placas, rama A), después de los rifts.
+        cambio |= self.soldaduras();
+        cambio |= self.capturas();
         cambio |= self.saltos_de_dorsal();
         if cambio {
             for p in self.placas.iter_mut().filter(|p| p.viva) {
@@ -1625,6 +1639,7 @@ impl Deriva {
                         choque_avisado: false,
                         choque_inicio_myr: 0.0,
                         regimen: None,
+                        inactivo_myr: 0.0,
                     },
                 );
                 i
@@ -4637,44 +4652,187 @@ impl Deriva {
         }
     }
 
-    /// Placas pequeñas (§6.5): menos de `A_min` → se absorben en la vecina con más borde común.
-    fn absorciones(&mut self) -> bool {
-        let areas = self.area_placa();
-        let a_min = self.cfg.a_min_frac * self.malla.area_total();
-        let mut cambio = false;
-        // Una microplaca con una losa que tira (la que separa la invasión de un margen, v4 §6.4) no
-        // se funde: se va hundiendo.
-        let mut con_losa = vec![false; self.placas.len()];
-        for b in &self.bordes {
-            if b.p_subduce && b.losa > 0.0 {
-                con_losa[b.p as usize] = true;
+    /// Celdas de borde con una fosa activa entre las dos placas del borde.
+    fn bordes_con_fosa(&self) -> Vec<bool> {
+        self.bordes
+            .iter()
+            .map(|b| {
+                b.tipo == TipoBorde::Subduccion
+                    && self
+                        .estado_fosa(b.p, self.rep[b.k as usize], b.q)
+                        .is_some_and(|e| e.activa)
+            })
+            .collect()
+    }
+
+    /// A1. Soldadura por borde inactivo (nota de demografía de placas §6): dos placas vecinas cuya
+    /// velocidad relativa máxima a lo largo de todo su borde común lleva `τ_fus` Myr seguidos por
+    /// debajo de `v_fus` se funden; la mayor absorbe a la menor y la corteza se conserva (`fundir`).
+    /// No se funden si su borde común incluye una fosa activa o un rift que aún se estira.
+    fn soldaduras(&mut self) -> bool {
+        let v_fus = self.cfg.v_fus_cm_anio * CM_ANIO;
+        let dt = self.cfg.dt_myr;
+        let con_fosa = self.bordes_con_fosa();
+        // Por par de placas (índices): velocidad relativa máxima, longitud y si hay fosa activa.
+        let mut pares: std::collections::BTreeMap<(u32, u32), (f64, f64, bool)> =
+            Default::default();
+        for (b, &fosa) in self.bordes.iter().zip(&con_fosa) {
+            let clave = (b.p.min(b.q), b.p.max(b.q));
+            let e = pares.entry(clave).or_insert((0.0, 0.0, false));
+            e.0 = e.0.max(b.v_rel);
+            e.1 += 0.5 * b.largo_km;
+            e.2 |= fosa;
+        }
+        let en_rift: Vec<(u64, u64)> = self
+            .rifts_activos
+            .iter()
+            .map(|l| (l.placa.min(l.otra), l.placa.max(l.otra)))
+            .collect();
+        // Los pares que ya no son vecinos empiezan de cero.
+        let mut vecinos: Vec<(u64, u64)> = pares
+            .keys()
+            .map(|&(p, q)| {
+                let (a, b) = (self.placas[p as usize].id, self.placas[q as usize].id);
+                (a.min(b), a.max(b))
+            })
+            .collect();
+        vecinos.sort_unstable();
+        for par in &mut self.pares {
+            if vecinos.binary_search(&(par.a, par.b)).is_err() {
+                par.inactivo_myr = 0.0;
             }
         }
-        for (pi, &area_p) in areas.iter().enumerate() {
-            if !self.placas[pi].viva || area_p >= a_min || con_losa[pi] {
+        let areas = self.area_placa();
+        let mut fundir: Vec<(usize, usize, f64, f64)> = Vec::new();
+        for (&(p, q), &(v_max, largo, fosa)) in &pares {
+            let (ip, iq) = (self.placas[p as usize].id, self.placas[q as usize].id);
+            let i = self.par_idx(ip, iq);
+            if v_max < v_fus {
+                self.pares[i].inactivo_myr += dt;
+            } else {
+                self.pares[i].inactivo_myr = 0.0;
+            }
+            let t_in = self.pares[i].inactivo_myr;
+            if t_in >= self.cfg.tau_fus_myr && !fosa && !en_rift.contains(&(ip.min(iq), ip.max(iq)))
+            {
+                let (a, b) = if areas[p as usize] >= areas[q as usize] {
+                    (p as usize, q as usize)
+                } else {
+                    (q as usize, p as usize)
+                };
+                fundir.push((a, b, largo, t_in));
+            }
+        }
+        let mut cambio = false;
+        for (a, b, largo, t_in) in fundir {
+            if !self.placas[a].viva || !self.placas[b].viva {
                 continue;
             }
-            // Vecina con más borde común.
+            let ids = vec![self.placas[a].id, self.placas[b].id];
+            self.estampar(b, lote::SOLDADURA);
+            self.fundir(a, b);
+            let i = self.par_idx(ids[0], ids[1]);
+            self.pares[i].inactivo_myr = 0.0;
+            self.evento_det(
+                "soldadura",
+                ids,
+                largo,
+                0.0,
+                None,
+                Detalle {
+                    tiempo_choque_myr: Some(t_in),
+                    ..Detalle::default()
+                },
+            );
+            cambio = true;
+        }
+        cambio
+    }
+
+    /// A2. Captura de microplacas (nota de demografía de placas §6): una placa de menos de `A_micro`
+    /// que lleva `τ_micro` Myr sin fosa activa propia (ni como placa que baja ni como placa de
+    /// arriba) pasa a la vecina con la que comparte más borde (empates, por el índice de placa), con
+    /// la misma conservación que A1. Sustituye a la absorción de toda placa de menos de `A_min`, de
+    /// la que solo se libraban las que tenían una losa que tiraba. Una placa sin área ni borde (la
+    /// consumida entera) pasa a la placa bajo sus muestras ocultas o, si no le queda ninguna, se
+    /// retira.
+    fn capturas(&mut self) -> bool {
+        let areas = self.area_placa();
+        let a_micro = self.cfg.a_micro_mkm2 * 1e6;
+        let dt = self.cfg.dt_myr;
+        let con_fosa = self.bordes_con_fosa();
+        let mut fosa_propia = vec![false; self.placas.len()];
+        for (b, &fosa) in self.bordes.iter().zip(&con_fosa) {
+            if fosa {
+                fosa_propia[b.p as usize] = true;
+                fosa_propia[b.q as usize] = true;
+            }
+        }
+        let mut capturar: Vec<usize> = Vec::new();
+        for (pi, p) in self.placas.iter_mut().enumerate() {
+            if !p.viva {
+                continue;
+            }
+            if areas[pi] < a_micro && !fosa_propia[pi] {
+                p.sin_fosa_myr += dt;
+            } else {
+                p.sin_fosa_myr = 0.0;
+            }
+            if areas[pi] < a_micro && p.sin_fosa_myr >= self.cfg.tau_micro_myr {
+                capturar.push(pi);
+            }
+        }
+        let mut cambio = false;
+        for pi in capturar {
+            if !self.placas[pi].viva {
+                continue;
+            }
+            // La vecina con más borde común; sin borde, la placa bajo la mayoría de sus muestras.
             let mut borde: Vec<(u32, f64)> = Vec::new();
             for b in &self.bordes {
-                if b.p as usize == pi {
+                if b.p as usize == pi && self.placas[b.q as usize].viva {
                     match borde.iter_mut().find(|x| x.0 == b.q) {
                         Some(x) => x.1 += b.largo_km,
                         None => borde.push((b.q, b.largo_km)),
                     }
                 }
             }
-            let Some(&(q, _)) = borde
+            let mut q = borde
                 .iter()
-                .filter(|x| self.placas[x.0 as usize].viva)
                 .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))
-            else {
-                continue;
-            };
-            let ids = vec![self.placas[pi].id, self.placas[q as usize].id];
-            self.estampar(pi, lote::ABSORCION);
-            self.fundir(q as usize, pi);
-            self.evento("absorcion", ids, 0.0, area_p, None);
+                .map(|x| x.0);
+            if q.is_none() {
+                let mut bajo: Vec<(u32, u32)> = Vec::new();
+                for &k in &self.placas[pi].mundo {
+                    let d = self.dueno[k as usize];
+                    if d == NADA || d as usize == pi || !self.placas[d as usize].viva {
+                        continue;
+                    }
+                    match bajo.iter_mut().find(|x| x.0 == d) {
+                        Some(x) => x.1 += 1,
+                        None => bajo.push((d, 1)),
+                    }
+                }
+                q = bajo
+                    .iter()
+                    .max_by(|a, b| a.1.cmp(&b.1).then(b.0.cmp(&a.0)))
+                    .map(|x| x.0);
+            }
+            let area = areas[pi];
+            match q {
+                Some(q) => {
+                    let ids = vec![self.placas[pi].id, self.placas[q as usize].id];
+                    self.estampar(pi, lote::CAPTURA);
+                    self.fundir(q as usize, pi);
+                    self.evento("captura_microplaca", ids, 0.0, area, None);
+                }
+                None if self.placas[pi].cort.is_empty() => {
+                    let ids = vec![self.placas[pi].id];
+                    self.placas[pi].morir();
+                    self.evento("captura_microplaca", ids, 0.0, 0.0, None);
+                }
+                None => continue,
+            }
             cambio = true;
         }
         cambio
