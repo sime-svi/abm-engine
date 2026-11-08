@@ -204,10 +204,33 @@ pub struct MetricaMyr {
     pub altura_tierra_por_edad_m: [f64; 5],
     #[serde(default)]
     pub tierra_por_edad_km2: [f64; 5],
-    /// Área continental cuya edad volvió a 0 en el paso, por causa: rift, arco, choque y
-    /// delaminación (km²).
+    /// Área continental cuya edad volvió a 0 en el paso, por causa: rift, arco, choque,
+    /// delaminación y gran erupción (km²).
     #[serde(default)]
-    pub reinicio_km2: [f64; 4],
+    pub reinicio_km2: [f64; 5],
+    /// Nota de puntos calientes §8: el magmatismo intraplaca del paso (AU): trazas (todo y la parte
+    /// que flota), mesetas y basaltos continentales; lo que se acreciona de las mesetas que llegan a
+    /// una fosa (AU); puntos calientes vivos y grandes erupciones en curso; y, cada 25 Myr, las
+    /// mesetas de más de 0,2 Mkm² (cuántas y su área), la profundidad media y mediana del océano (m)
+    /// y las islas volcánicas emergidas (km²).
+    #[serde(default)]
+    pub f_int_au: [f64; 4],
+    #[serde(default)]
+    pub mesetas_acrecionadas_au: f64,
+    #[serde(default)]
+    pub puntos_calientes: u32,
+    #[serde(default)]
+    pub erupciones: u32,
+    #[serde(default)]
+    pub mesetas_n: u32,
+    #[serde(default)]
+    pub mesetas_km2: f64,
+    #[serde(default)]
+    pub oceano_prof_media_m: f64,
+    #[serde(default)]
+    pub oceano_prof_mediana_m: f64,
+    #[serde(default)]
+    pub islas_km2: f64,
     /// Márgenes estirados distales (corteza de menos de 20 km) por tiempo desde la rotura (0–20,
     /// 20–50, 50–80, 80–120, 120–200 y más de 200 Myr): profundidad media bajo el mar (m; negativa
     /// si asoman), la del basamento sin su sedimento con agua encima (m) y área (km²).
@@ -240,6 +263,20 @@ pub struct CuentasCorteza {
     pub arcos_km3: f64,
     /// Producción de arcos sin franja donde ponerla (placa de arriba más estrecha que la franja).
     pub arcos_sin_franja_km3: f64,
+    /// Magmatismo intraplaca que entra en la corteza de tipo continental (`F_int`, nota de puntos
+    /// calientes §6.6): mesetas, basaltos continentales y la parte de las trazas que flota. Y, como
+    /// diagnóstico, todo lo que añaden las trazas, las mesetas y los basaltos, y lo que se acreciona
+    /// de las mesetas en las fosas.
+    #[serde(default)]
+    pub intraplaca_km3: f64,
+    #[serde(default)]
+    pub f_int_trazas_km3: f64,
+    #[serde(default)]
+    pub f_int_mesetas_km3: f64,
+    #[serde(default)]
+    pub f_int_cfb_km3: f64,
+    #[serde(default)]
+    pub mesetas_acrecionadas_km3: f64,
     /// Erosión por subducción (`F_SE`, §6.3): pasa al manto.
     pub erosion_subduccion_km3: f64,
     /// Erosión por subducción sin corteza continental cerca de la fosa (no ocurre).
@@ -304,7 +341,7 @@ impl CuentasCorteza {
     /// Cambio que explican las cuentas (§6.9): fuentes menos sumideros. El engrosamiento de los
     /// choques, el sedimento que se pega al margen y la erosión con su sedimento solo trasladan.
     pub fn explicado(&self) -> f64 {
-        self.arcos_km3
+        self.arcos_km3 + self.intraplaca_km3
             - self.erosion_subduccion_km3
             - self.sedimento_subducido_km3
             - self.choque_perdida_km3
@@ -621,5 +658,25 @@ pub struct BalanceMedio {
     #[serde(default)]
     pub ancho_plataforma_final_km: f64,
     #[serde(default)]
-    pub reinicio_km2_100myr: [f64; 4],
+    pub reinicio_km2_100myr: [f64; 5],
+    /// Nota de puntos calientes: magmatismo intraplaca medio (AU: trazas, su parte flotante,
+    /// mesetas y basaltos continentales), mesetas acrecionadas (AU), grandes erupciones por 100 Myr,
+    /// y al final las mesetas (cuántas y área), la profundidad media y mediana del océano y las
+    /// islas.
+    #[serde(default)]
+    pub f_int_au: [f64; 4],
+    #[serde(default)]
+    pub mesetas_acrecionadas_au: f64,
+    #[serde(default)]
+    pub grandes_erupciones_100myr: f64,
+    #[serde(default)]
+    pub mesetas_final_n: u32,
+    #[serde(default)]
+    pub mesetas_final_km2: f64,
+    #[serde(default)]
+    pub oceano_prof_media_final_m: f64,
+    #[serde(default)]
+    pub oceano_prof_mediana_final_m: f64,
+    #[serde(default)]
+    pub islas_final_km2: f64,
 }

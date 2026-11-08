@@ -109,6 +109,7 @@ def resumen_salida(doc):
             'rel_pendiente_media_tierra': pend[0]['media'],
             'rel_pendiente_p50_sobre_2000': pend[2000]['p50_p75_p90_p95_p99'][0],
             'rel_oceano_0_200_frac': rel['hipsometria_oceano_frac'][0],
+            'rel_hipsometria_oceano_frac': rel['hipsometria_oceano_frac'],
             'rel_tierra_en_depresion_frac': rel['tierra_en_depresion_frac'],
         })
     return r

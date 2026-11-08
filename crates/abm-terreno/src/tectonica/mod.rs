@@ -738,6 +738,14 @@ fn balance_medio(
         reinicio_km2_100myr: std::array::from_fn(|i| {
             val.iter().map(|m| m.reinicio_km2[i]).sum::<f64>() * 100.0 / n
         }),
+        f_int_au: std::array::from_fn(|i| val.iter().map(|m| m.f_int_au[i]).sum::<f64>() / n),
+        mesetas_acrecionadas_au: media(|m| m.mesetas_acrecionadas_au),
+        grandes_erupciones_100myr: tras_rodaje("gran_erupcion").count() as f64 * 100.0 / n,
+        mesetas_final_n: ultima.mesetas_n,
+        mesetas_final_km2: ultima.mesetas_km2,
+        oceano_prof_media_final_m: ultima.oceano_prof_media_m,
+        oceano_prof_mediana_final_m: ultima.oceano_prof_mediana_m,
+        islas_final_km2: ultima.islas_km2,
     }
 }
 

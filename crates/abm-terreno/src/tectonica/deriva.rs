@@ -22,6 +22,7 @@ use super::historia::{
     CuentasCorteza, EventoTectonico, FotoSupercontinente, MargenRift, MetricaMyr,
 };
 
+mod calientes;
 mod diagnostico;
 mod fosas;
 mod rifts;
@@ -32,6 +33,7 @@ use crate::config::TectonicaCfg;
 use crate::geometry::{V3, cross, dot, east_north, lat_lon, normalize};
 use crate::noise::Perlin3;
 use crate::statics::{hash01, splitmix64};
+pub use calientes::{IntraplacaPaso, PuntoCaliente};
 use fosas::Difusa;
 pub use fosas::{ConteoFosas, EstadoFosa};
 use suavizado::{TipoTramo, Vecindad};
@@ -47,6 +49,10 @@ const P_RIFT: u64 = 5;
 const P_ORIENT: u64 = 6;
 const P_CRATON: u64 = 7;
 const P_SALTO: u64 = 8;
+/// Puntos calientes (nota de puntos calientes §6.1): posición, abombamiento y gran erupción de cada
+/// uno al nacer, y edad de los de partida.
+const P_CALIENTE: u64 = 20;
+const P_CALIENTE_EDAD: u64 = 21;
 
 /// 1 cm/año en km/Myr.
 pub const CM_ANIO: f64 = 10.0;
@@ -226,7 +232,9 @@ pub mod via {
     pub const FUSION: usize = 8;
     pub const INICIAL: usize = 9;
     pub const RIFT: usize = 10;
-    pub const N: usize = 11;
+    /// Magmatismo intraplaca: trazas, mesetas y basaltos continentales de los puntos calientes.
+    pub const INTRAPLACA: usize = 11;
+    pub const N: usize = 12;
     pub const NOMBRES: [&str; N] = [
         "arco",
         "acreción",
@@ -239,6 +247,7 @@ pub mod via {
         "fusión",
         "inicial",
         "rift",
+        "intraplaca",
     ];
 }
 
@@ -1253,7 +1262,13 @@ pub struct Deriva {
     pub dorsal_fosa_paso: Vec<EncuentroDorsalFosa>,
     /// Área continental cuya edad tectonotérmica volvió a 0 en el último paso, por causa: rift,
     /// arco, choque y delaminación (km²; nota de isostasia con litosfera §8).
-    pub reinicio_km2_paso: [f64; 4],
+    pub reinicio_km2_paso: [f64; 5],
+    /// Puntos calientes vivos (nota de puntos calientes), cuántos han nacido, el abombamiento que
+    /// ponen en cada celda del mundo (m, sobre la litosfera oceánica) y lo que añadieron en el paso.
+    pub puntos_calientes: Vec<PuntoCaliente>,
+    puntos_calientes_nacidos: u64,
+    pub abombamiento_m: Vec<f64>,
+    intraplaca_paso: IntraplacaPaso,
     /// Márgenes pasivos por sus celdas de costa (longitud, edad media y máxima) y su perfil (corteza
     /// en la costa y franja estirada): se calculan cada 25 Myr y en el último paso, y se repiten
     /// entre medias (solo se usan sus valores finales y sus medias).
@@ -1261,6 +1276,9 @@ pub struct Deriva {
     ultimo_perfil: (f64, f64),
     /// Anchura media de la plataforma continental (km), cada 25 Myr y al final.
     ultima_plataforma_km: f64,
+    /// Mesetas oceánicas de más de 0,2 Mkm² (cuántas y su área), profundidad media y mediana del
+    /// océano (m) e islas volcánicas emergidas (km²), cada 25 Myr y al final.
+    ultimo_oceano: (u32, f64, f64, f64, f64),
     /// Los márgenes pasivos como entidades (diagnóstico; `ResumenTectonica::margenes_rift`) y el de
     /// cada `rift_id`.
     pub margenes_rift: Vec<MargenRift>,
@@ -1415,7 +1433,10 @@ impl Deriva {
         let ids: Vec<u64> = (0..n as u64)
             .map(|i| splitmix64(seed ^ splitmix64(i + 1)))
             .collect();
-        Self::desde(cfg, seed, malla, t0, &ids, |k| (placa_de[k], cortezas[k]))
+        let mut d = Self::desde(cfg, seed, malla, t0, &ids, |k| (placa_de[k], cortezas[k]));
+        // Los puntos calientes de partida (nota de puntos calientes §6.1).
+        d.puntos_calientes_iniciales();
+        d
     }
 
     /// Estado inicial dado: cada celda del mundo pertenece a la placa `asignar(k).0` (índice en
@@ -1517,10 +1538,15 @@ impl Deriva {
             consumo_paso: Vec::new(),
             hundido_paso: Vec::new(),
             dorsal_fosa_paso: Vec::new(),
-            reinicio_km2_paso: [0.0; 4],
+            reinicio_km2_paso: [0.0; 5],
+            puntos_calientes: Vec::new(),
+            puntos_calientes_nacidos: 0,
+            abombamiento_m: vec![0.0; num],
+            intraplaca_paso: IntraplacaPaso::default(),
             ultimos_margenes: (0.0, 0.0, 0.0),
             ultimo_perfil: (0.0, 0.0),
             ultima_plataforma_km: 0.0,
+            ultimo_oceano: (0, 0.0, 0.0, 0.0, 0.0),
             margenes_rift: Vec::new(),
             margen_de_rift: Default::default(),
             rotura_rift_myr: vec![f64::NAN],
@@ -1562,6 +1588,7 @@ impl Deriva {
         }
         self.fosas_paso = ConteoFosas::default();
         self.envejecer_tt();
+        self.vida_de_puntos_calientes();
         let v0 = self.inventario_continental();
         let c0 = self.cuentas;
         self.velocidades();
@@ -1596,6 +1623,8 @@ impl Deriva {
         for p in self.placas.iter_mut().filter(|p| p.viva) {
             p.cort.iter_mut().for_each(|c| c.dh_dt = 0.0);
         }
+        self.intraplaca();
+        self.trazar("puntos_calientes");
         self.clasificar_bordes();
         self.trazar("clasificar_bordes");
         self.procesos_de_fosa(&tramos);
@@ -1725,11 +1754,23 @@ impl Deriva {
         self.t_myr = self.t0_myr + self.paso as f64 * self.cfg.dt_myr;
     }
 
+    /// El magmatismo intraplaca del paso (nota de puntos calientes §6.2–6.3), con su fuente en el
+    /// balance (§6.6): la corteza que añade a la de tipo continental (mesetas, basaltos y la parte de
+    /// las trazas que flota).
+    fn intraplaca(&mut self) {
+        let ip = self.magmatismo_intraplaca();
+        self.cuentas.intraplaca_km3 += ip.mesetas_km3 + ip.cfb_km3 + ip.trazas_flotante_km3;
+        self.cuentas.f_int_trazas_km3 += ip.trazas_km3;
+        self.cuentas.f_int_mesetas_km3 += ip.mesetas_km3;
+        self.cuentas.f_int_cfb_km3 += ip.cfb_km3;
+        self.intraplaca_paso = ip;
+    }
+
     /// Envejecimiento de la edad tectonotérmica, al principio de cada paso (nota de isostasia con
     /// litosfera §6.1 y §9), y puesta a cero del área reiniciada en el paso.
     fn envejecer_tt(&mut self) {
         let dt = self.cfg.dt_myr;
-        self.reinicio_km2_paso = [0.0; 4];
+        self.reinicio_km2_paso = [0.0; 5];
         for p in self.placas.iter_mut().filter(|p| p.viva) {
             for c in p.cort.iter_mut() {
                 c.edad_tt += dt;
@@ -1777,6 +1818,8 @@ impl Deriva {
         self.rellenar_huecos();
         let (_, tramos, difusas) = self.reconstruir_mapas();
         self.estirar_rifts();
+        self.vida_de_puntos_calientes();
+        self.intraplaca();
         self.area_subducida_km2 = tramos.iter().map(|t| t.a_sub).sum();
         self.area_reasignada_km2 = self.suavizar_pertenencia();
         self.area_islas_km2 = self.absorber_islas();
@@ -1837,8 +1880,9 @@ impl Deriva {
     pub fn alturas(&self) -> Vec<f64> {
         (0..self.malla.num)
             .map(|k| {
-                self.corteza(k)
-                    .map_or(-self.cfg.d_r_m, |c| isostasia::altura(&self.cfg, c))
+                self.corteza(k).map_or(-self.cfg.d_r_m, |c| {
+                    isostasia::altura_mundo(&self.cfg, c, self.abombamiento_m[k])
+                })
             })
             .collect()
     }
@@ -2804,6 +2848,13 @@ impl Deriva {
                         eta,
                         vol_arco: fa * cfg.eta_arco * v_sol,
                     });
+                    // Mesetas oceánicas que llegan a la fosa (nota de puntos calientes §8): lo
+                    // que se queda arriba de la corteza de una muestra que hizo sobre todo el
+                    // magmatismo intraplaca.
+                    let tot: f32 = c.proc.vias.iter().sum();
+                    if !c.cont && tot > 0.0 && 2.0 * c.proc.vias[via::INTRAPLACA] >= tot {
+                        self.cuentas.mesetas_acrecionadas_km3 += eta * v_sol;
+                    }
                     self.cuentas.choque_solapado_km3 += v_sol;
                     self.cuentas.choque_perdida_km3 += (1.0 - eta) * v_sol;
                     // Diagnóstico por grosor y por vía, de la parte que no es de arco.
@@ -4268,6 +4319,7 @@ impl Deriva {
             }
         }
         let cfg = &self.cfg;
+        let abomb = &self.abombamiento_m;
         let (rs, rc) = (cfg.rho_s, cfg.rho_c);
         let zeta = self.zeta_m;
         let mut ero: Vec<(u32, f64)> = Vec::new();
@@ -4276,7 +4328,7 @@ impl Deriva {
             for (s, &k_ve) in ve[pi].iter().enumerate() {
                 let k_ve = k_ve as usize;
                 let c = &mut p.cort[s];
-                let zi = (isostasia::altura(cfg, c) - zeta) / 1000.0;
+                let zi = (isostasia::altura_mundo(cfg, c, abomb[k_ve]) - zeta) / 1000.0;
                 if zi > 0.0 && !cuenca[k_ve] {
                     // Lo que baja la superficie por km de roca retirada, con su isostasia.
                     let baja = isostasia::baja_por_km(cfg, c);
@@ -4314,7 +4366,7 @@ impl Deriva {
     /// `z_obj` (m), con su isostasia ([`isostasia::sedimento_hasta_columna`]).
     fn sed_hasta(&self, k: usize, z_obj: f64) -> f64 {
         self.corteza(k).map_or(0.0, |c0| {
-            isostasia::sedimento_hasta_columna(&self.cfg, c0, z_obj)
+            isostasia::sedimento_hasta_columna(&self.cfg, c0, z_obj, self.abombamiento_m[k])
         })
     }
 
@@ -5534,6 +5586,7 @@ impl Deriva {
         if toca {
             self.ultimo_perfil = self.perfil_de_margenes(&cont);
             self.ultima_plataforma_km = self.ancho_de_plataforma();
+            self.ultimo_oceano = self.medidas_del_oceano();
         }
         let (costa_margen_km, franja_estirada_km) = self.ultimo_perfil;
         self.margenes_rift_paso();
@@ -5650,6 +5703,25 @@ impl Deriva {
             }),
             tierra_por_edad_km2: a_tierra_edad,
             reinicio_km2: self.reinicio_km2_paso,
+            f_int_au: [
+                self.intraplaca_paso.trazas_km3 * au,
+                self.intraplaca_paso.trazas_flotante_km3 * au,
+                self.intraplaca_paso.mesetas_km3 * au,
+                self.intraplaca_paso.cfb_km3 * au,
+            ],
+            mesetas_acrecionadas_au: (c.mesetas_acrecionadas_km3 - c0.mesetas_acrecionadas_km3)
+                * au,
+            puntos_calientes: self.puntos_calientes.len() as u32,
+            erupciones: self
+                .puntos_calientes
+                .iter()
+                .filter(|p| p.erupcion_en_curso())
+                .count() as u32,
+            mesetas_n: self.ultimo_oceano.0,
+            mesetas_km2: self.ultimo_oceano.1,
+            oceano_prof_media_m: self.ultimo_oceano.2,
+            oceano_prof_mediana_m: self.ultimo_oceano.3,
+            islas_km2: self.ultimo_oceano.4,
             margen_prof_m: std::array::from_fn(|i| {
                 if a_margen[i] > 0.0 {
                     prof_margen[i] / a_margen[i]

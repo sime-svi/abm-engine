@@ -184,6 +184,28 @@ pub struct TectonicaCfg {
     /// 1978, primer término): `S = E_0·(β/π)·sin(π/β)·(1 − e^(−t/τ))`, con agua encima (km, Myr).
     pub e0_mck_km: f64,
     pub tau_mck_myr: f64,
+    // --- Puntos calientes (nota de puntos calientes §5) ---
+    /// Puntos calientes vivos (0 los apaga) y su vida (Myr).
+    pub n_hs: u32,
+    pub t_hs_myr: f64,
+    /// Myr entre dos grandes erupciones en todo el planeta (λ_LIP = 1/esto); la fracción de
+    /// nacimientos con gran erupción sale de ahí: `f_cabeza = λ_LIP·T_hs/N_hs`.
+    pub lip_cada_myr: f64,
+    /// Área de una gran erupción, log-uniforme entre estos (Mkm²), grosor que añade en el océano y
+    /// en un continente (km) y su duración (Myr).
+    pub a_lip_min_mkm2: f64,
+    pub a_lip_max_mkm2: f64,
+    pub h_lip_km: f64,
+    pub h_cfb_km: f64,
+    pub dt_lip_myr: f64,
+    /// Caudal de cada traza (km³/Myr) y radio de la zona de la traza (km).
+    pub q_traza_km3_myr: f64,
+    pub r_traza_km: f64,
+    /// Altura y anchura de los abombamientos, uniformes en sus rangos (km).
+    pub h_sw_min_km: f64,
+    pub h_sw_max_km: f64,
+    pub w_sw_min_km: f64,
+    pub w_sw_max_km: f64,
     /// Edades tectonotérmicas de la corteza continental al empezar la deriva: la distribución de la
     /// Tierra de hoy con las edades de más de 500 Myr, menos 500 (bordes de las clases, Myr, y área
     /// de cada clase). Las más viejas, en el interior de cada continente.
@@ -382,6 +404,20 @@ impl Default for TectonicaCfg {
             eps_del_km: 1.0,
             e0_mck_km: 3.2,
             tau_mck_myr: 62.8,
+            n_hs: 12,
+            t_hs_myr: 150.0,
+            lip_cada_myr: 23.0,
+            a_lip_min_mkm2: 0.2,
+            a_lip_max_mkm2: 2.0,
+            h_lip_km: 15.0,
+            h_cfb_km: 3.0,
+            dt_lip_myr: 2.0,
+            q_traza_km3_myr: 1.0e5,
+            r_traza_km: 100.0,
+            h_sw_min_km: 0.5,
+            h_sw_max_km: 1.2,
+            w_sw_min_km: 1000.0,
+            w_sw_max_km: 1500.0,
             edad_tt_ini_bordes_myr: vec![
                 0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0, 1750.0,
                 2000.0, 2250.0, 2500.0, 2750.0, 3000.0, 3250.0,
@@ -987,6 +1023,24 @@ impl TectonicaCfg {
         {
             return Err(invalid(
                 "isostasia con litosfera: se requiere rho_c_sup, rho_c_inf < rho_ast, rho_w < rho_ast, z_t, drho_ma, eps_del, e0_mck >= 0 y l_min, tau_l, tau_mck > 0",
+            ));
+        }
+        if !(self.t_hs_myr > 0.0
+            && self.lip_cada_myr >= 0.0
+            && self.a_lip_min_mkm2 > 0.0
+            && self.a_lip_max_mkm2 >= self.a_lip_min_mkm2
+            && self.h_lip_km >= 0.0
+            && self.h_cfb_km >= 0.0
+            && self.dt_lip_myr > 0.0
+            && self.q_traza_km3_myr >= 0.0
+            && self.r_traza_km > 0.0
+            && self.h_sw_max_km >= self.h_sw_min_km
+            && self.h_sw_min_km >= 0.0
+            && self.w_sw_max_km >= self.w_sw_min_km
+            && self.w_sw_min_km > 0.0)
+        {
+            return Err(invalid(
+                "puntos calientes: se requiere t_hs, dt_lip, r_traza, w_sw_min > 0, rangos ordenados y el resto >= 0",
             ));
         }
         if self.edad_tt_ini_bordes_myr.len() != self.edad_tt_ini_frac.len() + 1

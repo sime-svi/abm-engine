@@ -148,6 +148,24 @@ pub fn altura(c: &TectonicaCfg, k: &Corteza) -> f64 {
     }
 }
 
+/// Altura isostática (m) de la columna de la celda del mundo con el abombamiento de los puntos
+/// calientes `u_m` (nota de puntos calientes §6.4): una masa de menos en el manto bajo la litosfera
+/// oceánica, `Δm = −U·(ρ_m − ρ_w)`, que sube `U` el fondo bajo el agua. Sobre los continentes no se
+/// aplica (es topografía dinámica, ampliación futura).
+pub fn altura_mundo(c: &TectonicaCfg, k: &Corteza, u_m: f64) -> f64 {
+    if k.cont || u_m == 0.0 {
+        return altura(c, k);
+    }
+    let sed = (c.rho_m - c.rho_s) * k.sed;
+    let z0 = -profundidad_por_edad(c, k.edad_oc);
+    let empuje = u_m / 1000.0 * (c.rho_m - c.rho_w);
+    con_flotacion(
+        c,
+        z0,
+        (c.rho_m - c.rho_oc) * (k.h - c.h_oc_km) + sed + empuje,
+    )
+}
+
 /// Lo que baja la superficie de una columna al aire por km de roca que se le quita de arriba
 /// (km/km): en la continental, la derivada de su flotación de litosfera; en la oceánica, la de la
 /// corteza con el manto (como antes de la nota).
@@ -183,7 +201,7 @@ pub fn fosa_m(c: &TectonicaCfg, s_km: f64) -> f64 {
 /// Espesor de sedimento (km) que hay que añadir a la columna `k` para llevarla hasta la altura
 /// `z_obj` (m), con su isostasia (bisección sobre [`altura`]; 0 si ya llega). Lo que no depende del
 /// sedimento se calcula una vez.
-pub fn sedimento_hasta_columna(c: &TectonicaCfg, k: &Corteza, z_obj: f64) -> f64 {
+pub fn sedimento_hasta_columna(c: &TectonicaCfg, k: &Corteza, z_obj: f64, u_m: f64) -> f64 {
     // Continental: litosfera y contraste de su edad; oceánica: su profundidad y su flotación.
     let (l, drho) = if k.cont {
         (litosfera_km(c, k.edad_tt), drho_ma(c, k.edad_tt))
@@ -195,7 +213,7 @@ pub fn sedimento_hasta_columna(c: &TectonicaCfg, k: &Corteza, z_obj: f64) -> f64
     } else {
         (
             -profundidad_por_edad(c, k.edad_oc),
-            (c.rho_m - c.rho_oc) * (k.h - c.h_oc_km),
+            (c.rho_m - c.rho_oc) * (k.h - c.h_oc_km) + u_m / 1000.0 * (c.rho_m - c.rho_w),
         )
     };
     let (cont, h_tot, sed0, f_sed) = (k.cont, k.h + k.sed, k.sed, c.rho_m - c.rho_s);
@@ -403,7 +421,7 @@ mod tests {
         let mut m = cont(14.0, 0.0, 120.0);
         let z0 = altura(&c, &m);
         assert!(z0 < -130.0, "el margen empieza hondo: {z0:.0} m");
-        m.sed = sedimento_hasta_columna(&c, &m, -130.0);
+        m.sed = sedimento_hasta_columna(&c, &m, -130.0, 0.0);
         assert!((altura(&c, &m) + 130.0).abs() < 1e-6);
     }
 

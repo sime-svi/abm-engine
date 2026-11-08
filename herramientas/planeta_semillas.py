@@ -88,7 +88,35 @@ def correr(semilla, ajustes):
         m[f'tect_reinicio_{causa}_km2_100myr'] = b['reinicio_km2_100myr'][i]
     for i, causa in enumerate(['invasion', 'choque', 'desaparece']):
         m[f'tect_margen_rift_fin_{causa}_frac'] = b['margen_rift_fin_frac'][i]
+    # Nota de puntos calientes §10.
+    f = b['f_int_au']
+    m['tect_f_int_oceanico_au'] = f[0] + f[2]
+    m['tect_f_int_trazas_au'] = f[0]
+    m['tect_f_int_trazas_flotante_au'] = f[1]
+    m['tect_f_int_mesetas_au'] = f[2]
+    m['tect_f_int_cfb_au'] = f[3]
+    m['tect_mesetas_acrecionadas_au'] = b['mesetas_acrecionadas_au']
+    m['tect_grandes_erupciones_100myr'] = b['grandes_erupciones_100myr']
+    m['tect_mesetas_final_n'] = b['mesetas_final_n']
+    m['tect_mesetas_final_mkm2'] = b['mesetas_final_km2'] / 1e6
+    m['tect_islas_final_km2'] = b['islas_final_km2']
+    m['oceano_media_menos_mediana_m'] = m['profundidad_media_oceano_m'] - mediana_franjas(m['rel_hipsometria_oceano_frac'])
     return m
+
+
+# Franjas de la hipsometría del océano (m) del análisis y de la referencia de ETOPO.
+FRANJAS_OCEANO = [0.0, 200.0, 1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 6000.0, 11000.0]
+
+
+def mediana_franjas(frac):
+    """Mediana de la profundidad del océano, interpolada en sus franjas."""
+    tot = sum(frac)
+    acum = 0.0
+    for i, f in enumerate(frac):
+        if f > 0 and acum + f >= 0.5 * tot:
+            return FRANJAS_OCEANO[i] + (0.5 * tot - acum) / f * (FRANJAS_OCEANO[i + 1] - FRANJAS_OCEANO[i])
+        acum += f
+    return FRANJAS_OCEANO[-1]
 
 
 def referencia():
@@ -96,6 +124,7 @@ def referencia():
         r = tomllib.load(f)
     roca = r['relieve']['roca_rebote']['nivel3']
     return {
+        'oceano_media_menos_mediana_m': roca['profundidad_media_oceano_m'] - mediana_franjas(roca['hipsometria_oceano_frac']),
         'tierra_frac': roca['tierra_frac'],
         'altura_media_tierra_m': roca['altura_media_tierra_m'],
         'tierra_bajo_200_frac': roca['hipsometria_frac'][0],
@@ -111,7 +140,7 @@ def referencia():
 # rotura de los márgenes.
 CLASES_EDAD = ['0–100', '100–500', '500–1 600', '1 600–2 500', '> 2 500']
 CLASES_MARGEN = ['0–20', '20–50', '50–80', '80–120', '120–200', '> 200']
-CAUSAS_REINICIO = ['rift', 'arco', 'choque', 'delaminacion']
+CAUSAS_REINICIO = ['rift', 'arco', 'choque', 'delaminacion', 'erupcion']
 # Clases de estiramiento de los márgenes (nota de hundimiento de los márgenes), con el hundimiento que
 # da McKenzie (1978) entre las clases 80–120 y 0–20 Myr desde la rotura, para el β del medio de la clase.
 CLASES_BETA = ['1–2', '2–3', '> 3']
@@ -212,6 +241,21 @@ FILAS += [(f'tect_margen_hundimiento_beta_{i}_m', f'Hundimiento del basamento co
            f'McKenzie {MCK_CLASE[i]:.0f} ± 15 %', (lambda r: lambda x: abs(x / r - 1.0) <= 0.15)(MCK_CLASE[i]))
           for i, c in enumerate(CLASES_BETA)]
 FILAS += [('tect_ancho_plataforma_final_km', 'Plataforma al final de la deriva, por km de costa (km)', None, None)]
+# Nota de puntos calientes §10.
+FILAS += [
+    ('oceano_media_menos_mediana_m', 'Océano: media menos mediana de la profundidad (m)', None, None),
+    ('tect_f_int_oceanico_au', 'Magmatismo intraplaca oceánico: trazas y mesetas (AU)', '1,3–1,7 (Crisp 1984)',
+     lambda x: 1.3 <= x <= 1.7),
+    ('tect_f_int_trazas_au', '… trazas (AU)', None, None),
+    ('tect_f_int_trazas_flotante_au', '… parte de las trazas que flota (AU)', None, None),
+    ('tect_f_int_mesetas_au', '… mesetas (AU)', None, None),
+    ('tect_f_int_cfb_au', 'Basaltos continentales (AU)', '~0,12 (Clift et al. 2009)', lambda x: 0.06 <= x <= 0.24),
+    ('tect_grandes_erupciones_100myr', 'Grandes erupciones por 100 Myr', '~4,3 (una cada 23 Myr)', lambda x: 2.9 <= x <= 5.8),
+    ('tect_mesetas_acrecionadas_au', 'Mesetas acrecionadas (AU)', 'hasta ~1,1 (blando)', None),
+    ('tect_mesetas_final_n', 'Mesetas oceánicas de más de 0,2 Mkm², al final', None, None),
+    ('tect_mesetas_final_mkm2', '… su área (Mkm²)', None, None),
+    ('tect_islas_final_km2', 'Islas volcánicas emergidas, al final (km²)', None, None),
+]
 
 
 def main():

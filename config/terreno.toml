@@ -148,6 +148,23 @@ eps_del_km   = 1.0         # delaminación mínima en un paso para reiniciar la 
 # suma a R4 solo lo que R4 no hunde ya desde la rotura (el crecimiento de su litosfera).
 e0_mck_km    = 3.2         # McKenzie (1978): a = 125 km, ρ = 3 330, α = 3,28·10⁻⁵ /°C, T = 1 333 °C (rango 2,4–3,2)
 tau_mck_myr  = 62.8        # a²/(π²·κ), κ = 8·10⁻⁷ m²/s (rango 50–63)
+# Puntos calientes, mesetas oceánicas y trazas volcánicas (nota_puntos_calientes.md): fijos en el marco
+# del manto (el de la malla, sin rotación neta), con abombamiento sobre el océano, trazas que engrosan
+# la placa que pasa y grandes erupciones al nacer algunos. n_hs = 0 los apaga.
+n_hs         = 12          # puntos calientes vivos (supuesto: ~8 con más de 1 Mg/s de caudal de flotabilidad y más débiles; 8–20)
+t_hs_myr     = 150.0       # vida (Hawái–Emperador, más de 80 Myr; Kerguelen, ~120; 80–200)
+lip_cada_myr = 23.0        # una gran erupción cada 23 Myr en todo el planeta (11 en 250 Myr; Rampino y Stothers 1988)
+a_lip_min_mkm2 = 0.2       # área de una gran erupción, log-uniforme (Mkm²; Ontong Java, 1,86)
+a_lip_max_mkm2 = 2.0
+h_lip_km     = 15.0        # corteza que añade en el océano (las mesetas tienen 20–35 km frente a 7; 10–25)
+h_cfb_km     = 3.0         # la que añade en un continente (calibrado con ~0,12 km³/año, Clift et al. 2009; 1–5)
+dt_lip_myr   = 2.0         # duración (la mayor parte del volumen sale en menos de 1–5 Myr)
+q_traza_km3_myr = 1.0e5    # caudal de cada traza (a calibrar con el magmatismo intraplaca oceánico, 1,3–1,7 km³/año; Crisp 1984)
+r_traza_km   = 100.0       # radio de la zona de la traza (dorsales volcánicas tipo Hawái de ~150–250 km; 50–150)
+h_sw_min_km  = 0.5         # altura de los abombamientos, uniforme en 0,5–1,2 km (Crough 1983)
+h_sw_max_km  = 1.2
+w_sw_min_km  = 1000.0      # anchura, uniforme en 1 000–1 500 km (Crough 1983)
+w_sw_max_km  = 1500.0
 # Edades tectonotérmicas de partida: la tierra de hoy de más de 500 Myr (55 %), menos 500, por clases
 # (tipos de corteza de CRUST1.0, alineados con las provincias de Artemieva y Mooney; nota_isostasia_s0.py).
 edad_tt_ini_bordes_myr = [0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0, 1750.0, 2000.0, 2250.0, 2500.0, 2750.0, 3000.0, 3250.0]

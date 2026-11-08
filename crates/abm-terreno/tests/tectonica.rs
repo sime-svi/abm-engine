@@ -581,11 +581,14 @@ fn sin_cratones_solo_los_arcos_hacen_corteza_continental() {
             "corteza continental que no viene de un arco en un planeta sin cratones"
         );
         if c.h == cfg.h_oc_km && c.hc == 0.0 && c.sed == 0.0 {
+            // La curva de la edad, más el abombamiento de los puntos calientes (nota de puntos
+            // calientes §6.4), que sube el fondo bajo el agua.
             let esperada =
-                -abm_terreno::tectonica::isostasia::profundidad_por_edad(&cfg, c.edad_oc);
+                -abm_terreno::tectonica::isostasia::profundidad_por_edad(&cfg, c.edad_oc)
+                    + d.abombamiento_m[k];
             assert!(
                 (zk - esperada).abs() < 1e-9,
-                "profundidad por edad (Parsons y Sclater)"
+                "profundidad por edad (Parsons y Sclater) y abombamiento"
             );
         }
     }
@@ -4645,7 +4648,7 @@ fn diagnostico_nivel_del_mar_y_edad_del_fondo() {
                             edad_oc: edad_del_cuantil_10myr(frac_tierra, q),
                             ..*c
                         };
-                        z_t[k] = isostasia::altura(&tc, &nueva);
+                        z_t[k] = isostasia::altura_mundo(&tc, &nueva, d.abombamiento_m[k]);
                     }
                     let zeta_t = isostasia::nivel_del_mar(&z_t, &d.malla.area, vol);
                     // Profundidad media del océano (sin la corteza continental) con cada nivel.
@@ -4910,4 +4913,219 @@ fn un_margen_estirado_se_hunde_con_la_curva_de_mckenzie() {
         (media - 1.0).abs() <= 0.15 && peor <= 0.15,
         "el hundimiento sigue a McKenzie: {media:.3} de media, peor desvío {peor:.3} ({n} muestras)"
     );
+}
+
+// --- Puntos calientes (nota_puntos_calientes.md §10) -----------------------------------------------
+
+/// Un planeta todo oceánico (60 Myr) que gira hacia el este a 5 cm/año alrededor del eje z, con un
+/// punto caliente en el ecuador a 0° de longitud (prueba de la traza y del abombamiento).
+fn oceano_sobre_un_punto_caliente() -> Deriva {
+    let cfg = TectonicaCfg {
+        n_hs: 0,
+        lambda_esp: 0.0,
+        ..TectonicaCfg::default()
+    };
+    let malla = Malla::new(48, 2, 6371.0);
+    let mut d = Deriva::desde(&cfg, 5, malla, 0.0, &[1], |_| {
+        (0, corteza(false, 7.0, 60.0))
+    });
+    d.arrancar_con(&[[0.0, 0.0, 50.0 / 6371.0]]);
+    d.poner_punto_caliente([1.0, 0.0, 0.0], 1.0, 1200.0);
+    d
+}
+
+#[test]
+fn un_punto_caliente_deja_una_traza_recta_mas_vieja_cuanto_mas_lejos() {
+    // §10, prueba 1: bajo una placa que se mueve, la traza es una cadena recta detrás del punto
+    // caliente, tan larga como lo que avanzó la placa; cada trozo pasó por encima en su momento.
+    let mut d = oceano_sobre_un_punto_caliente();
+    let pasos = 20;
+    for _ in 0..pasos {
+        d.paso_cinematico();
+    }
+    let lado = d.malla.lado_km;
+    let (mut n, mut lon_max, mut lat_max) = (0, 0.0f64, 0.0f64);
+    for k in 0..d.malla.num {
+        let Some(c) = d.corteza(k) else { continue };
+        if c.h - 7.0 < 1e-6 && c.hc <= 0.0 {
+            continue;
+        }
+        let (la, lo) = lat_lon(d.malla.dir[k]);
+        let (la, lo) = (la.to_degrees() * 111.2, lo.to_degrees() * 111.2);
+        n += 1;
+        lat_max = lat_max.max(la.abs());
+        lon_max = lon_max.max(lo);
+        assert!(
+            lo > -(d.cfg.r_traza_km + 2.0 * lado),
+            "la traza queda detrás (al oeste no): {lo:.0} km"
+        );
+    }
+    // El volumen, por las muestras de la placa (cada una con el área de su celda).
+    let volumen: f64 = d
+        .placas
+        .iter()
+        .filter(|p| p.viva)
+        .flat_map(|p| p.cort.iter().zip(&p.celda))
+        .map(|(c, &l)| (c.h - 7.0) * d.malla.area[l as usize])
+        .sum();
+    assert!(n > 5, "hay traza: {n} celdas");
+    assert!(
+        lat_max <= d.cfg.r_traza_km + 1.5 * lado,
+        "es recta, a lo largo del ecuador: hasta {lat_max:.0} km de él"
+    );
+    let avance = 50.0 * pasos as f64;
+    assert!(
+        (lon_max - avance).abs() <= d.cfg.r_traza_km + 2.0 * lado,
+        "tan larga como lo que avanzó la placa ({avance} km): {lon_max:.0} km"
+    );
+    let esperado = d.cfg.q_traza_km3_myr * pasos as f64;
+    assert!(
+        (volumen / esperado - 1.0).abs() < 1e-9,
+        "conserva el caudal: {volumen:.6e} frente a {esperado:.6e} km³"
+    );
+}
+
+#[test]
+fn el_abombamiento_no_viaja_con_la_placa() {
+    // §10, prueba 2: el abombamiento sigue al punto caliente (fijo en el marco del manto).
+    let mut d = oceano_sobre_un_punto_caliente();
+    let k0 = d.malla.localizar([1.0, 0.0, 0.0]);
+    let campo = d.abombamiento_m.clone();
+    assert!(
+        campo[k0] > 900.0,
+        "sube ~1 km sobre el punto caliente: {:.0} m",
+        campo[k0]
+    );
+    let sube = |d: &Deriva, k: usize| {
+        let c = d.corteza(k).expect("corteza");
+        d.alturas()[k] - abm_terreno::tectonica::isostasia::altura(&d.cfg, c)
+    };
+    let antes = sube(&d, k0);
+    for _ in 0..20 {
+        d.paso_cinematico();
+    }
+    assert_eq!(d.abombamiento_m, campo, "el campo no se mueve con la placa");
+    assert!(
+        (sube(&d, k0) - antes).abs() < 1.0,
+        "sigue subiendo lo mismo el fondo que pasa por encima"
+    );
+    // Lejos (a más de W/2), nada.
+    let lejos = d.malla.localizar([0.0, 1.0, 0.0]);
+    assert_eq!(d.abombamiento_m[lejos], 0.0);
+}
+
+#[test]
+fn una_meseta_no_se_hunde_en_la_fosa_y_se_acreciona_un_90_por_ciento() {
+    // §10, prueba 3: el escenario India–Asia con una meseta oceánica (22 km de corteza, 15 de ella
+    // flotante) en lugar de la India: llega a la fosa de Asia y se acreciona con η_arco.
+    use abm_terreno::tectonica::deriva::{Corteza, via};
+    let cfg = TectonicaCfg {
+        n_hs: 0,
+        ..cfg_india_asia()
+    };
+    let mut d = choque_india_asia(&cfg, 1, 48);
+    let i_india = d.dueno[d.malla.localizar([
+        7.5f64.to_radians().cos() * 80f64.to_radians().cos(),
+        7.5f64.to_radians().cos() * 80f64.to_radians().sin(),
+        7.5f64.to_radians().sin(),
+    ])] as usize;
+    let meseta = |c: &Corteza| -> Corteza {
+        let mut m = Corteza {
+            cont: false,
+            h: 22.0,
+            hc: 15.0,
+            arco: 1.0,
+            edad_oc: 80.0,
+            ..*c
+        };
+        m.proc.vias = [0.0; via::N];
+        m.proc.vias[via::INTRAPLACA] = 15.0;
+        m
+    };
+    let mut v0 = 0.0;
+    let p = &mut d.placas[i_india];
+    for s in 0..p.cort.len() {
+        if p.cort[s].cont {
+            p.cort[s] = meseta(&p.cort[s]);
+            v0 += 15.0 * d.malla.area[p.celda[s] as usize];
+        }
+    }
+    let c0 = d.cuentas.mesetas_acrecionadas_km3;
+    for _ in 0..40 {
+        d.dar_paso();
+    }
+    let p = &d.placas[i_india];
+    let resto: f64 = p
+        .cort
+        .iter()
+        .zip(&p.celda)
+        .filter(|(c, _)| c.proc.vias[via::INTRAPLACA] > 0.0)
+        .map(|(c, &l)| c.hc * d.malla.area[l as usize])
+        .sum();
+    let consumido = v0 - resto;
+    let acrecionado = d.cuentas.mesetas_acrecionadas_km3 - c0;
+    assert!(
+        consumido > 0.2 * v0,
+        "la meseta llega a la fosa: {:.2} consumida",
+        consumido / v0
+    );
+    let f = acrecionado / consumido;
+    assert!(
+        (f - cfg.eta_arco).abs() < 0.03,
+        "se acreciona como un arco: {f:.3} (η_arco {})",
+        cfg.eta_arco
+    );
+}
+
+#[test]
+fn el_magmatismo_intraplaca_entra_en_el_balance_y_es_determinista() {
+    // §10, pruebas 4 y 5: con los puntos calientes, el balance de la corteza sigue cuadrando paso a
+    // paso con F_int como fuente, y la misma semilla da los mismos puntos calientes y erupciones.
+    let cfg = TectonicaCfg {
+        lip_cada_myr: 5.0,
+        t_hs_myr: 20.0,
+        ..cfg_rapida()
+    };
+    let correr = || {
+        let mut d = Deriva::nueva(&cfg, 11, Malla::new(24, 1, 6371.0));
+        for _ in 0..40 {
+            d.dar_paso();
+        }
+        d
+    };
+    let (a, b) = (correr(), correr());
+    assert!(a.cuentas.intraplaca_km3 > 0.0, "hay magmatismo intraplaca");
+    assert!(
+        a.eventos.iter().any(|e| e.tipo == "gran_erupcion"),
+        "hay grandes erupciones"
+    );
+    for m in &a.metricas {
+        assert!(
+            m.error_balance_rel < 1e-9,
+            "balance del paso {}: {:.2e}",
+            m.myr,
+            m.error_balance_rel
+        );
+    }
+    let suma = a.cuentas.f_int_mesetas_km3 + a.cuentas.f_int_cfb_km3;
+    assert!(
+        a.cuentas.intraplaca_km3 >= suma - 1e-6,
+        "las mesetas y los basaltos entran enteros"
+    );
+    let ev = |d: &Deriva| -> Vec<(String, u64, i64, i64)> {
+        d.eventos
+            .iter()
+            .filter(|e| e.tipo.contains("caliente") || e.tipo == "gran_erupcion")
+            .map(|e| {
+                (
+                    e.tipo.clone(),
+                    e.myr as u64,
+                    (e.lat_deg * 1e6) as i64,
+                    (e.area_km2) as i64,
+                )
+            })
+            .collect()
+    };
+    assert_eq!(ev(&a), ev(&b), "mismos puntos calientes y erupciones");
+    assert_eq!(a.cuentas.intraplaca_km3, b.cuentas.intraplaca_km3);
 }
