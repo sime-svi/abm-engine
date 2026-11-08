@@ -5,10 +5,14 @@ Corre el modo Tierra un año, con el volcado por celda, y lo compara con:
 - ETOPO 2022 a la misma resolución: `config/referencias/tierra_relieve.toml`, superficie, nivel 3;
 - CHELSA V2.1: una estimación independiente de la media sobre la tierra de la malla, con una muestra
   de los píxeles de cada GeoTIFF (1 de cada 40 filas y 1 de cada 8 columnas);
-- CRU TS 4.09: la variabilidad por regiones y el Sahel de 1984. Son las pruebas `--ignored` de
-  `crates/abm-terreno/tests/tierra.rs`, que esta herramienta corre;
-- HydroSHEDS (HydroRIVERS v1.0): las 20 mayores cuencas que llegan al mar o a una cuenca cerrada;
-- MODIS MOD17A3HGF v6.1 (ICDC, 0,5°, media de 2001–2023): la producción vegetal.
+- CRU TS 4.09: la variabilidad por regiones, las rachas de años secos y el Sahel de 1984. Son las
+  pruebas `--ignored` de `crates/abm-terreno/tests/tierra.rs`, que esta herramienta corre;
+- HydroSHEDS (HydroRIVERS v1.0): las 20 mayores cuencas, su área y su desembocadura; HydroLAKES: el
+  área de los lagos; las cuencas cerradas que rebosan; el caudal que llega al mar (Dai y Trenberth
+  2002) y el del Amazonas y el Congo (adenda 1 §1);
+- MODIS MOD17A3HGF v6.1 (ICDC, 0,5°, media de 2001–2023): la producción vegetal, su mapa, la del
+  bosque boreal y la de los desiertos (adenda 1 §2);
+- el RGI 7.0: los glaciares por región (adenda 1 §3).
 
 Escribe `output/tierra_validacion/validacion.json` y la tabla en la terminal.
 
@@ -213,18 +217,59 @@ def distancia_km(la1, lo1, la2, lo2):
 
 
 def rios(malla, reales, radio_km=150.0):
-    """Para cada río real: la mayor área de drenaje del modelo entre las celdas de tierra a menos de
-    `radio_km` de su desembocadura (si el río del modelo llega ahí, es su cuenca)."""
+    """Para cada río real: la celda de tierra del modelo con más área de drenaje a menos de `radio_km`
+    de su desembocadura (si el río del modelo llega ahí, es su cuenca), con su caudal."""
     filas = []
     for r in reales:
-        mejor = 0.0
+        mejor, caudal = 0.0, 0.0
         for c in malla.c:
             if not tierra(c) or abs(c['lat_deg'] - r['lat']) > 2.5:
                 continue
-            if distancia_km(c['lat_deg'], c['lon_deg'], r['lat'], r['lon']) <= radio_km:
-                mejor = max(mejor, c.get('drenaje_km2', 0.0))
-        filas.append({**r, 'modelo_km2': mejor, 'cociente': mejor / r['area_km2']})
+            if distancia_km(c['lat_deg'], c['lon_deg'], r['lat'], r['lon']) <= radio_km \
+                    and c.get('drenaje_km2', 0.0) > mejor:
+                mejor, caudal = c['drenaje_km2'], c.get('caudal_km3_anio', 0.0)
+        filas.append({**r, 'modelo_km2': mejor, 'cociente': mejor / r['area_km2'], 'caudal_km3_anio': caudal})
     return filas
+
+
+# Desembocaduras de referencia para el caudal (adenda 1 §1: del orden de 6 000 y 1 300 km³/año).
+CAUDALES = {'Amazonas': (-0.5, -50.0, 6000.0), 'Congo': (-6.0, 12.4, 1300.0)}
+
+
+def caudal_cerca(malla, lat, lon, radio_km=200.0):
+    """El mayor caudal (km³/año) del modelo a menos de `radio_km` de un punto."""
+    m = 0.0
+    for c in malla.c:
+        if tierra(c) and abs(c['lat_deg'] - lat) < 3 and distancia_km(c['lat_deg'], c['lon_deg'], lat, lon) <= radio_km:
+            m = max(m, c.get('caudal_km3_anio', 0.0))
+    return m
+
+
+# Cajas de las regiones de glaciares (adenda 1 §3) y del bosque boreal.
+GLACIARES = {'Patagonia': (-56, -45, -76, -70), 'Karakórum': (34, 37.5, 73, 78), 'Alaska': (56, 66, -156, -132),
+             'Alpes': (44, 48.5, 5, 15), 'Svalbard': (76, 81, 10, 34), 'Ártico canadiense': (74, 84, -100, -72),
+             'Islandia': (63, 67, -25, -13), 'Himalaya central': (27, 31, 80, 89)}
+
+
+def glaciares(malla, ruta_rgi):
+    import csv
+    rgi = {k: 0.0 for k in GLACIARES}
+    total = 0.0
+    with open(ruta_rgi) as f:
+        for r in csv.DictReader(f):
+            a = float(r['area_km2'])
+            total += a
+            la, lo = float(r['cenlat']), float(r['cenlon'])
+            for k, (a0, a1, o0, o1) in GLACIARES.items():
+                if a0 <= la < a1 and o0 <= lo < o1:
+                    rgi[k] += a
+    mod = {k: 0.0 for k in GLACIARES}
+    for c in malla.c:
+        h = c.get('hielo', 0.0)
+        for k, (a0, a1, o0, o1) in GLACIARES.items():
+            if h > 0 and a0 <= c['lat_deg'] < a1 and o0 <= c['lon_deg'] < o1:
+                mod[k] += h * c['area_km2']
+    return {'rgi_total_km2': total, 'regiones': {k: {'rgi_km2': rgi[k], 'malla_km2': mod[k]} for k in GLACIARES}}
 
 
 # --- 5. Vegetación: MODIS ------------------------------------------------------------------------------
@@ -355,13 +400,40 @@ def vegetacion(malla):
     for c in malla.c:
         if tierra(c) and c.get('hielo', 0.0) < 0.5:
             total_miami += miami(c['temp_anual_c'], c['lluvia_anual_mm']) * c['area_km2'] * 1e6 * C_MATERIA_SECA / 1e15
+    # Bosque boreal (50–70° N) y desiertos (lluvia de la climatología por debajo de 250 mm): producción
+    # del modelo (la vegetación del modo Tierra, en g de materia seca, a carbono) frente a MODIS, en las
+    # mismas celdas de 0,5°.
+    boreal = [0.0, 0.0]
+    desierto = [0.0, 0.0, 0]
+    for i in range(nlat):
+        for j in range(nlon):
+            x = npp[i * nlon + j]
+            if not math.isfinite(x):
+                continue
+            q = malla.celda(lat[i], lon[j])
+            if q < 0:
+                continue
+            c = malla.c[q]
+            if not tierra(c) or c.get('hielo', 0.0) >= 0.5:
+                continue
+            a = area_valida[i * nlon + j]
+            if 50.0 <= lat[i] < 70.0:
+                boreal[0] += c['veg'] * C_MATERIA_SECA / 1000.0 * a
+                boreal[1] += x * a
+            if c['lluvia_anual_mm'] < 250.0:
+                desierto[0] += c['veg'] * C_MATERIA_SECA
+                desierto[1] += x * 1000.0
+                desierto[2] += 1
     return {
         'modis_total_pgc': total_modis_valido,
         'modis_total_celda_entera_pgc': total_modis,
         'modis_unidades': unidades,
-        'miami_total_pgc': total_miami,
+        'miami_climatologia_total_pgc': total_miami,
         'r_veg_motor_modis': pearson([a for a, _ in pares_veg], [b for _, b in pares_veg]),
         'r_miami_modis': pearson([a for a, _ in pares_miami], [b for _, b in pares_miami]),
+        'boreal_modelo_frente_a_modis': boreal[0] / boreal[1] if boreal[1] > 0 else float('nan'),
+        'desiertos_modelo_gc_m2': desierto[0] / max(desierto[2], 1),
+        'desiertos_modis_gc_m2': desierto[1] / max(desierto[2], 1),
         'celdas': len(pares_veg),
     }
 
@@ -400,8 +472,15 @@ def main():
         out['rios'] = None
         log('Sin HydroRIVERS: la validación de los ríos queda pendiente.')
     out['cuencas_modelo'] = t['cuencas'][:30]
-    out['lagos_km2'] = t['lagos_km2']
+    out['hidrologia'] = {k: t[k] for k in ('lagos_km2', 'lagos_fraccion_km2', 'lagos_hydrolakes_km2', 'al_mar_km3_anio',
+                                           'a_cerradas_km3_anio', 'cerradas_que_rebosan_km2',
+                                           'abiertas_que_acaban_cerradas_km2')}
+    out['hidrologia']['caudales'] = {k: {'modelo_km3_anio': caudal_cerca(malla, la, lo), 'referencia_km3_anio': ref}
+                                     for k, (la, lo, ref) in CAUDALES.items()}
     out['vegetacion'] = vegetacion(malla)
+    out['vegetacion']['produccion_modelo_pgc'] = t['produccion_pgc']
+    out['glaciares'] = glaciares(malla, os.path.join(REF, 'rgi7', 'RGI2000-v7.0-G-global-attributes.csv'))
+    out['glaciares']['hielo_total_mkm2'] = out['relieve']['hielo_mkm2']
     with open(os.path.join(SALIDA, 'validacion.json'), 'w') as f:
         json.dump(out, f, indent=1, ensure_ascii=False)
 
@@ -421,11 +500,13 @@ def main():
         print(f"  temperatura {cm['temp_tierra_c']:.3f} °C frente a {ch['temp_tierra_c']:.3f}")
         print(f"  lluvia {cm['lluvia_tierra_mm']:.1f} mm frente a {ch['lluvia_tierra_mm']:.1f} "
               f"({cm['lluvia_tierra_mm'] / ch['lluvia_tierra_mm'] - 1:+.2%})")
-    print('== Variabilidad (CV, autocorrelación, años secos): CRU TS / modelo')
+    print('== Variabilidad (años con estaciones): CRU TS / modelo; rachas de ≥2 años secos y del quinto seco (p de Poisson)')
     for k, r in out['variabilidad'].items():
         c, m = r['cru'], r['modelo_remuestreado']
         print(f"  {k:<22} CV {c['cv']:.3f}/{m['cv']:.3f} ({m['cv'] / c['cv'] - 1:+.0%})  "
-              f"ac1 {c['ac1']:+.3f}/{m['ac1']:+.3f}  secos {c['secos_frac']:.3f}/{m['secos_frac']:.3f}")
+              f"ac1 {c['ac1']:+.3f}/{m['ac1']:+.3f}  rachas {c['rachas_secas']}/{r['rachas_secas_esperadas_en_el_periodo']:.2f} "
+              f"(p {r['rachas_secas_p_poisson']:.2f})  quinto {r['rachas_quinto_seco_cru']}/{r['rachas_quinto_seco_esperadas']:.2f} "
+              f"(p {r['rachas_quinto_seco_p_poisson']:.2f})")
     s = out['sahel_1984']
     print(f"== Sahel 1984: malla {s['malla_1984_mm']:.0f} mm ({s['malla_1984_mm'] / s['malla_climatologia_mm']:.3f}), "
           f"CRU TS {s['cru_1984_mm']:.0f} mm ({s['cru_1984_mm'] / s['cru_1981_2010_mm']:.3f})")
@@ -434,9 +515,21 @@ def main():
         for r in out['rios']:
             print(f"  ({r['lat']:6.2f}, {r['lon']:7.2f}) {r['area_km2']:10.0f} {r['modelo_km2']:10.0f} {r['cociente']:5.2f}"
                   f" {'✓' if abs(r['cociente'] - 1) <= 0.2 else '✗'}{' (endorreica)' if r['endorreica'] else ''}")
+    h = out['hidrologia']
+    print(f"== Lagos: {h['lagos_fraccion_km2'] / 1e6:.2f} Mkm² en la malla frente a {h['lagos_hydrolakes_km2'] / 1e6:.2f} de HydroLAKES "
+          f"({h['lagos_fraccion_km2'] / h['lagos_hydrolakes_km2'] - 1:+.1%}); celdas de lago {h['lagos_km2'] / 1e6:.2f} Mkm²")
+    print(f"== Cuencas cerradas que rebosan: {h['cerradas_que_rebosan_km2']:.0f} km²; abiertas que acaban cerradas: "
+          f"{h['abiertas_que_acaban_cerradas_km2']:.0f} km²")
+    print(f"== Caudal al mar: {h['al_mar_km3_anio']:.0f} km³/año (Dai y Trenberth: 37 000–40 000); a cuencas cerradas, "
+          f"{h['a_cerradas_km3_anio']:.0f}; " + ', '.join(f"{k} {x['modelo_km3_anio']:.0f} (~{x['referencia_km3_anio']:.0f})"
+                                                       for k, x in h['caudales'].items()))
+    g = out['glaciares']
+    print(f"== Glaciares: RGI {g['rgi_total_km2'] / 1e6:.3f} Mkm²; hielo total {g['hielo_total_mkm2']:.2f} Mkm²; " +
+          ', '.join(f"{k} {x['malla_km2'] / max(x['rgi_km2'], 1) - 1:+.0%}" for k, x in g['regiones'].items()))
     v = out['vegetacion']
-    print(f"== Vegetación: MODIS {v['modis_total_pgc']:.1f} PgC/año (con la celda de 0,5° entera, "
-          f"{v['modis_total_celda_entera_pgc']:.1f}); Miami {v['miami_total_pgc']:.1f}; "
+    print(f"== Vegetación: modelo {v['produccion_modelo_pgc']:.1f} PgC/año; MODIS {v['modis_total_pgc']:.1f} (con la celda de 0,5° entera, "
+          f"{v['modis_total_celda_entera_pgc']:.1f}); boreal, modelo/MODIS {v['boreal_modelo_frente_a_modis']:.2f}; "
+          f"desiertos, {v['desiertos_modelo_gc_m2']:.0f} frente a {v['desiertos_modis_gc_m2']:.0f} gC/m²/año; "
           f"r(veg del motor, MODIS) = {v['r_veg_motor_modis']:.3f}; r(Miami, MODIS) = {v['r_miami_modis']:.3f}")
     print(f'Resultados -> {os.path.join(SALIDA, "validacion.json")}')
 

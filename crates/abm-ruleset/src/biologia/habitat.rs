@@ -7,12 +7,9 @@ use super::config::BioConfig;
 use super::especie::{Especie, factor_ecto};
 
 /// Productividad primaria neta anual (g de materia seca/m²/año), modelo Miami (Lieth 1975): la
-/// limita el calor o el agua, el que sea más escaso. Los coeficientes son los del modelo publicado.
-pub fn ppn_miami(t_media: f64, p_media_mm: f64) -> f64 {
-    let f_t = 3000.0 / (1.0 + (1.315 - 0.119 * t_media).exp());
-    let f_p = 3000.0 * (1.0 - (-0.000664 * p_media_mm).exp());
-    f_t.min(f_p).max(0.0)
-}
+/// limita el calor o el agua, el que sea más escaso. Es la producción del terreno (adenda 1 al modo
+/// Tierra §2: el motor tiene una sola producción vegetal), la misma que da la vegetación del modo Tierra.
+pub use abm_terreno::vegetacion::ppn_miami;
 
 /// Celdas del hábitat y forraje de cada especie (índice `celda · n_esp + especie`).
 #[derive(Resource, Debug, Clone)]

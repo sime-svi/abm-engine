@@ -61,6 +61,17 @@ pub struct TierraCfg {
     /// Series mensuales de CRU TS 4.09 (NetCDF-3 comprimido con gzip): temperatura y lluvia.
     pub cru_tmp: String,
     pub cru_pre: String,
+    /// Tabla global de atributos del RGI 7.0 (centro y área de cada glaciar; adenda 1 §3).
+    pub rgi: String,
+    /// HydroSHEDS v1 a 15″: direcciones de flujo y acumulación (GeoTIFF; adenda 1 §1).
+    pub hydrosheds_dir: String,
+    pub hydrosheds_acc: String,
+    /// HydroLAKES v1.0, polígonos (shapefile, con su .dbf al lado).
+    pub hydrolakes: String,
+    /// Los lagos más pequeños que esto caen enteros en la celda de su desagüe; los mayores se
+    /// rasterizan cada `lagos_paso_grados`.
+    pub lagos_raster_km2: f64,
+    pub lagos_paso_grados: f64,
     /// Espesor mínimo (superficie − roca, m) que se cuenta como hielo, y solo con la superficie sobre el
     /// nivel del mar. Por debajo, la diferencia entre las dos versiones de ETOPO es ruido de sus
     /// fuentes (medido: con 0, 1,2 Mkm² de «hielo» sobre el mar del Ártico).
@@ -71,6 +82,9 @@ pub struct TierraCfg {
     pub l_bloque: u32,
     /// Tope del cociente de precipitación de un mes frente a su climatología.
     pub r_max: f64,
+    /// Solo se remuestrean los años con estaciones en al menos esta fracción de la tierra de CRU TS,
+    /// en la temperatura y en la lluvia (adenda 1 §4).
+    pub cobertura_min: f64,
     /// Periodo al que se refiere el clima, `[desde, hasta]` (años incluidos). La climatología de
     /// CHELSA es la de 1981–2010; otro periodo la corrige con CRU TS (§5 de la nota).
     pub periodo_base: [i32; 2],
@@ -87,10 +101,19 @@ impl Default for TierraCfg {
             chelsa: "output/referencias/chelsa_mensual".to_string(),
             cru_tmp: "output/referencias/cru_ts/cru_ts4.09.1901.2024.tmp.dat.nc.gz".to_string(),
             cru_pre: "output/referencias/cru_ts/cru_ts4.09.1901.2024.pre.dat.nc.gz".to_string(),
+            rgi: "output/referencias/rgi7/RGI2000-v7.0-G-global-attributes.csv".to_string(),
+            hydrosheds_dir: "output/referencias/hydrosheds/hyd_glo_dir_15s.tif".to_string(),
+            hydrosheds_acc: "output/referencias/hydrosheds/hyd_glo_acc_15s.tif".to_string(),
+            hydrolakes:
+                "output/referencias/hydrosheds/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp"
+                    .to_string(),
+            lagos_raster_km2: 50.0,
+            lagos_paso_grados: 0.01,
             hielo_min_m: 10.0,
             nivel_carga: 3,
             l_bloque: 10,
             r_max: 5.0,
+            cobertura_min: 0.9,
             periodo_base: [1981, 2010],
             anio_forzado: 0,
         }
@@ -1001,9 +1024,13 @@ impl TerrenoConfig {
             if t.nivel_carga < self.lod.l_min || t.nivel_carga > 6 {
                 return Err(invalid("tierra: se requiere lod.l_min <= nivel_carga <= 6"));
             }
-            if t.l_bloque == 0 || !(t.r_max >= 1.0 && t.r_max.is_finite()) || t.hielo_min_m < 0.0 {
+            if t.l_bloque == 0
+                || !(t.r_max >= 1.0 && t.r_max.is_finite())
+                || t.hielo_min_m < 0.0
+                || !(0.0..=1.0).contains(&t.cobertura_min)
+            {
                 return Err(invalid(
-                    "tierra: se requiere l_bloque >= 1, r_max >= 1 y hielo_min_m >= 0",
+                    "tierra: se requiere l_bloque >= 1, r_max >= 1, hielo_min_m >= 0 y 0 <= cobertura_min <= 1",
                 ));
             }
             if t.periodo_base[1] < t.periodo_base[0] {

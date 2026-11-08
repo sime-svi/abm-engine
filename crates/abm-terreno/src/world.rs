@@ -179,9 +179,12 @@ pub struct World {
     pub k_perm: Vec<f64>,   // permeabilidad (0..1)
     pub fert: Vec<f64>,     // fertilidad efectiva (0..1)
     pub resource: Vec<f64>, // recurso genérico extraíble
-    /// Fracción de la celda cubierta de hielo (modo Tierra: casquetes de ETOPO; 0 en el planeta
-    /// inventado). Sin vegetación ni vida terrestre en esa parte.
+    /// Fracción de la celda cubierta de hielo (modo Tierra: casquetes de ETOPO y glaciares del RGI
+    /// 7.0; 0 en el planeta inventado). Sin vegetación ni vida terrestre en esa parte.
     pub hielo: Vec<f64>,
+    /// Fracción de la celda cubierta por lagos (modo Tierra: HydroLAKES; 0 en el planeta inventado,
+    /// que marca sus lagos como superficie). Es agua: sin vegetación ni tierra habitable.
+    pub lago: Vec<f64>,
 
     // --- Relieve y suelo vivos (incr. 3): cambian con la erosión, despacio ---
     pub e: Vec<f64>,      // erosión (−) / depósito (+) acumulados (m); h = h0 + e
@@ -223,7 +226,13 @@ pub struct World {
     pub temp: Vec<f64>,   // temperatura del tick (°C)
     pub precip: Vec<f64>, // precipitación del tick (mm)
     pub swe: Vec<f64>,    // nieve acumulada, equiv. agua (mm)
-    pub veg: Vec<f64>,    // biomasa vegetal (densidad)
+    pub veg: Vec<f64>, // biomasa vegetal (densidad); en el modo Tierra, la producción de Miami del año (g de materia seca/m²/año)
+    /// Modo Tierra: la producción del mes en curso (g de materia seca/m²), la parte del año que le toca
+    /// (adenda 1 §2.2). 0 en el planeta inventado.
+    pub prod_mes: Vec<f64>,
+    /// Modo Tierra: agua que ha pasado por cada celda desde el principio de la corrida (m³), la
+    /// escorrentía encaminada por la red de ríos. 0 en el planeta inventado.
+    pub caudal_m3: Vec<f64>,
     pub biome: Vec<Biome>,
     /// Marca hidrológica pegajosa del LOD: la hoja fue río o lago (incremento 2 §8).
     pub hydro_lock: Vec<bool>,

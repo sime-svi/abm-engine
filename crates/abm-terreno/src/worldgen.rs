@@ -137,6 +137,7 @@ fn malla_inicial(cfg: &TerrenoConfig, statgen: StaticGen) -> World {
     let mut fert = Vec::with_capacity(num);
     let mut resource = Vec::with_capacity(num);
     let mut hielo = Vec::with_capacity(num);
+    let mut lago = Vec::with_capacity(num);
     let mut oro0_e = Vec::with_capacity(num);
     let mut oro0_n = Vec::with_capacity(num);
     let mut oro_air0_e = Vec::with_capacity(num);
@@ -160,6 +161,7 @@ fn malla_inicial(cfg: &TerrenoConfig, statgen: StaticGen) -> World {
         fert.push(st.fert);
         resource.push(st.resource);
         hielo.push(statgen.hielo(c, lv, i, j));
+        lago.push(statgen.lago(c, lv, i, j));
         let (oe, on, oa) = statgen.oro_gradient0_air(&g, lv);
         oro0_e.push(oe);
         oro0_n.push(on);
@@ -188,6 +190,7 @@ fn malla_inicial(cfg: &TerrenoConfig, statgen: StaticGen) -> World {
         fert,
         resource,
         hielo,
+        lago,
         e: vec![0.0; num],
         z_soil: vec![cfg.soil.z_init; num],
         h,
@@ -213,6 +216,8 @@ fn malla_inicial(cfg: &TerrenoConfig, statgen: StaticGen) -> World {
         precip: Vec::new(),
         swe: Vec::new(),
         veg: Vec::new(),
+        prod_mes: Vec::new(),
+        caudal_m3: Vec::new(),
         biome: Vec::new(),
         hydro_lock: Vec::new(),
         temp_sum: Vec::new(),
@@ -259,6 +264,8 @@ fn set_initial_state(world: &mut World, cfg: &TerrenoConfig) {
         .map(|&o| if o { Biome::Oceano } else { Biome::Desierto })
         .collect();
     world.swe = vec![0.0; num];
+    world.prod_mes = vec![0.0; num];
+    world.caudal_m3 = vec![0.0; num];
     world.temp = vec![0.0; num];
     world.precip = vec![0.0; num];
     world.temp_sum = vec![0.0; num];

@@ -78,11 +78,14 @@ abm/
 │   │   │   ├── [x] erosion · cache · worldgen · systems
 │   │   │   ├── [x] metrics.rs       # Métricas por tick + diagnóstico del planeta (v5) + diagnóstico del relieve (v6) + modo Tierra (v8)
 │   │   │   ├── [x] humedad.rs       # Agotamiento de humedad a favor del viento (anillos, Λ, w, c_P)
-│   │   │   ├── tierra/              # Modo Tierra real (diseno_modo_tierra.md, Fase 1): el proveedor de mundo de la Tierra
-│   │   │   │   ├── [x] mod.rs       # Tablas por nivel (altura, hielo, clima de 12 meses), series de CRU TS, celda de cada nivel
-│   │   │   │   ├── [x] carga.rs     # Proyección de ETOPO, CHELSA y CRU TS al nivel de carga (un hilo por GeoTIFF), niveles gruesos por medias, caché
-│   │   │   │   ├── [x] clima.rs     # Años reales por bloques (RNG por contador), mapas mensuales con las anomalías, clima del día
-│   │   │   │   ├── [x] geotiff.rs   # Lector mínimo de GeoTIFF (tiras, Deflate, predictor 2, 16 bits)
+│   │   │   ├── [x] vegetacion.rs    # La producción de Miami (Lieth 1975) y su reparto mensual: la única producción vegetal del motor (la usan el terreno y los agentes)
+│   │   │   ├── tierra/              # Modo Tierra real (diseno_modo_tierra.md y su adenda 1): el proveedor de mundo de la Tierra
+│   │   │   │   ├── [x] mod.rs       # Tablas por nivel (altura, hielo, lagos, clima de 12 meses), series de CRU TS, red, mar y cuencas
+│   │   │   │   ├── [x] carga.rs     # Proyección de ETOPO, CHELSA, CRU TS, RGI 7.0, HydroSHEDS y HydroLAKES al nivel de carga, niveles gruesos por medias, caché
+│   │   │   │   ├── [x] clima.rs     # Años reales por bloques (solo años con estaciones), mapas mensuales con las anomalías, clima del día y producción de Miami del año
+│   │   │   │   ├── [x] hidro.rs     # Red de HydroSHEDS reescalada por píxel de salida (Eilander et al. 2021), cuencas cerradas, mar conectado con el océano mundial
+│   │   │   │   ├── [x] lagos.rs     # Lagos de HydroLAKES en fracción de celda (shapefile y dBASE mínimos; barrido de filas)
+│   │   │   │   ├── [x] geotiff.rs   # Lectores mínimos de GeoTIFF: el de CHELSA (tiras, Deflate, 16 bits) y el general (teselas, LZW, Deflate, PackBits, 8–32 bits)
 │   │   │   │   └── [x] netcdf3.rs   # Lector mínimo de NetCDF-3 en flujo desde un gzip (CRU TS)
 │   │   │   └── tectonica/           # Relieve tectónico (incremento 4): deriva de placas → relieve de nacimiento
 │   │   │       ├── [x] mod.rs       # Génesis tectónica, estado final, interpolación a las celdas del terreno
@@ -99,7 +102,7 @@ abm/
 │   │   └── tests/
 │   │       ├── [x] terreno.rs       # incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación…) + lluvia y w vs resolución + diagnóstico
 │   │       ├── [x] erosion.rs       # incr. 3 (material, hondonadas, camino, tope, caché…) + relieve orográfico + mundo plano
-│   │       ├── [x] tierra.rs        # Modo Tierra: clima del día con datos inventados (interpolación, anomalías, conservación entre niveles, periodo base), altura y hielo, secuencia de años (+ con las fuentes: el Sahel de 1984, la variabilidad por regiones)
+│   │       ├── [x] tierra.rs        # Modo Tierra: clima del día con datos inventados (interpolación, anomalías, conservación entre niveles, periodo base), altura y hielo, secuencia de años, red reescalada y cuencas cerradas sin rebosar con TIFF inventados (+ con las fuentes: el Sahel de 1984, la variabilidad y las rachas de años secos por regiones)
 │   │       └── [x] tectonica.rs     # incr. 4: determinismo, giro rígido, sin continentes, India–Asia, rifts (por la sutura, bloque pequeño, determinismo, reloj, márgenes con su edad), captura de placas, subducción de dorsales, edades tectonotérmicas de partida, caché (+ exploratorias: deriva_en_varias_semillas, diagnostico_demografia_placas, diagnostico_nivel_del_mar_y_edad_del_fondo, diagnostico_huella_de_la_deriva, calibraciones, diagnostico_pilas, diagnostico_fondo_viejo)
 │   │
 │   ├── abm-metrics/               # OBSERVADORES + LOD de almacenamiento (→ core, ruleset, persistence)

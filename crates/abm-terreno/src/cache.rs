@@ -22,7 +22,7 @@ use crate::tectonica::historia::ResumenTectonica;
 use crate::tectonica::malla::Malla;
 use crate::world::{Biome, Pair, Surface, Topology, World};
 
-const MAGIC: &[u8; 8] = b"ABMGEN05";
+const MAGIC: &[u8; 8] = b"ABMGEN06";
 const FINGERPRINT: &str = env!("ABM_TERRENO_FINGERPRINT");
 
 fn fnv1a(mut h: u64, bytes: &[u8]) -> u64 {
@@ -225,7 +225,7 @@ fn surface_from(c: u8) -> Option<Surface> {
 }
 
 /// Nº de columnas `f64` del mundo que se guardan.
-const N_F64: usize = 32;
+const N_F64: usize = 35;
 
 /// Columnas `f64` del mundo, en orden fijo (el mismo al guardar y al cargar).
 fn f64_columns(w: &World) -> [&Vec<f64>; N_F64] {
@@ -262,6 +262,9 @@ fn f64_columns(w: &World) -> [&Vec<f64>; N_F64] {
         &w.oro_air0_e,
         &w.w_hum,
         &w.hielo,
+        &w.lago,
+        &w.prod_mes,
+        &w.caudal_m3,
     ]
 }
 
@@ -560,6 +563,9 @@ fn decode(
         oro_air0_e: next(),
         w_hum: next(),
         hielo: next(),
+        lago: next(),
+        prod_mes: next(),
+        caudal_m3: next(),
         c_p,
         desvio_lluvia,
         // La caché guarda mundos ya envejecidos: el agotamiento ya está activo (salvo en el modo

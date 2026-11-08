@@ -1677,3 +1677,35 @@ Formato de entrada:
   - los glaciares de montaña (RGI 7.0);
   - la autocorrelación;
   - fusionar la rama.
+
+## [2026-11-08] Adenda 1 del modo Tierra, en curso (rama terreno-modo-tierra-adenda1)
+
+- **Qué pidió el responsable:**
+  - fusionar `terreno-modo-tierra` con `main` (hecho: `main` = ca6ddbe);
+  - `adenda_modo_tierra_1.md`, segunda ronda de la capa (queda una como mucho):
+    - ríos y lagos como dato (HydroSHEDS reescalado por píxel de salida, cuencas cerradas que no rebosan, mar solo lo conectado, lagos de HydroLAKES y caudal encaminado);
+    - vegetación = producción de Miami del año, repartida por meses;
+    - glaciares del RGI 7.0;
+    - remuestreo solo de años con estaciones en el 90 % de la tierra, y rachas de años secos;
+    - acepta la regla del hielo y la hipsometría a ±1,4 %.
+- **Hecho y probado** (las pruebas pasan, clippy limpio; planeta inventado y agentes idénticos byte a byte frente a `main`):
+  - **Remuestreo:** `cobertura_min` 0,9, con 1938–2010 (73 años). Las rachas de 2 o más años bajo el 75 % y las del quinto seco quedan dentro del ruido de Poisson en las 13 regiones: se acepta la autocorrelación.
+  - **Una sola producción:** `abm_terreno::vegetacion::ppn_miami`, que reexporta el hábitat de los agentes (`abm-ruleset` depende ahora de `abm-terreno`). En el modo Tierra:
+    - `veg` es la producción del año;
+    - `prod_mes`, la del mes;
+    - con el año de la semilla 42 (1987), 59,3 PgC/año.
+  - **Glaciares:** la tabla del RGI 7.0 (réplica de OGGM; NSIDC pide cuenta), repartida por centro y área. +0,54 Mkm², hielo 16,1 Mkm²; regiones a ±2 %.
+  - **Hidrología** (`tierra/hidro.rs`, `tierra/lagos.rs`, lector general de GeoTIFF con LZW y teselas):
+    - el reescalado, el mar conectado, los lagos rasterizados y la red de la malla de niveles mezclados (`hydro.rs: red_de_la_tierra`);
+    - la escorrentía encaminada, con las cuencas cerradas evaporando;
+    - el LOD afina las celdas que mezclan cuencas.
+
+    Probado con TIFF inventados: sin ciclos y sin cuencas que rebosen.
+- **Lo que falta:** los datos de HydroSHEDS. Vodafone bloquea `data.hydrosheds.org` (Cloudflare, por LaLiga): 16 intentos de 21:40 a 23:08, todos bloqueados.
+  - El responsable se ofreció a bajarlos desde otra red.
+  - Hasta tenerlos, el modo Tierra no arranca (los pide la carga).
+  - Después:
+    1. proyectar;
+    2. validar con las tablas de la adenda;
+    3. márgenes de la batería;
+    4. informe, mapa, README y TREE.

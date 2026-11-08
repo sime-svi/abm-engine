@@ -41,9 +41,151 @@ impl PartialOrd for MinItem {
 
 /// Recalcula todos los derivados globales del mundo sobre su malla actual.
 pub fn recompute(world: &mut World, cfg: &TerrenoConfig) {
+    // Modo Tierra: la red es un dato (adenda 1 §1); la hidrología del motor queda para el planeta
+    // inventado, sin cambios.
+    if let Some(d) = world.statgen.tierra().cloned() {
+        red_de_la_tierra(world, cfg, &d);
+        recompute_dist_ocean(world);
+        return;
+    }
     recompute_flow(world, cfg);
     recompute_dist_ocean(world);
     label_rivers_lakes(world, cfg);
+}
+
+/// Receptor de una celda terminal de una cuenca cerrada (modo Tierra): el agua se evapora allí.
+pub const CERRADA: i64 = -2;
+
+/// Red de ríos del modo Tierra sobre la malla actual (niveles mezclados), derivada de la red del nivel
+/// de carga:
+/// - mar, la celda con al menos la mitad de su área en el mar conectado con el océano mundial;
+/// - la salida de una celda es su descendiente del nivel de carga con más área drenada; desde ella se
+///   sigue la red del nivel de carga hasta salir de la celda, y la celda de la malla que la recibe es
+///   la de aguas abajo. Si la red acaba dentro de la celda, el receptor es −1 (sale al mar) o
+///   [`CERRADA`] (el fondo de una cuenca cerrada). El área drenada de la salida crece estrictamente
+///   río abajo, así que la red no tiene ciclos;
+/// - orden de flujo de aguas arriba abajo, área de drenaje acumulada, y ríos y lagos: lago si la mitad
+///   de la celda es lago de HydroLAKES, río si drena más de `river_threshold_km2`.
+fn red_de_la_tierra(world: &mut World, cfg: &TerrenoConfig, d: &crate::tierra::DatosTierra) {
+    use crate::geometry::{key, split_key};
+    use crate::tierra::hidro::{NINGUNA, fin};
+    let num = world.topo.num_cells;
+    let lc = d.nivel_carga;
+    let fino = &d.niveles[lc as usize];
+    let n = fino.n;
+    world.surface.clear();
+    world.surface.extend((0..num).map(|s| {
+        let (lv, k) = d.celda_de_clave(world.topo.keys[s]);
+        if d.mar_frac[lv][k] >= 0.5 {
+            Surface::Oceano
+        } else {
+            Surface::Tierra
+        }
+    }));
+    // Celda de la malla que contiene una celda del nivel de carga.
+    let malla_de = |k: usize| -> Option<usize> {
+        let nn = (n as usize) * (n as usize);
+        let (c, r) = ((k / nn) as u8, k % nn);
+        let (j, i) = ((r / n as usize) as u32, (r % n as usize) as u32);
+        for l in (0..=lc).rev() {
+            let s = lc - l;
+            if let Some(q) = world.topo.slot_of(key(c, l, i >> s, j >> s)) {
+                return Some(q);
+            }
+        }
+        (lc + 1..=world.topo.l_max)
+            .find_map(|l| world.topo.slot_of(key(c, l, i << (l - lc), j << (l - lc))))
+    };
+    world.receiver.clear();
+    world.receiver.resize(num, -1);
+    for s in 0..num {
+        if matches!(world.surface[s], Surface::Oceano) {
+            continue;
+        }
+        let (c, l, i, j) = split_key(world.topo.keys[s]);
+        // Las celdas más finas que el nivel de carga siguen a su antecesora.
+        let (l, i, j) = if l > lc {
+            (lc, i >> (l - lc), j >> (l - lc))
+        } else {
+            (l, i, j)
+        };
+        let sh = lc - l;
+        let dentro = |k: usize| {
+            let nn = (n as usize) * (n as usize);
+            let (c2, r) = ((k / nn) as u8, k % nn);
+            let (j2, i2) = ((r / n as usize) as u32, (r % n as usize) as u32);
+            c2 == c && i2 >> sh == i && j2 >> sh == j
+        };
+        // Salida: la descendiente con más área drenada (en empate, la primera).
+        let mut o = fino.indice(c, i << sh, j << sh);
+        for jj in (j << sh)..((j + 1) << sh) {
+            for ii in (i << sh)..((i + 1) << sh) {
+                let k = fino.indice(c, ii, jj);
+                if d.red.acum[k] > d.red.acum[o] || (d.red.acum[k] == d.red.acum[o] && k < o) {
+                    o = k;
+                }
+            }
+        }
+        let mut x = o;
+        world.receiver[s] = loop {
+            let a = d.red.abajo[x];
+            if a == NINGUNA {
+                break if d.red.fin[x] == fin::CERRADA {
+                    CERRADA
+                } else {
+                    -1
+                };
+            }
+            let a = a as usize;
+            if dentro(a) {
+                x = a;
+                continue;
+            }
+            break malla_de(a).map_or(-1, |q| if q == s { -1 } else { q as i64 });
+        };
+    }
+    // Orden de flujo (Kahn, con la cola en orden de posición): de aguas arriba abajo.
+    let mut entradas = vec![0u32; num];
+    for &r in &world.receiver {
+        if r >= 0 {
+            entradas[r as usize] += 1;
+        }
+    }
+    let mut cola: std::collections::VecDeque<u32> = (0..num as u32)
+        .filter(|&s| entradas[s as usize] == 0)
+        .collect();
+    world.flow_order.clear();
+    while let Some(s) = cola.pop_front() {
+        world.flow_order.push(s);
+        let r = world.receiver[s as usize];
+        if r >= 0 {
+            entradas[r as usize] -= 1;
+            if entradas[r as usize] == 0 {
+                cola.push_back(r as u32);
+            }
+        }
+    }
+    world.drainage_area.clear();
+    world.drainage_area.extend_from_slice(&world.topo.area);
+    for &s in world.flow_order.iter() {
+        let r = world.receiver[s as usize];
+        if r >= 0 {
+            world.drainage_area[r as usize] += world.drainage_area[s as usize];
+        }
+    }
+    world.filled_h.clear();
+    world.filled_h.extend_from_slice(&world.h);
+    let umbral = cfg.worldgen.river_threshold_km2 * 1e6;
+    for s in 0..num {
+        if matches!(world.surface[s], Surface::Oceano) {
+            continue;
+        }
+        if world.lago[s] >= 0.5 {
+            world.surface[s] = Surface::Lago;
+        } else if world.drainage_area[s] > umbral {
+            world.surface[s] = Surface::Rio;
+        }
+    }
 }
 
 /// Recalcula los derivados tras un paso de erosión (incr. 3): la red de flujo y las etiquetas. La

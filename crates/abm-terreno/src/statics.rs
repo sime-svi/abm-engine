@@ -258,6 +258,11 @@ impl StaticGen {
         self.tierra.as_ref().map_or(0.0, |t| t.hielo(c, l, i, j))
     }
 
+    /// Fracción de lago de la celda `(c, l, i, j)`: la de HydroLAKES, o 0 en el planeta inventado.
+    pub fn lago(&self, c: u8, l: u32, i: u32, j: u32) -> f64 {
+        self.tierra.as_ref().map_or(0.0, |t| t.lago(c, l, i, j))
+    }
+
     /// Altura de la base tectónica en `d` (con la fosa y sin el ruido de detalle); `None` sin
     /// tectónica. Sirve para distinguir las cuencas de la tectónica de los hoyos del ruido (G6).
     pub fn h_base_at(&self, d: V3) -> Option<f64> {
@@ -478,6 +483,30 @@ impl StaticGen {
     #[inline]
     pub fn is_ocean_h(&self, h: f64) -> bool {
         h < self.sea
+    }
+
+    /// `true` si la celda de clave `clave` y altura `h` es mar: en el planeta inventado, si está bajo
+    /// el nivel del mar; en el modo Tierra, si la mitad de su área es mar conectado con el océano
+    /// mundial (adenda 1 §1.4: las depresiones interiores son tierra).
+    #[inline]
+    pub fn es_mar(&self, clave: u64, h: f64) -> bool {
+        match &self.tierra {
+            Some(t) => {
+                let (lv, k) = t.celda_de_clave(clave);
+                t.mar_frac[lv][k] >= 0.5
+            }
+            None => self.is_ocean_h(h),
+        }
+    }
+
+    /// `true` si la celda de clave `clave` mezcla cuencas cerradas y abiertas (modo Tierra): el LOD la
+    /// afina para que ninguna cuenca cerrada rebose por una celda gruesa.
+    #[inline]
+    pub fn mezcla_cuencas(&self, clave: u64) -> bool {
+        self.tierra.as_ref().is_some_and(|t| {
+            let (lv, k) = t.celda_de_clave(clave);
+            t.mezcla[lv][k]
+        })
     }
 }
 

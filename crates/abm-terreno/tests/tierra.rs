@@ -12,7 +12,7 @@ use std::sync::Arc;
 use abm_terreno::TerrenoConfig;
 use abm_terreno::config::Modo;
 use abm_terreno::geometry::{center_dir, face_n, lat_lon, split_key};
-use abm_terreno::tierra::carga::{areas, desde_nivel_fino};
+use abm_terreno::tierra::carga::{Hidrologia, areas, desde_nivel_fino};
 use abm_terreno::tierra::clima::{Estado, secuencia_anios};
 use abm_terreno::tierra::{Cru, DatosTierra, Nivel};
 
@@ -86,11 +86,13 @@ fn datos_inventados(cfg: &TerrenoConfig) -> Arc<DatosTierra> {
         area: areas(n, cfg.planet.r_km * 1000.0),
         z,
         hielo,
+        lago: vec![0.0; m],
         t,
         p,
         cobertura: vec![1.0; m],
     };
-    Arc::new(desde_nivel_fino(cfg, fino, cru, cru_de_celda, 0))
+    let hid = Hidrologia::sin_red(&fino.z);
+    Arc::new(desde_nivel_fino(cfg, fino, cru, cru_de_celda, hid, 0))
 }
 
 /// Clima esperado de una celda del mundo en un mes: el de su celda del nivel de carga, o la media por
@@ -232,7 +234,9 @@ fn misma_semilla_misma_secuencia_de_anios_reales() {
     assert_eq!(sa, sb);
     assert!(sa.iter().all(|&x| (1981..=2010).contains(&x)));
     cfg.run.seed = 8;
-    assert_ne!(secuencia_anios(&cfg, 1981, 2010, 50)[1..51], sa[..]);
+    let todos = vec![true; 30];
+    let otra = secuencia_anios(&cfg, 1981, &todos, 50).expect("secuencia");
+    assert_ne!(otra[1..51], sa[..]);
     // Otro periodo base que el de CHELSA se corrige con CRU TS: aquí, 1990–1999 (todo a 15 °C y
     // 100 mm, igual que 1981–2010 salvo julio de 2001): la corrección es nula fuera de julio.
     cfg.tierra.periodo_base = [1990, 1999];
@@ -266,6 +270,7 @@ fn cfg_tierra() -> TerrenoConfig {
     t.chelsa = r(&t.chelsa);
     t.cru_tmp = r(&t.cru_tmp);
     t.cru_pre = r(&t.cru_pre);
+    t.rgi = r(&t.rgi);
     cfg.run.genesis_cache = r(&cfg.run.genesis_cache);
     cfg
 }
@@ -346,6 +351,57 @@ fn estadisticas(x: &[f64]) -> [f64; 5] {
     [media, sd, sd / media, cov / var, secos]
 }
 
+/// Rachas de 2 o más años seguidos por debajo del 75 % de la media de la serie (adenda 1 §4.2).
+fn rachas_secas(x: &[f64]) -> usize {
+    let media = x.iter().sum::<f64>() / x.len() as f64;
+    let (mut rachas, mut largo) = (0, 0);
+    for &v in x.iter().chain(std::iter::once(&f64::INFINITY)) {
+        if v < 0.75 * media {
+            largo += 1;
+        } else {
+            if largo >= 2 {
+                rachas += 1;
+            }
+            largo = 0;
+        }
+    }
+    rachas
+}
+
+/// Rachas de 2 o más años seguidos en el quinto más seco de la serie (por debajo de su percentil 20):
+/// la misma prueba con más sucesos que la del 75 % de la media, que casi nunca se alcanza.
+fn rachas_quinto_seco(x: &[f64]) -> usize {
+    let mut orden = x.to_vec();
+    orden.sort_by(|a, b| a.total_cmp(b));
+    let umbral = orden[(0.2 * (orden.len() - 1) as f64).round() as usize];
+    let (mut rachas, mut largo) = (0, 0);
+    for &v in x.iter().chain(std::iter::once(&f64::INFINITY)) {
+        if v <= umbral {
+            largo += 1;
+        } else {
+            if largo >= 2 {
+                rachas += 1;
+            }
+            largo = 0;
+        }
+    }
+    rachas
+}
+
+/// Probabilidad de Poisson a dos colas de ver `k` sucesos si se esperan `lambda`: `2·min(P(X ≤ k),
+/// P(X ≥ k))`, como mucho 1. «Dentro del ruido» si es al menos 0,05.
+fn poisson_dos_colas(k: usize, lambda: f64) -> f64 {
+    let mut termino = (-lambda).exp();
+    let mut acumulada = termino;
+    for i in 1..=k {
+        termino *= lambda / i as f64;
+        acumulada += termino;
+    }
+    let menor_o_igual = acumulada;
+    let mayor_o_igual = 1.0 - (acumulada - termino);
+    (2.0 * menor_o_igual.min(mayor_o_igual)).min(1.0)
+}
+
 #[test]
 #[ignore = "necesita las fuentes de la Tierra (herramientas/tierra/descargar.sh); diagnóstico"]
 fn diagnostico_tierra_variabilidad_por_regiones() {
@@ -360,11 +416,23 @@ fn diagnostico_tierra_variabilidad_por_regiones() {
     let e = Estado::new(Arc::clone(&datos), &cfg, n_sim).expect("estado");
     let cru = &datos.cru;
     let (a0, a1) = (cru.anio0, cru.anio_final());
+    // Los años del remuestreo (estaciones en al menos `cobertura_min` de la tierra): la referencia de
+    // CRU TS se mide en esos mismos años.
+    let validos = abm_terreno::tierra::clima::anios_con_estaciones(
+        &cru.sin_estaciones,
+        cfg.tierra.cobertura_min,
+    );
+    let periodo: Vec<i32> = (a0..=a1).filter(|a| validos[(a - a0) as usize]).collect();
     let mut out = serde_json::Map::new();
     println!(
-        "{:<22} {:>9} {:>7} {:>7} {:>7} | {:>7} {:>7} {:>7} | {:>7} {:>7} {:>7}",
+        "años del remuestreo: {}–{} ({})",
+        periodo[0],
+        periodo[periodo.len() - 1],
+        periodo.len()
+    );
+    println!(
+        "{:<22} {:>6} {:>6} {:>6} | {:>6} {:>6} {:>6} | {:>6} {:>6} | {:>5} {:>6} {:>5} | {:>5} {:>6} {:>5}",
         "región",
-        "P CRU",
         "CV CRU",
         "CV mod",
         "CV ord",
@@ -373,7 +441,12 @@ fn diagnostico_tierra_variabilidad_por_regiones() {
         "ac1 ord",
         "sec CRU",
         "sec mod",
-        "sec ord"
+        "R CRU",
+        "R esp",
+        "p",
+        "Q CRU",
+        "Q esp",
+        "p"
     );
     for r in &REGIONES {
         let celdas = celdas_region(&datos, r);
@@ -382,22 +455,60 @@ fn diagnostico_tierra_variabilidad_por_regiones() {
         let modelo: Vec<f64> = (0..n_sim as i64)
             .map(|y| por_anio[(e.anio_real(y) - a0) as usize])
             .collect();
-        let real: Vec<f64> = (a0..=a1).map(|a| lluvia_cru(cru, r, a)).collect();
-        let (sc, sm, so) = (
+        let real_todo: Vec<f64> = (a0..=a1).map(|a| lluvia_cru(cru, r, a)).collect();
+        let real: Vec<f64> = periodo
+            .iter()
+            .map(|&a| real_todo[(a - a0) as usize])
+            .collect();
+        let en_orden: Vec<f64> = periodo
+            .iter()
+            .map(|&a| por_anio[(a - a0) as usize])
+            .collect();
+        let (sc, sm, so, st) = (
             estadisticas(&real),
             estadisticas(&modelo),
-            estadisticas(&por_anio),
+            estadisticas(&en_orden),
+            estadisticas(&real_todo),
         );
+        // Rachas de años secos: las de CRU en el periodo frente a las esperadas con el ritmo del
+        // modelo en tantos años.
+        let (r_cru, r_mod) = (rachas_secas(&real), rachas_secas(&modelo));
+        let esperadas = r_mod as f64 * real.len() as f64 / n_sim as f64;
+        let p = poisson_dos_colas(r_cru, esperadas);
+        let (q_cru, q_mod) = (rachas_quinto_seco(&real), rachas_quinto_seco(&modelo));
+        let q_esp = q_mod as f64 * real.len() as f64 / n_sim as f64;
+        let q_p = poisson_dos_colas(q_cru, q_esp);
         println!(
-            "{:<22} {:>9.0} {:>7.3} {:>7.3} {:>7.3} | {:>7.3} {:>7.3} {:>7.3} | {:>7.3} {:>7.3} {:>7.3}",
-            r.0, sc[0], sc[2], sm[2], so[2], sc[3], sm[3], so[3], sc[4], sm[4], so[4]
+            "{:<22} {:>6.3} {:>6.3} {:>6.3} | {:>6.3} {:>6.3} {:>6.3} | {:>6.3} {:>6.3} | {:>5} {:>6.2} {:>5.2} | {:>5} {:>6.2} {:>5.2}",
+            r.0,
+            sc[2],
+            sm[2],
+            so[2],
+            sc[3],
+            sm[3],
+            so[3],
+            sc[4],
+            sm[4],
+            r_cru,
+            esperadas,
+            p,
+            q_cru,
+            q_esp,
+            q_p
         );
         let reg = serde_json::json!({
             "celdas": celdas.len(),
-            "cru": {"media_mm": sc[0], "sd_mm": sc[1], "cv": sc[2], "ac1": sc[3], "secos_frac": sc[4]},
-            "modelo_remuestreado": {"media_mm": sm[0], "sd_mm": sm[1], "cv": sm[2], "ac1": sm[3], "secos_frac": sm[4]},
+            "cru": {"media_mm": sc[0], "sd_mm": sc[1], "cv": sc[2], "ac1": sc[3], "secos_frac": sc[4], "rachas_secas": r_cru},
+            "cru_1901_2024": {"media_mm": st[0], "sd_mm": st[1], "cv": st[2], "ac1": st[3], "secos_frac": st[4], "rachas_secas": rachas_secas(&real_todo)},
+            "modelo_remuestreado": {"media_mm": sm[0], "sd_mm": sm[1], "cv": sm[2], "ac1": sm[3], "secos_frac": sm[4],
+                                    "rachas_secas_por_100_anios": 100.0 * r_mod as f64 / n_sim as f64},
             "modelo_en_orden": {"media_mm": so[0], "sd_mm": so[1], "cv": so[2], "ac1": so[3], "secos_frac": so[4]},
-            "serie_cru_mm": real,
+            "rachas_secas_esperadas_en_el_periodo": esperadas,
+            "rachas_secas_p_poisson": p,
+            "rachas_quinto_seco_cru": q_cru,
+            "rachas_quinto_seco_esperadas": q_esp,
+            "rachas_quinto_seco_p_poisson": q_p,
+            "serie_cru_mm": real_todo,
             "serie_malla_por_anio_mm": por_anio,
         });
         out.insert(r.0.to_string(), reg);
@@ -407,6 +518,8 @@ fn diagnostico_tierra_variabilidad_por_regiones() {
         "l_bloque": cfg.tierra.l_bloque,
         "semilla": cfg.run.seed,
         "cru_anios": [a0, a1],
+        "cobertura_min": cfg.tierra.cobertura_min,
+        "anios_remuestreo": periodo,
         "regiones": out,
     });
     let raiz = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../output/tierra_validacion");
@@ -468,5 +581,268 @@ fn forzando_1984_la_lluvia_del_sahel_es_la_de_cru_ts() {
     assert!(
         (p / p_clim - cru_1984 / cru_base).abs() < 0.02,
         "la anomalía del Sahel en 1984 no es la de CRU TS"
+    );
+}
+
+// --- La red de ríos con datos inventados ----------------------------------------------------------
+
+/// Escribe un GeoTIFF mínimo (little-endian, sin comprimir, una fila por tira) de una rejilla global
+/// de `ancho × alto` píxeles desde (−180°, 90°), con su valor «sin dato».
+fn escribir_tiff(
+    ruta: &std::path::Path,
+    ancho: usize,
+    alto: usize,
+    datos: &[u8],
+    bits: u16,
+    formato: u16,
+    sin_dato: &str,
+) {
+    let paso = 360.0 / ancho as f64;
+    let mut ent: Vec<(u16, u16, u32, Vec<u8>)> = Vec::new();
+    let largo_u32 = |v: u32| v.to_le_bytes().to_vec();
+    let corto = |v: u16| v.to_le_bytes().to_vec();
+    let bytes_fila = ancho * bits as usize / 8;
+    ent.push((256, 4, 1, largo_u32(ancho as u32)));
+    ent.push((257, 4, 1, largo_u32(alto as u32)));
+    ent.push((258, 3, 1, corto(bits)));
+    ent.push((259, 3, 1, corto(1)));
+    ent.push((262, 3, 1, corto(1)));
+    ent.push((273, 4, alto as u32, vec![]));
+    ent.push((277, 3, 1, corto(1)));
+    ent.push((278, 4, 1, largo_u32(1)));
+    ent.push((
+        279,
+        4,
+        alto as u32,
+        (0..alto)
+            .flat_map(|_| (bytes_fila as u32).to_le_bytes())
+            .collect(),
+    ));
+    ent.push((339, 3, 1, corto(formato)));
+    ent.push((
+        33550,
+        12,
+        3,
+        [paso, paso, 0.0]
+            .iter()
+            .flat_map(|x| x.to_le_bytes())
+            .collect(),
+    ));
+    ent.push((
+        33922,
+        12,
+        6,
+        [0.0f64, 0.0, 0.0, -180.0, 90.0, 0.0]
+            .iter()
+            .flat_map(|x| x.to_le_bytes())
+            .collect(),
+    ));
+    let mut nd = sin_dato.as_bytes().to_vec();
+    nd.push(0);
+    ent.push((42113, 2, nd.len() as u32, nd));
+    let ifd = 8usize;
+    let mut extra = ifd + 2 + ent.len() * 12 + 4;
+    let mut bloques: Vec<u8> = Vec::new();
+    let mut ifd_b: Vec<u8> = (ent.len() as u16).to_le_bytes().to_vec();
+    let datos0 = {
+        // Lo que va fuera del IFD, con las posiciones de las filas al final.
+        let mut x = extra;
+        for (tag, _, _, v) in &ent {
+            if *tag == 273 {
+                x += 4 * alto;
+            } else if v.len() > 4 {
+                x += v.len();
+            }
+        }
+        x
+    };
+    for (tag, tipo, cuenta, v) in &ent {
+        ifd_b.extend_from_slice(&tag.to_le_bytes());
+        ifd_b.extend_from_slice(&tipo.to_le_bytes());
+        ifd_b.extend_from_slice(&cuenta.to_le_bytes());
+        let v = if *tag == 273 {
+            (0..alto)
+                .flat_map(|r| ((datos0 + r * bytes_fila) as u32).to_le_bytes())
+                .collect()
+        } else {
+            v.clone()
+        };
+        if v.len() <= 4 {
+            let mut c = v.clone();
+            c.resize(4, 0);
+            ifd_b.extend_from_slice(&c);
+        } else {
+            ifd_b.extend_from_slice(&(extra as u32).to_le_bytes());
+            bloques.extend_from_slice(&v);
+            extra += v.len();
+        }
+    }
+    ifd_b.extend_from_slice(&0u32.to_le_bytes());
+    let mut out = b"II".to_vec();
+    out.extend_from_slice(&42u16.to_le_bytes());
+    out.extend_from_slice(&(ifd as u32).to_le_bytes());
+    out.extend_from_slice(&ifd_b);
+    out.extend_from_slice(&bloques);
+    assert_eq!(out.len(), datos0);
+    out.extend_from_slice(datos);
+    std::fs::write(ruta, out).expect("escribir el TIFF de prueba");
+}
+
+#[test]
+fn la_red_reescalada_crece_rio_abajo_y_las_cuencas_cerradas_no_rebosan() {
+    use abm_terreno::tierra::hidro::{self, NINGUNA, fin};
+    // Rejilla global de 1°: un continente (lon −60…60, lat −40…40) que desagua al oeste, con una
+    // cuenca cerrada dentro (lon 20…40, lat −10…10) que lleva todo a su centro.
+    let (w, h) = (360usize, 180usize);
+    let tierra = |r: usize, c: usize| (120..240).contains(&c) && (50..130).contains(&r);
+    let cerrada = |r: usize, c: usize| (200..220).contains(&c) && (80..100).contains(&r);
+    let (cc, rc) = (210usize, 90usize);
+    let mut dir = vec![247u8; w * h];
+    for r in 0..h {
+        for c in 0..w {
+            if !tierra(r, c) {
+                continue;
+            }
+            dir[r * w + c] = if cerrada(r, c) {
+                if c < cc {
+                    1
+                } else if c > cc {
+                    16
+                } else if r < rc {
+                    4
+                } else if r > rc {
+                    64
+                } else {
+                    255
+                }
+            } else if c == 120 {
+                0
+            } else {
+                16
+            };
+        }
+    }
+    // Acumulación: cada píxel suma los que le vierten (de aguas arriba abajo, por orden topológico).
+    let destino = |q: usize| -> Option<usize> {
+        let (r, c) = (q / w, q % w);
+        let (dr, dc): (i64, i64) = match dir[q] {
+            1 => (0, 1),
+            4 => (1, 0),
+            16 => (0, -1),
+            64 => (-1, 0),
+            _ => return None,
+        };
+        Some(((r as i64 + dr) as usize) * w + (c as i64 + dc) as usize)
+    };
+    let mut entradas = vec![0u32; w * h];
+    for (q, &d0) in dir.iter().enumerate() {
+        if d0 != 247
+            && let Some(d) = destino(q)
+        {
+            entradas[d] += 1;
+        }
+    }
+    let mut acum = vec![0i32; w * h];
+    let mut cola: std::collections::VecDeque<usize> = (0..w * h)
+        .filter(|&q| dir[q] != 247 && entradas[q] == 0)
+        .collect();
+    while let Some(q) = cola.pop_front() {
+        acum[q] += 1;
+        if let Some(d) = destino(q) {
+            acum[d] += acum[q];
+            entradas[d] -= 1;
+            if entradas[d] == 0 {
+                cola.push_back(d);
+            }
+        }
+    }
+    let dirs_tmp = std::env::temp_dir().join(format!("abm_red_prueba_{}", std::process::id()));
+    std::fs::create_dir_all(&dirs_tmp).expect("carpeta temporal");
+    let (p_dir, p_acc) = (dirs_tmp.join("dir.tif"), dirs_tmp.join("acc.tif"));
+    escribir_tiff(&p_dir, w, h, &dir, 8, 1, "247");
+    let acc_bytes: Vec<u8> = acum
+        .iter()
+        .zip(&dir)
+        .flat_map(|(&a, &d)| (if d == 247 { -1 } else { a }).to_le_bytes())
+        .collect();
+    escribir_tiff(&p_acc, w, h, &acc_bytes, 32, 2, "-1");
+
+    let mut cfg = cfg_pequena();
+    let n = face_n(cfg.planet.n0, cfg.tierra.nivel_carga);
+    let red = hidro::reescalar(&p_dir, &p_acc, n).expect("reescalado");
+    std::fs::remove_dir_all(&dirs_tmp).ok();
+    // El área drenada crece estrictamente río abajo y la celda de aguas abajo es vecina.
+    let mut con_red = 0;
+    for k in 0..red.abajo.len() {
+        let a = red.abajo[k];
+        if a != NINGUNA {
+            con_red += 1;
+            assert!(red.acum[a as usize] > red.acum[k], "celda {k}");
+        }
+    }
+    assert!(con_red > 50, "la red tiene que tener tramos: {con_red}");
+    let cerradas = hidro::acaba_en_cerrada(&red);
+    let terminales_cerradas = (0..red.abajo.len())
+        .filter(|&k| red.abajo[k] == NINGUNA && red.fin[k] == fin::CERRADA)
+        .count();
+    assert!(terminales_cerradas >= 1, "la cuenca cerrada tiene su fondo");
+    assert!(
+        cerradas.iter().filter(|&&x| x).count() >= 4,
+        "celdas de la cuenca cerrada"
+    );
+
+    // En una malla de niveles mezclados: ninguna cuenca cerrada rebosa ni ninguna abierta se cierra.
+    cfg.tierra.anio_forzado = 2001;
+    let datos = datos_inventados(&cfg);
+    let m = 6 * (n as usize) * (n as usize);
+    let fino = &datos.niveles[cfg.tierra.nivel_carga as usize];
+    let z: Vec<f64> = (0..m)
+        .map(|k| {
+            if red.pix_mar[k] > 0 && red.acum[k] == 0 {
+                -3000.0
+            } else {
+                400.0
+            }
+        })
+        .collect();
+    let nivel = Nivel {
+        n,
+        area: fino.area.clone(),
+        z: z.clone(),
+        hielo: vec![0.0; m],
+        lago: vec![0.0; m],
+        t: fino.t.clone(),
+        p: fino.p.clone(),
+        cobertura: vec![1.0; m],
+    };
+    let mar = hidro::mar_conectado(&z, &red.pix_mar, n);
+    let hid = Hidrologia {
+        red,
+        mar,
+        lagos_total_km2: 0.0,
+    };
+    let d = Arc::new(desde_nivel_fino(
+        &cfg,
+        nivel,
+        datos.cru.clone(),
+        datos.cru_de_celda.clone(),
+        hid,
+        0,
+    ));
+    let (world, _) = abm_terreno::worldgen::generate_tierra(&cfg, Arc::clone(&d));
+    assert_eq!(
+        world.flow_order.len(),
+        world.topo.num_cells,
+        "la red de la malla no tiene ciclos"
+    );
+    let dg = abm_terreno::metrics::diagnostico_tierra(&world).expect("diagnóstico");
+    assert_eq!(
+        dg.cerradas_que_rebosan_km2, 0.0,
+        "una cuenca cerrada rebosa"
+    );
+    assert_eq!(dg.abiertas_que_acaban_cerradas_km2, 0.0);
+    assert!(
+        (0..world.topo.num_cells).any(|s| world.receiver[s] == abm_terreno::hydro::CERRADA),
+        "la malla tiene el fondo de la cuenca cerrada"
     );
 }

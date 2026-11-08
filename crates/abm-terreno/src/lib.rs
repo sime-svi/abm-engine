@@ -21,6 +21,7 @@ pub mod statics;
 pub mod systems;
 pub mod tectonica;
 pub mod tierra;
+pub mod vegetacion;
 pub mod world;
 pub mod worldgen;
 
@@ -218,6 +219,14 @@ pub struct WorldDumpCell {
     pub temp_anual_c: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub drenaje_km2: Option<f64>,
+    /// Modo Tierra: fracción de lago, caudal medio que pasa por la celda (km³/año) y su receptor
+    /// (−1 al mar, −2 fondo de una cuenca cerrada).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lago: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub caudal_km3_anio: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receptor: Option<i64>,
 }
 
 /// Datos tectónicos de una celda del volcado.
@@ -236,6 +245,7 @@ pub struct DumpTectonica {
 pub fn world_dump(world: &World, cfg: &TerrenoConfig) -> Vec<WorldDumpCell> {
     let clima = cfg.run.dump_climate;
     let tierra = world.statgen.tierra();
+    let anios = (world.sample_count as f64 / 365.0).max(1.0 / 365.0);
     // El factor orográfico y el agotamiento son del clima del planeta inventado.
     let clima_modelo = clima && tierra.is_none();
     (0..world.topo.num_cells)
@@ -276,6 +286,9 @@ pub fn world_dump(world: &World, cfg: &TerrenoConfig) -> Vec<WorldDumpCell> {
                 .filter(|_| clima)
                 .map(|d| d.clima_anual(world.topo.keys[id]).0),
             drenaje_km2: tierra.map(|_| world.drainage_area[id] / 1e6),
+            lago: tierra.map(|_| world.lago[id]),
+            caudal_km3_anio: tierra.map(|_| world.caudal_m3[id] / 1e9 / anios),
+            receptor: tierra.map(|_| world.receiver[id]),
         })
         .collect()
 }

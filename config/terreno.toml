@@ -288,9 +288,16 @@ etopo_roca_norte  = "output/referencias/etopo2022_roca_norte_2m.f32be" # ETOPO 2
 chelsa            = "output/referencias/chelsa_mensual"                # CHELSA V2.1, tas y pr de cada mes, 1981–2010 (30'')
 cru_tmp           = "output/referencias/cru_ts/cru_ts4.09.1901.2024.tmp.dat.nc.gz" # CRU TS 4.09, temperatura mensual
 cru_pre           = "output/referencias/cru_ts/cru_ts4.09.1901.2024.pre.dat.nc.gz" # CRU TS 4.09, lluvia mensual
+rgi               = "output/referencias/rgi7/RGI2000-v7.0-G-global-attributes.csv" # RGI 7.0: centro y área de cada glaciar (adenda 1 §3; CC BY 4.0, réplica de OGGM)
+hydrosheds_dir    = "output/referencias/hydrosheds/hyd_glo_dir_15s.tif" # HydroSHEDS v1, direcciones de flujo a 15″ (adenda 1 §1)
+hydrosheds_acc    = "output/referencias/hydrosheds/hyd_glo_acc_15s.tif" # HydroSHEDS v1, acumulación a 15″ (para elegir el píxel de salida de cada celda)
+hydrolakes        = "output/referencias/hydrosheds/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp" # HydroLAKES v1.0 (CC BY 4.0)
+lagos_raster_km2  = 50.0       # un lago más pequeño cae entero en la celda de su desagüe (a 26 km, despreciable); los mayores se rasterizan
+lagos_paso_grados = 0.01       # paso del barrido de los lagos grandes (~1 km)
 hielo_min_m       = 10.0       # espesor mínimo (superficie − roca) que es hielo, con la superficie sobre el mar: por debajo es ruido entre las dos versiones de ETOPO (con 0: 1,2 Mkm² de «hielo» sobre el mar del Ártico; con 10 m, Groenlandia da 1,80 Mkm²: casquete 1,71 + glaciares de alrededor)
 nivel_carga       = 3          # nivel más fino al que se cargan los datos (el l_max por defecto: ~26 km); por debajo, reparto conservativo
 l_bloque          = 10         # años reales seguidos de cada bloque remuestreado (supuesto: conserva las sequías de varios años, como la del Sahel; 5–20)
+cobertura_min     = 0.9        # solo se remuestrean los años con estaciones en al menos este tanto de la tierra de CRU TS (adenda 1 §4); el resto vuelve a la climatología
 r_max             = 5.0        # tope del cociente de lluvia de un mes frente a su climatología (numérico: zonas casi sin lluvia)
 periodo_base      = [1981, 2010] # periodo del clima (el de CHELSA); otro, p. ej. [1901, 1930], lo corrige con CRU TS
 anio_forzado      = 0          # 0 = remuestreo por bloques; un año real (p. ej. 1984) = siempre ese año

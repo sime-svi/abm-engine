@@ -120,15 +120,21 @@ El proveedor de mundo de la Tierra real (`diseno_modo_tierra.md`, Fase 1; técni
 
 1. **Carga** (`tierra/carga.rs`), en la caché `output/cache/tierra_n3_*.bin` si ya se hizo con las mismas fuentes:
    1. ETOPO 2022 cada 2': la altura media de cada celda de nivel 3 y la fracción con hielo (superficie − roca ≥ `hielo_min_m`, con la superficie sobre el mar);
-   2. CHELSA V2.1 (30'', los 24 GeoTIFF mensuales, un hilo por archivo): la temperatura y la lluvia de cada mes;
-   3. CRU TS 4.09: las series mensuales 1901–2024 de sus 67 420 celdas de tierra, y la celda de CRU de cada celda de nivel 3;
-   4. los niveles 0–2, como medias por área de sus hijas (conservación exacta).
-2. **Génesis** (`worldgen.rs: generate_tierra`): la malla, la hidrología del motor y el refinado inicial del LOD sobre la altura de ETOPO. No corren la deriva, la génesis geológica ni el agotamiento de humedad.
+   2. los glaciares del RGI 7.0 (centro y área de cada uno; lo que no cabe en una celda pasa a sus vecinas): el hielo es el mayor de ETOPO y el RGI;
+   3. CHELSA V2.1 (30'', los 24 GeoTIFF mensuales, un hilo por archivo): la temperatura y la lluvia de cada mes;
+   4. CRU TS 4.09: las series mensuales 1901–2024 de sus 67 420 celdas de tierra, y la celda de CRU de cada celda de nivel 3;
+   5. la red de ríos (`tierra/hidro.rs`): HydroSHEDS a 15″ reescalado por píxel de salida, las cuencas cerradas y el mar conectado con el océano mundial;
+   6. los lagos de HydroLAKES en fracción de celda (`tierra/lagos.rs`);
+   7. los niveles 0–2, como medias por área de sus hijas (conservación exacta), con la fracción de mar y las celdas que mezclan cuencas cerradas y abiertas.
+2. **Génesis** (`worldgen.rs: generate_tierra`): la malla, la red de la Tierra (`hydro.rs: red_de_la_tierra`) y el refinado inicial del LOD sobre la altura de ETOPO. No corren la deriva, la génesis geológica ni el agotamiento de humedad.
 3. **Ticks diarios:** los mismos sistemas del §2.1, salvo:
    - el clima (`tierra/clima.rs: Estado::clima`): la temperatura se interpola entre las mitades de los dos meses que rodean el día, y la lluvia es la del mes repartida entre sus días. Cada mes es la climatología de CHELSA más la anomalía (`ΔT`, `r` ≤ `r_max`) del año real de CRU TS que toca;
-   - el año real se sortea por bloques de `l_bloque` años seguidos, con el RNG por contador;
+   - el año real se sortea por bloques de `l_bloque` años seguidos, solo de los años con estaciones en al menos `cobertura_min` de la tierra (1938–2010), con el RNG por contador;
+   - la vegetación: la producción de Miami del año (`veg`, g de materia seca/m²/año) y la de su mes (`prod_mes`), sin la parte de hielo ni la de lago (adenda 1 §2);
+   - el agua superficial (`systems.rs: surface_water_tierra`): la escorrentía se encamina por la red fija; la que llega al fondo de una cuenca cerrada se evapora allí, y el caudal de cada celda se acumula;
+   - el LOD afina las celdas que mezclan cuencas cerradas y abiertas;
    - la erosión, que no corre: el relieve no cambia;
-   - el hielo (`hielo` de cada celda), que quita la vegetación y la habitabilidad y es bioma «hielo».
+   - el hielo y los lagos, que quitan la vegetación y la habitabilidad.
 4. **Salida:** esquema v8.
    - `run.tierra`: las fuentes, los parámetros y el año real de cada año simulado.
    - `diagnostico.tierra`: el hielo, las medias del clima sobre la tierra, la conservación del relieve y las 50 mayores cuencas.
@@ -138,6 +144,8 @@ El proveedor de mundo de la Tierra real (`diseno_modo_tierra.md`, Fase 1; técni
 | `hielo_min_m` | 10 m | supuesto (por debajo, ruido entre las dos versiones de ETOPO; medido: con 0, 1,2 Mkm² de «hielo» sobre el mar del Ártico) |
 | `nivel_carga` | 3 (~26 km) | el `l_max` del motor |
 | `l_bloque` | 10 años | supuesto de la nota (5–20) |
+| `cobertura_min` | 0,9 | de la adenda 1: solo años con estaciones en el 90 % de la tierra (1938–2010) |
+| `lagos_raster_km2`, `lagos_paso_grados` | 50 km², 0,01° | numéricos (a 26 km, un lago pequeño cabe en la celda de su desagüe) |
 | `r_max` | 5 | numérico |
 | `periodo_base` | 1981–2010 | el de CHELSA; otro se corrige con CRU TS |
 | `anio_forzado` | 0 (remuestreo) | — |

@@ -12,6 +12,8 @@
 pub mod carga;
 pub mod clima;
 mod geotiff;
+pub mod hidro;
+pub mod lagos;
 mod netcdf3;
 
 pub use carga::cargar;
@@ -30,8 +32,11 @@ pub struct Nivel {
     pub area: Vec<f64>,
     /// Altura media (m, positiva sobre el nivel del mar actual).
     pub z: Vec<f64>,
-    /// Fracción de la celda con hielo (casquetes de ETOPO: superficie − roca > 0).
+    /// Fracción de la celda con hielo: casquetes de ETOPO (superficie sobre el mar y al menos
+    /// `hielo_min_m` sobre la roca) y glaciares del RGI 7.0, el mayor de los dos.
     pub hielo: Vec<f64>,
+    /// Fracción de la celda con lagos de HydroLAKES (0 hasta que se carguen).
+    pub lago: Vec<f64>,
     /// Climatología mensual: temperatura (°C) y precipitación (mm/mes), 12 valores por celda
     /// (`[k·12 + mes]`).
     pub t: Vec<f32>,
@@ -116,6 +121,17 @@ pub struct DatosTierra {
     pub cru: Cru,
     /// Celda de CRU de cada celda del nivel de carga (`u32::MAX`: ninguna; sin variabilidad).
     pub cru_de_celda: Vec<u32>,
+    /// Red de ríos del nivel de carga (HydroSHEDS reescalado), el mar conectado con el océano mundial
+    /// y si el agua de cada celda acaba en una cuenca cerrada.
+    pub red: hidro::Red,
+    pub mar: Vec<bool>,
+    pub cerrada: Vec<bool>,
+    /// Por nivel: fracción de mar de cada celda y si mezcla cuencas cerradas y abiertas (el LOD la
+    /// afina para que ninguna cuenca cerrada rebose a través de una celda gruesa).
+    pub mar_frac: Vec<Vec<f32>>,
+    pub mezcla: Vec<Vec<bool>>,
+    /// Área total de los lagos de HydroLAKES (km²).
+    pub lagos_total_km2: f64,
     /// Huella de las fuentes y del código: entra en la clave de la caché del mundo.
     pub huella: u64,
 }
@@ -155,6 +171,13 @@ impl DatosTierra {
     pub fn hielo(&self, c: u8, l: u32, i: u32, j: u32) -> f64 {
         let (lv, k) = self.celda(c, l, i, j);
         self.niveles[lv].hielo[k]
+    }
+
+    /// Fracción de lago de la celda `(c, l, i, j)` (HydroLAKES).
+    #[inline]
+    pub fn lago(&self, c: u8, l: u32, i: u32, j: u32) -> f64 {
+        let (lv, k) = self.celda(c, l, i, j);
+        self.niveles[lv].lago[k]
     }
 
     /// Temperatura media anual (°C) y precipitación anual (mm) de la climatología de una celda.

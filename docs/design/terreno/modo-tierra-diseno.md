@@ -266,6 +266,70 @@ Opciones:
 - Los años de los extremos de la serie tienen, por tanto, menos variabilidad real.
 - Va en la salida: `run.tierra.cru_sin_estaciones_por_decada`.
 
+## 5. Adenda 1 (segunda ronda de la capa)
+
+Nota del responsable: `adenda_modo_tierra_1.md`. Su principio: en el modo Tierra, lo que existe medido se usa como dato; el motor modela solo lo que cambia con el tiempo.
+
+### 5.1 Ríos y lagos como dato
+
+- **Fuentes:**
+  - HydroSHEDS v1 a 15″: las direcciones de flujo (`hyd_glo_dir_15s`, D8 de ESRI; 0 es la salida al mar, 255 el fondo de una cuenca cerrada y el mar va sin dato) y la acumulación (`hyd_glo_acc_15s`);
+  - HydroLAKES v1.0 (polígonos).
+
+  Se leen con el lector general de GeoTIFF (`tierra/geotiff.rs: Raster`: teselas o tiras; sin comprimir, Deflate, LZW o PackBits; 8, 16 o 32 bits) y con lectores mínimos de shapefile y dBASE (`tierra/lagos.rs`).
+- **Reescalado por píxel de salida** (`tierra/hidro.rs: reescalar`), al nivel de carga, como en Eilander et al. (2021):
+  - la salida de una celda es su píxel de 15″ con más acumulación;
+  - desde ella se sigue el camino río abajo hasta la salida de otra celda;
+  - si esa celda no es vecina, se toma la primera vecina por la que pasa el camino.
+
+  En los dos casos, la acumulación de la salida de la celda de aguas abajo es mayor que la de la celda: la red no puede tener ciclos.
+  Si el camino acaba en el mar o en el fondo de una cuenca cerrada antes de llegar a otra salida, la celda termina allí. En particular, si el fondo cae en una vecina cuya salida es de otra cuenca, la celda es terminal: su agua nunca rebosa a esa otra red.
+- **Mar** (`mar_conectado`): solo lo que está bajo el nivel del mar y en la mayor componente conexa de las celdas bajo el nivel del mar o con algún píxel de mar de HydroSHEDS.
+  - Los estrechos más finos que una celda (Gibraltar, el Bósforo) unen.
+  - El Caspio, el mar Muerto, El Fayum, Qattara y Turfán quedan fuera: los dos primeros son lagos (HydroLAKES) y los demás, tierra.
+  - En los niveles gruesos, una celda es mar si la mitad de su área lo es.
+- **Lagos** (`fraccion_de_lagos`):
+  - un lago de menos de `lagos_raster_km2` (50 km²) cae entero en la celda de su desagüe;
+  - los mayores se rasterizan por barrido de filas cada `lagos_paso_grados` (0,01°) y se escalan a su área de HydroLAKES;
+  - la celda es lago si la mitad de su área lo es. La fracción de lago quita vegetación y habitabilidad.
+- **La malla de niveles mezclados** (`hydro.rs: red_de_la_tierra`): la salida de una celda es su descendiente del nivel de carga con más acumulación; se sigue la red del nivel de carga hasta salir de la celda, y la celda de la malla que la recibe es la de aguas abajo.
+  - Receptor −1: sale al mar. Receptor −2 (`hydro::CERRADA`): el fondo de una cuenca cerrada.
+  - La acumulación de la salida crece estrictamente río abajo, así que no hay ciclos.
+  - El LOD afina las celdas que mezclan cuencas cerradas y abiertas (`mezcla_cuencas`), para que ninguna cuenca cerrada rebose por una celda gruesa.
+- **Caudal** (`systems.rs: surface_water_tierra`): la escorrentía del motor se encamina cada día por la red.
+  - El agua que llega al fondo de una cuenca cerrada se evapora allí; es un término nuevo del balance de agua, que en el planeta inventado vale 0 exacto.
+  - Cada celda acumula lo que pasa por ella (`caudal_m3`).
+- **La hidrología del planeta inventado no cambia:** sale idéntico byte a byte.
+
+### 5.2 Vegetación: una sola producción
+
+- **Producción del año:** cada año real tiene su producción de Miami, en el nivel de carga (`tierra/clima.rs: asegurar_produccion`), con la temperatura media y la lluvia de ese año (la climatología más la anomalía del año real). Los niveles gruesos son medias por área.
+- **Reparto mensual** (`vegetacion.rs: reparto_mensual`): cada mes pesa lo que daría Miami con su temperatura y su lluvia ×12, y los pesos suman 1.
+- **En el mundo:**
+  - `veg` es la producción del año (g de materia seca/m²/año), la capacidad;
+  - `prod_mes` es la del mes en curso;
+  - las dos con el factor `(1 − hielo)·(1 − lago)`;
+  - la logística de la vegetación del planeta inventado no corre en el modo Tierra.
+- **Una sola fórmula:** `abm_terreno::vegetacion::ppn_miami`, que usan el terreno y los agentes. `abm-ruleset` depende ahora de `abm-terreno`, y su hábitat la reexporta. `capacidad_alimento` devuelve en el modo Tierra la producción del año.
+- **Los agentes:** siguen en su hábitat de prueba, con la misma fórmula y la misma conversión a kcal. Cuando pasen al planeta (incremento 3 de los agentes) leerán la producción de cada celda.
+
+### 5.3 Glaciares del RGI 7.0
+
+- **Fuente:** la tabla global de atributos del RGI 7.0 (centro y área de cada glaciar), de la réplica de OGGM. NSIDC pide cuenta de Earthdata.
+- **Reparto:** cada glaciar cae en la celda de su centro, y lo que no cabe en una celda pasa a las vecinas, anillo a anillo, sin perder área.
+- **Hielo de la celda:** el mayor del de ETOPO y el del RGI. Los glaciares de alrededor de Groenlandia y de la Antártida ya están en ETOPO y no se cuentan dos veces.
+
+### 5.4 Variabilidad de un año a otro
+
+- **Fondo de años:** solo entran los años con estaciones en al menos el 90 % (`cobertura_min`) de la tierra de CRU TS, en la temperatura y en la lluvia: de 1938 a 2010, 73 años seguidos.
+- **Bloques:** cada bloque es de años válidos seguidos.
+- **Rachas de 2 o más años secos** (por debajo del 75 % de la media):
+  - CRU TS tiene 1, en el Sahel, en 1938–2010, y el modelo espera 1,01 en 73 años;
+  - en el resto de regiones, 0 y ~0;
+  - todas dentro del ruido de Poisson.
+- **Con más sucesos** (rachas de 2 o más años en el quinto más seco de cada serie), también dentro del ruido en las 13 regiones (p ≥ 0,53).
+- **Decisión:** como dice la adenda, se acepta la autocorrelación del remuestreo y se anota.
+
 ## Referencias
 
 - Harris, I., Osborn, T. J., Jones, P. y Lister, D. (2020). Version 4 of the CRU TS monthly high-resolution gridded multivariate climate dataset. Scientific Data 7, 109.

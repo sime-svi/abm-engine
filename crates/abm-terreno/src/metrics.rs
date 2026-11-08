@@ -144,6 +144,9 @@ pub struct TierraMeta {
     /// Por década de CRU TS: `[primer año, fracción del área de tierra sin estaciones en la
     /// temperatura, en la lluvia]`. Allí CRU TS vuelve a su climatología: sin variabilidad propia.
     pub cru_sin_estaciones_por_decada: Vec<[f64; 3]>,
+    /// Años reales que entran en el remuestreo (estaciones en al menos `cobertura_min` de la tierra).
+    pub cobertura_min: f64,
+    pub anios_remuestreo: Vec<i32>,
     pub anios: Vec<AnioReal>,
 }
 
@@ -153,6 +156,12 @@ pub struct Cuenca {
     pub lat_deg: f64,
     pub lon_deg: f64,
     pub area_km2: f64,
+    /// Caudal medio de la corrida en la desembocadura (km³/año; modo Tierra).
+    #[serde(default)]
+    pub caudal_km3_anio: f64,
+    /// `true` si es el fondo de una cuenca cerrada (no llega al mar).
+    #[serde(default)]
+    pub cerrada: bool,
 }
 
 /// Diagnóstico del modo Tierra (esquema v8).
@@ -170,8 +179,22 @@ pub struct DiagnosticoTierra {
     /// Fracción del área de las celdas con dato de CHELSA (el resto, al norte de 84° N, toma el
     /// clima de su meridiano).
     pub cobertura_chelsa_frac: f64,
-    /// Área de los lagos del motor (km²).
+    /// Área de las celdas de lago (km²), la de la fracción de lago de todas las celdas y la total de
+    /// HydroLAKES.
     pub lagos_km2: f64,
+    pub lagos_fraccion_km2: f64,
+    pub lagos_hydrolakes_km2: f64,
+    /// Agua que llega al mar y a los fondos de las cuencas cerradas (km³/año, media de la corrida).
+    pub al_mar_km3_anio: f64,
+    pub a_cerradas_km3_anio: f64,
+    /// Cuencas cerradas que rebosan (adenda 1 §1.3): área de las celdas del nivel de carga cuya agua
+    /// debería acabar en una cuenca cerrada y en la malla llega al mar, y al revés (km²).
+    pub cerradas_que_rebosan_km2: f64,
+    pub abiertas_que_acaban_cerradas_km2: f64,
+    /// Producción vegetal de Miami del último año simulado sobre la tierra (adenda 1 §2): total en
+    /// PgC/año (con 0,47 g C por g de materia seca) y media en g de materia seca/m²/año.
+    pub produccion_pgc: f64,
+    pub produccion_media_g_m2: f64,
     /// Conservación del relieve: mayor diferencia relativa de `Σ z·A` entre un nivel de las tablas y el
     /// de carga, y entre la malla activa (niveles mezclados) y el de carga (debe ser de redondeo).
     pub conservacion_niveles_rel: f64,
@@ -282,14 +305,7 @@ pub struct TerrenoDoc {
     pub ticks: Vec<TerrenoTickMetrics>,
 }
 
-/// PPN del modelo de Miami (Lieth, 1975), g/m²/año: el mínimo del límite por temperatura (°C) y del
-/// límite por lluvia (mm/año). Solo para el diagnóstico; el forraje de los agentes usa la misma
-/// fórmula en su hábitat de prueba (`abm-ruleset`), y se unirán cuando pasen al planeta.
-fn ppn_miami(t_c: f64, p_mm: f64) -> f64 {
-    let f_t = 3000.0 / (1.0 + (1.315 - 0.119 * t_c).exp());
-    let f_p = 3000.0 * (1.0 - (-0.000664 * p_mm).exp());
-    f_t.min(f_p).max(0.0)
-}
+use crate::vegetacion::ppn_miami;
 
 /// Calcula el diagnóstico del planeta con el estado final del mundo. Sumas en orden de celda
 /// (deterministas); se llama una vez, al final, así que puede reservar memoria.
@@ -364,9 +380,11 @@ pub fn diagnostico_tierra(world: &World) -> Option<DiagnosticoTierra> {
     let n = world.topo.num_cells;
     let (mut a_tot, mut a_tierra, mut hielo, mut hielo_tierra) = (0.0, 0.0, 0.0, 0.0);
     let (mut t_clim, mut p_clim, mut t_run, mut p_run) = (0.0, 0.0, 0.0, 0.0);
-    let (mut cob, mut lagos) = (0.0, 0.0);
+    let (mut cob, mut lagos, mut prod, mut lago_frac) = (0.0, 0.0, 0.0, 0.0);
+    let (mut al_mar, mut a_cerradas) = (0.0, 0.0);
     let muestras = world.sample_count.max(1) as f64;
-    let mut salidas: Vec<(f64, usize)> = Vec::new();
+    let anios = (muestras / 365.0).max(1.0 / 365.0);
+    let mut salidas: Vec<(f64, usize, bool)> = Vec::new();
     for s in 0..n {
         let a = world.topo.area[s];
         a_tot += a;
@@ -386,12 +404,21 @@ pub fn diagnostico_tierra(world: &World) -> Option<DiagnosticoTierra> {
         if matches!(world.surface[s], Surface::Lago) {
             lagos += a;
         }
+        lago_frac += world.lago[s] * a;
+        prod += world.veg[s] * a;
         let r = world.receiver[s];
-        if r >= 0 && world.es_oceano(r as usize) {
-            salidas.push((world.drainage_area[s], s));
+        if r == crate::hydro::CERRADA {
+            a_cerradas += world.caudal_m3[s];
+            salidas.push((world.drainage_area[s], s, true));
+        } else if r == -1 || (r >= 0 && world.es_oceano(r as usize)) {
+            al_mar += world.caudal_m3[s];
+            salidas.push((world.drainage_area[s], s, false));
         }
     }
     salidas.sort_by(|x, y| y.0.total_cmp(&x.0).then(x.1.cmp(&y.1)));
+    // ¿Rebosa alguna cuenca cerrada? Cada celda del nivel de carga, por la red de la malla, desde la
+    // celda de la malla que la contiene, frente a cómo acaba en la red del nivel de carga.
+    let (rebosan, acaban_cerradas) = cuencas_que_cambian(world, d);
     let por = |x: f64, a: f64| if a > 0.0 { x / a } else { 0.0 };
     // Σ z·A por nivel (y Σ |z|·A del nivel de carga, como escala) y el de la malla activa.
     let suma =
@@ -419,18 +446,88 @@ pub fn diagnostico_tierra(world: &World) -> Option<DiagnosticoTierra> {
         lluvia_tierra_corrida_mm: por(p_run, a_tierra),
         cobertura_chelsa_frac: por(cob, a_tot),
         lagos_km2: lagos / 1e6,
+        lagos_fraccion_km2: lago_frac / 1e6,
+        lagos_hydrolakes_km2: d.lagos_total_km2,
+        al_mar_km3_anio: al_mar / 1e9 / anios,
+        a_cerradas_km3_anio: a_cerradas / 1e9 / anios,
+        cerradas_que_rebosan_km2: rebosan,
+        abiertas_que_acaban_cerradas_km2: acaban_cerradas,
+        produccion_pgc: prod * crate::vegetacion::CARBONO_MATERIA_SECA / 1e15,
+        produccion_media_g_m2: por(prod, a_tierra),
         conservacion_niveles_rel,
         conservacion_malla_rel: (malla - ref_fino).abs() / escala,
         cuencas: salidas
             .iter()
             .take(50)
-            .map(|&(area, s)| Cuenca {
+            .map(|&(area, s, cerrada)| Cuenca {
                 lat_deg: world.topo.lat[s].to_degrees(),
                 lon_deg: world.topo.lon[s].to_degrees(),
                 area_km2: area / 1e6,
+                caudal_km3_anio: world.caudal_m3[s] / 1e9 / anios,
+                cerrada,
             })
             .collect(),
     })
+}
+
+/// Área (km²) de las celdas de tierra del nivel de carga cuya agua, por la red de la malla, acaba en
+/// el mar aunque su cuenca sea cerrada, y la de las que acaban en una cuenca cerrada sin serlo.
+fn cuencas_que_cambian(world: &World, d: &crate::tierra::DatosTierra) -> (f64, f64) {
+    use crate::geometry::key;
+    let n_malla = world.topo.num_cells;
+    // Cómo acaba el agua de cada celda de la malla (memoizado): true = en una cuenca cerrada.
+    let mut acaba: Vec<Option<bool>> = vec![None; n_malla];
+    let mut camino = Vec::new();
+    for s0 in 0..n_malla {
+        if acaba[s0].is_some() {
+            continue;
+        }
+        camino.clear();
+        let mut s = s0;
+        let res = loop {
+            if let Some(v) = acaba[s] {
+                break v;
+            }
+            camino.push(s);
+            let r = world.receiver[s];
+            if r < 0 || world.es_oceano(s) || camino.len() > n_malla {
+                break r == crate::hydro::CERRADA;
+            }
+            s = r as usize;
+        };
+        for &c in &camino {
+            acaba[c] = Some(res);
+        }
+    }
+    let lc = d.nivel_carga;
+    let fino = &d.niveles[lc as usize];
+    let n = fino.n;
+    let (mut rebosan, mut cierran) = (0.0, 0.0);
+    for c in 0..6u8 {
+        for j in 0..n {
+            for i in 0..n {
+                let k = fino.indice(c, i, j);
+                if d.mar[k] {
+                    continue;
+                }
+                let s = (0..=lc).rev().find_map(|l| {
+                    let sh = lc - l;
+                    world.topo.slot_of(key(c, l, i >> sh, j >> sh))
+                });
+                let Some(s) = s else { continue };
+                if world.es_oceano(s) {
+                    continue;
+                }
+                let malla = acaba[s].unwrap_or(false);
+                if d.cerrada[k] && !malla {
+                    rebosan += fino.area[k] / 1e6;
+                } else if !d.cerrada[k] && malla {
+                    cierran += fino.area[k] / 1e6;
+                }
+            }
+        }
+    }
+    (rebosan, cierran)
 }
 
 /// Metadatos del modo Tierra de una corrida de `n_sim` años simulados.
@@ -470,6 +567,16 @@ pub fn meta_tierra(
         cru_celdas: cru.n_celdas() as u64,
         cru_pre_recortados: cru.pre_recortados,
         cru_sin_estaciones_por_decada: decadas,
+        cobertura_min: t.cobertura_min,
+        anios_remuestreo: crate::tierra::clima::anios_con_estaciones(
+            &cru.sin_estaciones,
+            t.cobertura_min,
+        )
+        .iter()
+        .enumerate()
+        .filter(|(_, v)| **v)
+        .map(|(i, _)| cru.anio0 + i as i32)
+        .collect(),
         anios: (0..n_sim as u64)
             .map(|y| AnioReal {
                 anio_simulado: y,

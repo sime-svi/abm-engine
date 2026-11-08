@@ -372,7 +372,8 @@ pub fn marks(world: &World, cfg: &TerrenoConfig) -> Marks {
         let nbs = topo.neighbors(s);
         if lod.refine_features {
             feature[s] = matches!(world.surface[s], Surface::Rio | Surface::Lago)
-                || nbs.iter().any(|&b| ocean[b as usize] != ocean[s]);
+                || nbs.iter().any(|&b| ocean[b as usize] != ocean[s])
+                || world.statgen.mezcla_cuencas(topo.keys[s]);
         }
         if !ocean[s] {
             let v = &mut var[s];
@@ -465,7 +466,12 @@ fn mother_would_subdivide(
         }
     }
     let h_m = st.h + e_vol / g.area;
-    let m_ocean = world.statgen.is_ocean_h(h_m);
+    let clave_madre = crate::geometry::key(c, ml, mi, mj);
+    let m_ocean = world.statgen.es_mar(clave_madre, h_m);
+    // Modo Tierra: una madre que mezclara cuencas cerradas y abiertas volvería a subdividirse.
+    if world.statgen.mezcla_cuencas(clave_madre) {
+        return true;
+    }
     let t_m = t_area / area;
     let z_m =
         area_mean(fam.map(|m| (world.z_soil[m], topo.area[m]))).max(erosion::soil_floor(cfg, ml));
@@ -710,9 +716,12 @@ struct Cols {
     fert: Vec<f64>,
     resource: Vec<f64>,
     hielo: Vec<f64>,
+    lago: Vec<f64>,
     w: Vec<f64>,
     swe: Vec<f64>,
     veg: Vec<f64>,
+    prod_mes: Vec<f64>,
+    caudal_m3: Vec<f64>,
     temp: Vec<f64>,
     precip: Vec<f64>,
     temp_sum: Vec<f64>,
@@ -764,6 +773,9 @@ impl Cols {
         self.fert.push(w.fert[s]);
         self.resource.push(w.resource[s]);
         self.hielo.push(w.hielo[s]);
+        self.lago.push(w.lago[s]);
+        self.prod_mes.push(w.prod_mes[s]);
+        self.caudal_m3.push(w.caudal_m3[s]);
         self.w.push(w.w[s]);
         self.swe.push(w.swe[s]);
         self.veg.push(w.veg[s]);
@@ -812,6 +824,11 @@ impl Cols {
         self.fert.push(st.fert);
         self.resource.push(st.resource);
         self.hielo.push(w.statgen.hielo(c, l, i, j));
+        self.lago.push(w.statgen.lago(c, l, i, j));
+        // La producción del mes la rehace el clima del tick siguiente; el caudal de una hoja nueva
+        // empieza en 0 (los ríos llevan la marca hidrológica y no se rehacen).
+        self.prod_mes.push(0.0);
+        self.caudal_m3.push(0.0);
         self.w.push(0.0);
         self.swe.push(0.0);
         self.veg.push(0.0);
@@ -1044,7 +1061,7 @@ fn rebuild(
         let kids = slots.map(|ns| CellCap {
             area: cols.area[ns],
             w_cap: cols.w_cap[ns],
-            ocean: old.statgen.is_ocean_h(cols.h[ns]),
+            ocean: old.statgen.es_mar(cols.keys[ns], cols.h[ns]),
         });
         let (out, tr) = split_state(&cell_in(old, m), &kids, v_init);
         for (st, &ns) in out.iter().zip(&slots) {
@@ -1057,7 +1074,7 @@ fn rebuild(
         let mother = CellCap {
             area: cols.area[ns],
             w_cap: cols.w_cap[ns],
-            ocean: old.statgen.is_ocean_h(cols.h[ns]),
+            ocean: old.statgen.es_mar(cols.keys[ns], cols.h[ns]),
         };
         let (st, tr) = merge_state(&fam.map(|m| cell_in(old, m)), &mother, v_init);
         cols.set_state(ns, st);
@@ -1097,6 +1114,9 @@ fn rebuild(
     world.fert = cols.fert;
     world.resource = cols.resource;
     world.hielo = cols.hielo;
+    world.lago = cols.lago;
+    world.prod_mes = cols.prod_mes;
+    world.caudal_m3 = cols.caudal_m3;
     world.w = cols.w;
     world.swe = cols.swe;
     world.veg = cols.veg;

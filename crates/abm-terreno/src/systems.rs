@@ -63,6 +63,9 @@ pub struct TickAccount {
     pub precip_vol: f64,
     pub et_vol: f64,
     pub to_ocean_vol: f64,
+    /// Modo Tierra: agua que llega al fondo de una cuenca cerrada y se evapora allí (m³; 0 en el
+    /// planeta inventado, cuyas cuencas acaban todas en el mar).
+    pub to_closed_vol: f64,
     /// Agua enviada al mar por el reparto del LOD en el paso de topología del tick (m³).
     pub lod_to_ocean_vol: f64,
     pub dstore_vol: f64,
@@ -81,7 +84,12 @@ impl TickAccount {
     /// Residual del balance: `entrada − evaporación − salida al mar − lod_al_mar − Δalmacenamiento`.
     /// Debe ≈ 0. El almacenamiento previo se mide antes del paso de topología (incremento 2 §6.4).
     pub fn residual(&self) -> f64 {
-        self.precip_vol - self.et_vol - self.to_ocean_vol - self.lod_to_ocean_vol - self.dstore_vol
+        self.precip_vol
+            - self.et_vol
+            - self.to_ocean_vol
+            - self.to_closed_vol
+            - self.lod_to_ocean_vol
+            - self.dstore_vol
     }
 }
 
@@ -159,7 +167,12 @@ pub fn step(
     sc.cron.anotar("balance_agua");
     lateral_diffusion(world, cfg);
     sc.cron.anotar("difusion_lateral");
-    let (to_ocean_vol, discharge_max) = surface_water(world, sc);
+    let (to_ocean_vol, to_closed_vol, discharge_max) = if world.statgen.tierra().is_some() {
+        surface_water_tierra(world, sc)
+    } else {
+        let (o, m) = surface_water(world, sc);
+        (o, 0.0, m)
+    };
     sc.cron.anotar("agua_superficial");
 
     // Acumuladores de medias (para idoneidad y biomas).
@@ -188,6 +201,7 @@ pub fn step(
         precip_vol,
         et_vol,
         to_ocean_vol,
+        to_closed_vol,
         lod_to_ocean_vol: lod.to_ocean_vol,
         dstore_vol: store_after - store_before,
         discharge_max,
@@ -435,16 +449,61 @@ fn surface_water(world: &mut World, sc: &mut Scratch) -> (f64, f64) {
     (to_ocean, discharge_max)
 }
 
+/// Agua superficial del modo Tierra (adenda 1 §1.6): la escorrentía del día se encamina por la red fija
+/// de aguas arriba abajo. Llega al mar la de las celdas que vierten en el mar (receptor de mar, o −1);
+/// la que llega al fondo de una cuenca cerrada (receptor [`crate::hydro::CERRADA`]) se evapora allí y
+/// nunca rebosa. Cada celda suma lo que pasa por ella a `caudal_m3`. Devuelve (al mar, a cuencas
+/// cerradas, caudal máximo).
+fn surface_water_tierra(world: &mut World, sc: &mut Scratch) -> (f64, f64, f64) {
+    sc.q.copy_from_slice(&sc.gen_vol);
+    for &id in world.flow_order.iter() {
+        let r = world.receiver[id as usize];
+        if r >= 0 {
+            sc.q[r as usize] += sc.q[id as usize];
+        }
+    }
+    let (mut al_mar, mut cerradas, mut maximo) = (0.0, 0.0, 0.0);
+    for id in 0..world.topo.num_cells {
+        if matches!(world.surface[id], Surface::Oceano) {
+            continue;
+        }
+        let q = sc.q[id];
+        world.caudal_m3[id] += q;
+        if q > maximo {
+            maximo = q;
+        }
+        match world.receiver[id] {
+            crate::hydro::CERRADA => cerradas += q,
+            -1 => al_mar += q,
+            r if r >= 0 && matches!(world.surface[r as usize], Surface::Oceano) => al_mar += q,
+            _ => {}
+        }
+    }
+    (al_mar, cerradas, maximo)
+}
+
 /// 6.6 Vegetación: idoneidad (campanas) → capacidad de carga → logístico; bioma de Whittaker.
 fn vegetation(world: &mut World, cfg: &TerrenoConfig) {
     let v = &cfg.vegetation;
     let n = v.n_veg as f64;
     let count = world.sample_count.max(1) as f64;
+    // En el modo Tierra la vegetación es la producción de Miami del año, que pone el clima de cada día
+    // (adenda 1 §2); aquí solo se clasifica el bioma.
+    let tierra = world.statgen.tierra().is_some();
     for id in 0..world.topo.num_cells {
         if matches!(world.surface[id], Surface::Oceano) {
             continue;
         }
         let tbar = world.temp_sum[id] / count;
+        let p_annual = world.precip_sum[id] / count * cfg.climate.t_year;
+        if tierra {
+            world.biome[id] = if world.hielo[id] >= 0.5 {
+                Biome::Hielo
+            } else {
+                whittaker(tbar, p_annual)
+            };
+            continue;
+        }
         let theta = world.theta(id);
         let f_hum = (-((theta - v.theta_opt) / v.sigma_theta).powi(2)).exp();
         let f_temp = (-((tbar - v.t_opt) / v.sigma_t).powi(2)).exp();
@@ -459,7 +518,6 @@ fn vegetation(world: &mut World, cfg: &TerrenoConfig) {
         }
         world.veg[id] = world.veg[id].max(0.0);
 
-        let p_annual = world.precip_sum[id] / count * cfg.climate.t_year;
         world.biome[id] = if world.hielo[id] >= 0.5 {
             Biome::Hielo
         } else {
@@ -477,7 +535,13 @@ pub fn coste_movimiento(world: &World, id: usize) -> f64 {
     }
     let s = world.slope[id].tan();
     let theta = world.theta(id);
-    let vrel = (world.veg[id] / 100.0).clamp(0.0, 1.0);
+    // En el modo Tierra la vegetación es la producción de Miami (hasta ~3 000 g/m²/año).
+    let escala = if world.statgen.tierra().is_some() {
+        3000.0
+    } else {
+        100.0
+    };
+    let vrel = (world.veg[id] / escala).clamp(0.0, 1.0);
     1.0 * (1.0 + 1.0 * s) * (1.0 + 0.5 * theta) * (1.0 + 0.3 * vrel)
 }
 
@@ -491,7 +555,7 @@ pub fn habitabilidad(world: &World, cfg: &TerrenoConfig, id: usize) -> f64 {
     let f_hum = (-((theta - v.theta_opt) / v.sigma_theta).powi(2)).exp();
     let f_temp = (-((world.temp[id] - v.t_opt) / v.sigma_t).powi(2)).exp();
     let g_agua = (agua_disponible(world, id)).clamp(0.0, 1.0);
-    f_hum * f_temp * g_agua * (1.0 - world.hielo[id])
+    f_hum * f_temp * g_agua * (1.0 - world.hielo[id]) * (1.0 - world.lago[id])
 }
 
 /// Agua disponible: humedad del suelo + bonus por río/lago adyacente.
@@ -507,7 +571,12 @@ pub fn agua_disponible(world: &World, id: usize) -> f64 {
     a
 }
 
-/// Capacidad de alimento: biomasa vegetal (o recurso extraíble).
+/// Capacidad de alimento: biomasa vegetal (o recurso extraíble). En el modo Tierra, la producción de
+/// Miami del año (g de materia seca/m²/año), la misma de la que comen los agentes; la del mes en curso
+/// está en `prod_mes`.
 pub fn capacidad_alimento(world: &World, id: usize) -> f64 {
+    if world.statgen.tierra().is_some() {
+        return world.veg[id];
+    }
     world.veg[id].max(world.resource[id])
 }

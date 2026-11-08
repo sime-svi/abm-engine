@@ -17,6 +17,7 @@ use super::{DIAS_MES, DatosTierra, Nivel};
 use crate::config::TerrenoConfig;
 use crate::error::TerrenoError;
 use crate::statics::hash01;
+use crate::vegetacion::{ppn_miami, reparto_mensual};
 use crate::world::World;
 
 /// Flujo del RNG por contador del sorteo de los años reales.
@@ -37,27 +38,52 @@ pub fn mes_del_dia(d: u32) -> usize {
     INICIO_MES.iter().rposition(|&i| d >= i).unwrap_or(0)
 }
 
+/// Años de la serie que entran en el remuestreo (adenda 1 §4): los que tienen estaciones en al menos
+/// `cobertura_min` de la tierra de CRU TS, en la temperatura y en la lluvia. Donde no hay estaciones,
+/// CRU TS vuelve a su climatología: ese año no tiene variabilidad propia allí.
+pub fn anios_con_estaciones(sin_estaciones: &[[f32; 2]], cobertura_min: f64) -> Vec<bool> {
+    sin_estaciones
+        .iter()
+        .map(|s| 1.0 - s[0] as f64 >= cobertura_min && 1.0 - s[1] as f64 >= cobertura_min)
+        .collect()
+}
+
 /// Año real de cada año simulado `y` en `[-1, n_sim]` (posición `y + 1`): bloques de `L_bloque` años
-/// seguidos con inicio sorteado; antes del año 0, el año real anterior al del año 0 (o el mismo si es
-/// el primero de la serie). Con `anio_forzado`, siempre ese año.
-pub fn secuencia_anios(cfg: &TerrenoConfig, anio0: i32, anio_final: i32, n_sim: usize) -> Vec<i32> {
+/// seguidos, todos válidos (`validos[i]` es el año `anio0 + i`), con inicio sorteado uniforme entre
+/// los que caben; antes del año 0, el año real anterior al del año 0 si es válido (si no, el mismo).
+/// Con `anio_forzado`, siempre ese año. `None` si ningún bloque cabe entero en los años válidos.
+pub fn secuencia_anios(
+    cfg: &TerrenoConfig,
+    anio0: i32,
+    validos: &[bool],
+    n_sim: usize,
+) -> Option<Vec<i32>> {
     let t = &cfg.tierra;
     if t.anio_forzado != 0 {
-        return vec![t.anio_forzado; n_sim + 2];
+        return Some(vec![t.anio_forzado; n_sim + 2]);
     }
-    let n_anios = (anio_final - anio0 + 1).max(1) as u64;
-    let l = (t.l_bloque as u64).clamp(1, n_anios);
-    let inicios = n_anios - l + 1;
+    let l = (t.l_bloque as usize).max(1);
+    let inicios: Vec<usize> = (0..validos.len().saturating_sub(l - 1))
+        .filter(|&s| validos[s..s + l].iter().all(|&v| v))
+        .collect();
+    if inicios.is_empty() {
+        return None;
+    }
     let mut v = Vec::with_capacity(n_sim + 2);
     for y in 0..=n_sim as u64 {
-        let b = y / l;
+        let b = y / l as u64;
         let u = hash01(cfg.run.seed, b, FLUJO_ANIOS);
-        let inicio = anio0 + ((u * inicios as f64) as u64).min(inicios - 1) as i32;
-        v.push(inicio + (y % l) as i32);
+        let q = ((u * inicios.len() as f64) as usize).min(inicios.len() - 1);
+        v.push(anio0 + (inicios[q] + (y % l as u64) as usize) as i32);
     }
-    let previo = if v[0] > anio0 { v[0] - 1 } else { v[0] };
+    let i0 = (v[0] - anio0) as usize;
+    let previo = if i0 > 0 && validos[i0 - 1] {
+        v[0] - 1
+    } else {
+        v[0]
+    };
     v.insert(0, previo);
-    v
+    Some(v)
 }
 
 /// Mapa de un mes de un año real: temperatura (°C) y precipitación (mm/mes) de cada celda, por nivel.
@@ -66,6 +92,14 @@ struct MapaMes {
     mes: usize,
     t: Vec<Vec<f32>>,
     p: Vec<Vec<f32>>,
+}
+
+/// Producción de Miami de un año real (adenda 1 §2), por nivel: la anual (g de materia seca/m²/año) y
+/// la de cada mes (12 por celda), que suman la anual.
+struct ProduccionAnio {
+    anio: i32,
+    anual: Vec<Vec<f32>>,
+    mes: Vec<Vec<f32>>,
 }
 
 /// Estado del clima de la Tierra durante una corrida.
@@ -81,6 +115,7 @@ pub struct Estado {
     corr_p: Vec<f64>,
     r_max: f64,
     mapas: Vec<MapaMes>,
+    produccion: Option<ProduccionAnio>,
 }
 
 /// Media de CRU TS en un periodo, por mes y celda.
@@ -140,8 +175,16 @@ impl Estado {
                     .collect(),
             )
         };
+        let validos = anios_con_estaciones(&datos.cru.sin_estaciones, cfg.tierra.cobertura_min);
+        let anios = secuencia_anios(cfg, a0, &validos, n_sim).ok_or_else(|| {
+            TerrenoError::Tierra(format!(
+                "ningún bloque de {} años seguidos tiene estaciones en al menos el {} % de la tierra",
+                cfg.tierra.l_bloque,
+                100.0 * cfg.tierra.cobertura_min
+            ))
+        })?;
         Ok(Estado {
-            anios: secuencia_anios(cfg, a0, a1, n_sim),
+            anios,
             datos,
             t_base,
             p_base,
@@ -149,6 +192,7 @@ impl Estado {
             corr_p,
             r_max,
             mapas: Vec::with_capacity(3),
+            produccion: None,
         })
     }
 
@@ -247,14 +291,67 @@ impl Estado {
         };
         let (q1, q2, qp) = (pos(a1, m1), pos(a2, m2), pos(a, mes));
         let dias = DIAS_MES[mes] as f64;
+        self.asegurar_produccion(a);
         let (mt1, mt2, mp) = (&self.mapas[q1], &self.mapas[q2], &self.mapas[qp]);
+        let pr = self.produccion.as_ref();
         for s in 0..world.topo.num_cells {
             let (lv, k) = self.datos.celda_de_clave(world.topo.keys[s]);
             let t1 = mt1.t[lv][k] as f64;
             let t2 = mt2.t[lv][k] as f64;
             world.temp[s] = (1.0 - w) * t1 + w * t2;
             world.precip[s] = (mp.p[lv][k] as f64 / dias).max(0.0);
+            // La vegetación del modo Tierra es la producción de Miami del año (la capacidad) y la de
+            // su mes; el hielo y los lagos no producen.
+            if let Some(pr) = pr {
+                let f = (1.0 - world.hielo[s]) * (1.0 - world.lago[s]);
+                world.veg[s] = pr.anual[lv][k] as f64 * f;
+                world.prod_mes[s] = pr.mes[lv][k * 12 + mes] as f64 * f;
+            }
         }
+    }
+
+    /// Construye la producción de Miami del año real `a` si no es la que ya está: en el nivel de carga,
+    /// con la temperatura media y la lluvia del año (la climatología más la anomalía de ese año real) y
+    /// su reparto por meses; después, los niveles gruesos como medias por área.
+    fn asegurar_produccion(&mut self, a: i32) {
+        if self.produccion.as_ref().is_some_and(|p| p.anio == a) {
+            return;
+        }
+        let d = Arc::clone(&self.datos);
+        let l = d.nivel_carga as usize;
+        let fino = &d.niveles[l];
+        let m = fino.len();
+        let (mut anual, mut mes) = (vec![0.0f32; m], vec![0.0f32; 12 * m]);
+        let (mut t, mut p) = ([0.0f64; 12], [0.0f64; 12]);
+        for k in 0..m {
+            for mm in 0..12 {
+                (t[mm], p[mm]) = self.mes_en_celda(a, mm, k);
+            }
+            let t_media = t
+                .iter()
+                .zip(DIAS_MES)
+                .map(|(x, dd)| x * dd as f64)
+                .sum::<f64>()
+                / 365.0;
+            let ppn = ppn_miami(t_media, p.iter().sum());
+            let w = reparto_mensual(&t, &p);
+            anual[k] = ppn as f32;
+            for mm in 0..12 {
+                mes[k * 12 + mm] = (ppn * w[mm]) as f32;
+            }
+        }
+        let mut anual = vec![anual];
+        let mut mes = vec![mes];
+        for lv in (0..l).rev() {
+            let (madre, hija) = (&d.niveles[lv], &d.niveles[lv + 1]);
+            anual.insert(0, subir(&anual[0], hija, madre));
+            mes.insert(0, subir12(&mes[0], hija, madre));
+        }
+        self.produccion = Some(ProduccionAnio {
+            anio: a,
+            anual,
+            mes,
+        });
     }
 
     /// Lluvia anual (mm) del año real `a`, media por área de las celdas `celdas` del nivel de carga.
@@ -272,6 +369,33 @@ impl Estado {
         }
         if ar > 0.0 { s / ar } else { 0.0 }
     }
+}
+
+/// Lo mismo que [`subir`] para un campo de 12 valores por celda.
+fn subir12(hija_v: &[f32], hija: &Nivel, madre: &Nivel) -> Vec<f32> {
+    let n = madre.n;
+    let mut out = vec![0.0f32; 12 * madre.len()];
+    let mut v = [0.0f64; 12];
+    for c in 0..6u8 {
+        for j in 0..n {
+            for i in 0..n {
+                let mut a = 0.0f64;
+                v.fill(0.0);
+                for (di, dj) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    let k = hija.indice(c, 2 * i + di, 2 * j + dj);
+                    a += hija.area[k];
+                    for (mm, x) in v.iter_mut().enumerate() {
+                        *x += hija_v[k * 12 + mm] as f64 * hija.area[k];
+                    }
+                }
+                let km = madre.indice(c, i, j);
+                for (mm, x) in v.iter().enumerate() {
+                    out[km * 12 + mm] = (x / a) as f32;
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Un nivel más grueso de un campo mensual: media por área de las cuatro hijas.
@@ -316,8 +440,9 @@ mod tests {
         let mut cfg = TerrenoConfig::default();
         cfg.tierra.l_bloque = 10;
         cfg.run.seed = 42;
-        let a = secuencia_anios(&cfg, 1901, 2024, 95);
-        let b = secuencia_anios(&cfg, 1901, 2024, 95);
+        let todos = vec![true; 124];
+        let a = secuencia_anios(&cfg, 1901, &todos, 95).unwrap_or_default();
+        let b = secuencia_anios(&cfg, 1901, &todos, 95).unwrap_or_default();
         assert_eq!(a, b, "misma semilla, misma secuencia de años reales");
         assert_eq!(a.len(), 97);
         // Dentro de cada bloque, años seguidos; todos dentro de la serie.
@@ -332,16 +457,28 @@ mod tests {
         assert!(a[0] == a[1] - 1 || a[1] == 1901);
         // Otra semilla, otra secuencia; y los bloques no empiezan todos igual.
         cfg.run.seed = 43;
-        assert_ne!(secuencia_anios(&cfg, 1901, 2024, 95), a);
+        assert_ne!(
+            secuencia_anios(&cfg, 1901, &todos, 95).unwrap_or_default(),
+            a
+        );
         let inicios: std::collections::BTreeSet<i32> = (0..10).map(|b| a[b * 10 + 1]).collect();
         assert!(inicios.len() > 5, "{inicios:?}");
         // Con el año forzado, siempre ese.
         cfg.tierra.anio_forzado = 1984;
         assert!(
-            secuencia_anios(&cfg, 1901, 2024, 5)
+            secuencia_anios(&cfg, 1901, &todos, 5)
+                .unwrap_or_default()
                 .iter()
                 .all(|&v| v == 1984)
         );
+        // Solo años válidos: con 1901–1930 fuera, ningún bloque toca esos años, y el año −1 tampoco.
+        cfg.tierra.anio_forzado = 0;
+        let validos: Vec<bool> = (0..124).map(|i| i >= 30).collect();
+        let c = secuencia_anios(&cfg, 1901, &validos, 500).unwrap_or_default();
+        assert!(c.iter().all(|&v| v >= 1931), "{:?}", &c[..12]);
+        // Sin ningún bloque entero de años válidos, no hay secuencia.
+        let pocos: Vec<bool> = (0..124).map(|i| i % 3 != 0).collect();
+        assert!(secuencia_anios(&cfg, 1901, &pocos, 5).is_none());
     }
 
     #[test]
@@ -349,7 +486,7 @@ mod tests {
         // 20 000 bloques: cada año de inicio posible (1901–2015) sale ~1/115 de las veces.
         let mut cfg = TerrenoConfig::default();
         cfg.tierra.l_bloque = 10;
-        let a = secuencia_anios(&cfg, 1901, 2024, 200_000);
+        let a = secuencia_anios(&cfg, 1901, &[true; 124], 200_000).unwrap_or_default();
         let mut cuenta = std::collections::BTreeMap::new();
         for b in 0..20_000usize {
             *cuenta.entry(a[b * 10 + 1]).or_insert(0u32) += 1;

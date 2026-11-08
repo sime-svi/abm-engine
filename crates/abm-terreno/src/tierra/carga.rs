@@ -14,13 +14,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::geotiff::GeoTiff;
+use super::hidro::{self, Red};
 use super::netcdf3::{Gzip, Netcdf3, anio_mes_desde_1900};
 use super::{Cru, DatosTierra, Nivel};
 use crate::config::TerrenoConfig;
 use crate::error::TerrenoError;
 use crate::geometry::{angle_between, cell_area, center_dir, face_n, lat_lon, locate};
 
-const MAGIA: &[u8; 8] = b"ABMTIE01";
+const MAGIA: &[u8; 8] = b"ABMTIE03";
 const HUELLA_CODIGO: &str = env!("ABM_TERRENO_FINGERPRINT");
 
 /// ETOPO 2022 a 2': filas y columnas, primera fila de la franja polar norte de la roca (latitud
@@ -66,11 +67,16 @@ fn fuentes(cfg: &TerrenoConfig) -> Vec<PathBuf> {
         &t.etopo_roca_norte,
         &t.cru_tmp,
         &t.cru_pre,
+        &t.rgi,
+        &t.hydrosheds_dir,
+        &t.hydrosheds_acc,
+        &t.hydrolakes,
     ]
     .iter()
     .map(PathBuf::from)
     .collect();
     v.extend(rutas_chelsa(cfg));
+    v.push(Path::new(&t.hydrolakes).with_extension("dbf"));
     v
 }
 
@@ -81,6 +87,8 @@ pub fn huella(cfg: &TerrenoConfig) -> Result<u64, TerrenoError> {
     h = fnv1a(h, &cfg.planet.n0.to_le_bytes());
     h = fnv1a(h, &cfg.tierra.nivel_carga.to_le_bytes());
     h = fnv1a(h, &cfg.tierra.hielo_min_m.to_le_bytes());
+    h = fnv1a(h, &cfg.tierra.lagos_raster_km2.to_le_bytes());
+    h = fnv1a(h, &cfg.tierra.lagos_paso_grados.to_le_bytes());
     for r in fuentes(cfg) {
         let m = std::fs::metadata(&r).map_err(|e| {
             error(format!(
@@ -115,16 +123,42 @@ pub fn cargar(cfg: &TerrenoConfig) -> Result<Arc<DatosTierra>, TerrenoError> {
         return Ok(Arc::new(d));
     }
     let n = face_n(cfg.planet.n0, l);
-    let (z, hielo) = proyectar_etopo(cfg, n)?;
+    let r_m = cfg.planet.r_km * 1000.0;
+    let area = areas(n, r_m);
+    let (z, hielo_etopo) = proyectar_etopo(cfg, n)?;
+    // El hielo es el mayor de los casquetes de ETOPO y los glaciares del RGI: los glaciares de
+    // alrededor de Groenlandia y de la Antártida ya están en ETOPO y no se cuentan dos veces.
+    let glaciares = glaciares_rgi(&cfg.tierra.rgi, n, &area)?;
+    let hielo: Vec<f64> = hielo_etopo
+        .iter()
+        .zip(&glaciares)
+        .map(|(&e, &g)| e.max(g))
+        .collect();
     let (t, p, cobertura) = proyectar_chelsa(cfg, n)?;
     let cru = cargar_cru(cfg)?;
     let cru_de_celda = celdas_de_cru(&cru, n);
-    let r_m = cfg.planet.r_km * 1000.0;
+    // Ríos y lagos como dato (adenda 1 §1): la red de HydroSHEDS reescalada, el mar conectado y los
+    // lagos de HydroLAKES.
+    let tc = &cfg.tierra;
+    let red = hidro::reescalar(
+        Path::new(&tc.hydrosheds_dir),
+        Path::new(&tc.hydrosheds_acc),
+        n,
+    )?;
+    let mar = hidro::mar_conectado(&z, &red.pix_mar, n);
+    let (lago, lagos_total_km2) = super::lagos::fraccion_de_lagos(
+        Path::new(&tc.hydrolakes),
+        n,
+        &area,
+        tc.lagos_raster_km2,
+        tc.lagos_paso_grados,
+    )?;
     let fino = Nivel {
         n,
-        area: areas(n, r_m),
+        area,
         z,
         hielo,
+        lago,
         t,
         p,
         cobertura,
@@ -139,10 +173,35 @@ pub fn cargar(cfg: &TerrenoConfig) -> Result<Arc<DatosTierra>, TerrenoError> {
             std::process::id(),
             std::thread::current().id()
         ));
-        std::fs::write(&tmp, codificar(&fino, &cru, &cru_de_celda, h))?;
+        let hid = Hidrologia {
+            red,
+            mar,
+            lagos_total_km2,
+        };
+        std::fs::write(&tmp, codificar(&fino, &cru, &cru_de_celda, &hid, h))?;
         std::fs::rename(&tmp, r)?;
+        return Ok(Arc::new(desde_nivel_fino(
+            cfg,
+            fino,
+            cru,
+            cru_de_celda,
+            hid,
+            h,
+        )));
     }
-    Ok(Arc::new(desde_nivel_fino(cfg, fino, cru, cru_de_celda, h)))
+    let hid = Hidrologia {
+        red,
+        mar,
+        lagos_total_km2,
+    };
+    Ok(Arc::new(desde_nivel_fino(
+        cfg,
+        fino,
+        cru,
+        cru_de_celda,
+        hid,
+        h,
+    )))
 }
 
 /// Áreas reales de las celdas de un nivel, en el orden de las tablas.
@@ -158,15 +217,58 @@ pub fn areas(n: u32, r_m: f64) -> Vec<f64> {
     a
 }
 
+/// La hidrología del nivel de carga: la red, el mar conectado y el área total de HydroLAKES.
+pub struct Hidrologia {
+    pub red: Red,
+    pub mar: Vec<bool>,
+    pub lagos_total_km2: f64,
+}
+
+impl Hidrologia {
+    /// Sin red (cada celda vierte directamente al mar) y con el mar donde hay profundidad: para las
+    /// pruebas con datos inventados.
+    pub fn sin_red(z: &[f64]) -> Hidrologia {
+        let m = z.len();
+        Hidrologia {
+            red: Red {
+                abajo: vec![hidro::NINGUNA; m],
+                fin: vec![hidro::fin::MAR; m],
+                acum: vec![0; m],
+                pix_mar: z.iter().map(|&x| u32::from(x < 0.0)).collect(),
+            },
+            mar: z.iter().map(|&x| x < 0.0).collect(),
+            lagos_total_km2: 0.0,
+        }
+    }
+}
+
 /// Datos completos a partir del nivel de carga: cada celda de un nivel grueso es la media por área de
-/// sus cuatro hijas.
+/// sus cuatro hijas; la fracción de mar, la de sus hijas en el mar, y la mezcla de cuencas, si entre
+/// sus descendientes de tierra hay de las que acaban en una cuenca cerrada y de las que no.
 pub fn desde_nivel_fino(
     cfg: &TerrenoConfig,
     fino: Nivel,
     cru: Cru,
     cru_de_celda: Vec<u32>,
+    hid: Hidrologia,
     huella: u64,
 ) -> DatosTierra {
+    let cerrada = hidro::acaba_en_cerrada(&hid.red);
+    // Por nivel, cuántas descendientes de tierra acaban en una cuenca cerrada y cuántas no.
+    let mut cuenta: Vec<Vec<[u32; 2]>> = vec![
+        (0..fino.len())
+            .map(|k| {
+                if hid.mar[k] {
+                    [0, 0]
+                } else if cerrada[k] {
+                    [1, 0]
+                } else {
+                    [0, 1]
+                }
+            })
+            .collect(),
+    ];
+    let mut mar_frac: Vec<Vec<f32>> = vec![hid.mar.iter().map(|&x| f32::from(x as u8)).collect()];
     let l = cfg.tierra.nivel_carga;
     let r_m = cfg.planet.r_km * 1000.0;
     let mut niveles = vec![fino];
@@ -179,6 +281,7 @@ pub fn desde_nivel_fino(
             area: areas(n, r_m),
             z: vec![0.0; m],
             hielo: vec![0.0; m],
+            lago: vec![0.0; m],
             t: vec![0.0; 12 * m],
             p: vec![0.0; 12 * m],
             cobertura: vec![0.0; m],
@@ -189,7 +292,7 @@ pub fn desde_nivel_fino(
             for j in 0..n {
                 for i in 0..n {
                     let km = madre.indice(c, i, j);
-                    let (mut a, mut z, mut hi, mut cob) = (0.0, 0.0, 0.0, 0.0);
+                    let (mut a, mut z, mut hi, mut la, mut cob) = (0.0, 0.0, 0.0, 0.0, 0.0);
                     t.fill(0.0);
                     p.fill(0.0);
                     for (di, dj) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
@@ -198,6 +301,7 @@ pub fn desde_nivel_fino(
                         a += ah;
                         z += hija.z[k] * ah;
                         hi += hija.hielo[k] * ah;
+                        la += hija.lago[k] * ah;
                         cob += hija.cobertura[k] as f64 * ah;
                         for mes in 0..12 {
                             t[mes] += hija.t[k * 12 + mes] as f64 * ah;
@@ -206,6 +310,7 @@ pub fn desde_nivel_fino(
                     }
                     madre.z[km] = z / a;
                     madre.hielo[km] = hi / a;
+                    madre.lago[km] = la / a;
                     madre.cobertura[km] = (cob / a) as f32;
                     for mes in 0..12 {
                         madre.t[km * 12 + mes] = (t[mes] / a) as f32;
@@ -214,14 +319,44 @@ pub fn desde_nivel_fino(
                 }
             }
         }
+        // Fracción de mar y cuencas de las descendientes.
+        let (mut mf, mut cu) = (vec![0.0f32; m], vec![[0u32; 2]; m]);
+        for c in 0..6u8 {
+            for j in 0..n {
+                for i in 0..n {
+                    let km = madre.indice(c, i, j);
+                    let (mut a, mut x) = (0.0f64, 0.0f64);
+                    for (di, dj) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                        let k = hija.indice(c, 2 * i + di, 2 * j + dj);
+                        a += hija.area[k];
+                        x += mar_frac[0][k] as f64 * hija.area[k];
+                        cu[km][0] += cuenta[0][k][0];
+                        cu[km][1] += cuenta[0][k][1];
+                    }
+                    mf[km] = (x / a) as f32;
+                }
+            }
+        }
+        mar_frac.insert(0, mf);
+        cuenta.insert(0, cu);
         niveles.insert(0, madre);
     }
+    let mezcla = cuenta
+        .iter()
+        .map(|v| v.iter().map(|c| c[0] > 0 && c[1] > 0).collect())
+        .collect();
     DatosTierra {
         n0: cfg.planet.n0,
         nivel_carga: l,
         niveles,
         cru,
         cru_de_celda,
+        red: hid.red,
+        mar: hid.mar,
+        cerrada,
+        mar_frac,
+        mezcla,
+        lagos_total_km2: hid.lagos_total_km2,
         huella,
     }
 }
@@ -298,6 +433,97 @@ fn proyectar_etopo(cfg: &TerrenoConfig, n: u32) -> Result<(Vec<f64>, Vec<f64>), 
     let z = szw.iter().zip(&sw).map(|(a, b)| a / b).collect();
     let hielo = shw.iter().zip(&sw).map(|(a, b)| a / b).collect();
     Ok((z, hielo))
+}
+
+/// Glaciares del RGI 7.0 (tabla global de atributos: centro y área de cada glaciar) en fracción de
+/// cada celda del nivel de carga. Casi todos son mucho más pequeños que una celda y caen enteros en la
+/// de su centro. Los que no caben (los grandes casquetes de Svalbard, del Ártico canadiense o de
+/// Patagonia) reparten lo que sobra por las celdas vecinas, anillo a anillo, sin perder área.
+fn glaciares_rgi(ruta: &str, n: u32, area: &[f64]) -> Result<Vec<f64>, TerrenoError> {
+    let texto = std::fs::read_to_string(ruta).map_err(|e| error(format!("{ruta}: {e}")))?;
+    let mut lineas = texto.lines();
+    let cab = campos_csv(lineas.next().unwrap_or(""));
+    let col = |nombre: &str| {
+        cab.iter()
+            .position(|c| c == nombre)
+            .ok_or_else(|| error(format!("{ruta}: sin la columna {nombre}")))
+    };
+    let (c_lon, c_lat, c_area) = (col("cenlon")?, col("cenlat")?, col("area_km2")?);
+    let mut km2 = vec![0.0f64; area.len()];
+    for (q, linea) in lineas.enumerate() {
+        if linea.trim().is_empty() {
+            continue;
+        }
+        let f = campos_csv(linea);
+        let num = |i: usize| -> Result<f64, TerrenoError> {
+            f.get(i)
+                .and_then(|x| x.parse::<f64>().ok())
+                .filter(|x| x.is_finite())
+                .ok_or_else(|| error(format!("{ruta}: fila {} mal formada", q + 2)))
+        };
+        let (lon, lat, a) = (num(c_lon)?, num(c_lat)?, num(c_area)?);
+        let (c, i, j) = locate(direccion(lat, lon), n);
+        km2[indice_de(c, i, j, n)] += a.max(0.0);
+    }
+    // Lo que no cabe en una celda pasa a sus vecinas (a la misma distancia en la cara o cruzando la
+    // arista), por orden de celda: es determinista y conserva el área total.
+    let mut frac: Vec<f64> = km2.iter().zip(area).map(|(k, a)| k * 1e6 / a).collect();
+    for c in 0..6u8 {
+        for j in 0..n {
+            for i in 0..n {
+                let k = indice_de(c, i, j, n);
+                if frac[k] <= 1.0 {
+                    continue;
+                }
+                let mut sobra = (frac[k] - 1.0) * area[k];
+                frac[k] = 1.0;
+                for radio in 1i64..=8 {
+                    if sobra <= 0.0 {
+                        break;
+                    }
+                    for dj in -radio..=radio {
+                        for di in -radio..=radio {
+                            if di.abs().max(dj.abs()) != radio || sobra <= 0.0 {
+                                continue;
+                            }
+                            let Some((c2, i2, j2)) =
+                                crate::geometry::neighbor_addr(c, i, j, n, di, dj)
+                            else {
+                                continue;
+                            };
+                            let k2 = indice_de(c2, i2, j2, n);
+                            let hueco = (1.0 - frac[k2]).max(0.0) * area[k2];
+                            let pon = hueco.min(sobra);
+                            frac[k2] += pon / area[k2];
+                            sobra -= pon;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(frac.into_iter().map(|x| x.min(1.0)).collect())
+}
+
+/// Campos de una línea CSV con comillas dobles (las comas dentro de comillas no separan).
+fn campos_csv(linea: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut actual = String::new();
+    let mut dentro = false;
+    let mut chars = linea.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' if dentro && chars.peek() == Some(&'"') => {
+                actual.push('"');
+                chars.next();
+            }
+            '"' => dentro = !dentro,
+            ',' if !dentro => out.push(std::mem::take(&mut actual)),
+            _ => actual.push(ch),
+        }
+    }
+    out.push(actual);
+    out
 }
 
 /// Tramos de una fila de la rejilla de CHELSA que caen en una misma celda: `(columna inicial,
@@ -742,7 +968,7 @@ fn celdas_de_cru(cru: &Cru, n: u32) -> Vec<u32> {
 
 // --- Caché -----------------------------------------------------------------------------------------
 
-fn codificar(f: &Nivel, cru: &Cru, cru_de_celda: &[u32], huella: u64) -> Vec<u8> {
+fn codificar(f: &Nivel, cru: &Cru, cru_de_celda: &[u32], hid: &Hidrologia, huella: u64) -> Vec<u8> {
     let mut w: Vec<u8> = Vec::with_capacity(
         64 + f.len() * 120 + cru.tmp.len() * 4 + cru.n_celdas() * 8 + cru.n_anios * 8,
     );
@@ -750,7 +976,7 @@ fn codificar(f: &Nivel, cru: &Cru, cru_de_celda: &[u32], huella: u64) -> Vec<u8>
     w.extend_from_slice(&huella.to_le_bytes());
     w.extend_from_slice(&f.n.to_le_bytes());
     w.extend_from_slice(&(f.len() as u64).to_le_bytes());
-    for x in f.z.iter().chain(&f.hielo) {
+    for x in f.z.iter().chain(&f.hielo).chain(&f.lago) {
         w.extend_from_slice(&x.to_le_bytes());
     }
     for x in f.t.iter().chain(&f.p).chain(&f.cobertura) {
@@ -775,6 +1001,13 @@ fn codificar(f: &Nivel, cru: &Cru, cru_de_celda: &[u32], huella: u64) -> Vec<u8>
     for x in cru.sin_estaciones.iter().flatten() {
         w.extend_from_slice(&x.to_le_bytes());
     }
+    let red = &hid.red;
+    for x in red.abajo.iter().chain(&red.acum).chain(&red.pix_mar) {
+        w.extend_from_slice(&x.to_le_bytes());
+    }
+    w.extend_from_slice(&red.fin);
+    w.extend(hid.mar.iter().map(|&x| x as u8));
+    w.extend_from_slice(&hid.lagos_total_km2.to_le_bytes());
     w
 }
 
@@ -825,6 +1058,7 @@ fn decodificar(b: &[u8], cfg: &TerrenoConfig, huella: u64) -> Option<DatosTierra
     }
     let z = r.vf64(m)?;
     let hielo = r.vf64(m)?;
+    let lago = r.vf64(m)?;
     let t = r.vf32(12 * m)?;
     let p = r.vf32(12 * m)?;
     let cobertura = r.vf32(m)?;
@@ -851,6 +1085,36 @@ fn decodificar(b: &[u8], cfg: &TerrenoConfig, huella: u64) -> Option<DatosTierra
         .collect();
     let pre_recortados = r.u64()?;
     let se = r.vf32(2 * n_anios)?;
+    let u32s = |r: &mut Lector| -> Option<Vec<u32>> {
+        Some(
+            r.tomar(4 * m)?
+                .chunks_exact(4)
+                .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                .collect(),
+        )
+    };
+    let abajo = u32s(&mut r)?;
+    let acum = u32s(&mut r)?;
+    let pix_mar = u32s(&mut r)?;
+    let fin = r.tomar(m)?.to_vec();
+    let mar: Vec<bool> = r.tomar(m)?.iter().map(|&x| x != 0).collect();
+    let lagos_total_km2 = f64::from_le_bytes(r.tomar(8)?.try_into().ok()?);
+    if abajo
+        .iter()
+        .any(|&a| a != hidro::NINGUNA && a as usize >= m)
+    {
+        return None;
+    }
+    let hid = Hidrologia {
+        red: Red {
+            abajo,
+            fin,
+            acum,
+            pix_mar,
+        },
+        mar,
+        lagos_total_km2,
+    };
     if r.p != b.len()
         || cru_de_celda
             .iter()
@@ -873,11 +1137,12 @@ fn decodificar(b: &[u8], cfg: &TerrenoConfig, huella: u64) -> Option<DatosTierra
         area: areas(n, cfg.planet.r_km * 1000.0),
         z,
         hielo,
+        lago,
         t,
         p,
         cobertura,
     };
-    Some(desde_nivel_fino(cfg, fino, cru, cru_de_celda, huella))
+    Some(desde_nivel_fino(cfg, fino, cru, cru_de_celda, hid, huella))
 }
 
 #[cfg(test)]
@@ -909,6 +1174,7 @@ mod tests {
             area: areas(n, r_m),
             z: z.clone(),
             hielo: (0..m).map(|k| (k % 3) as f64 / 2.0).collect(),
+            lago: vec![0.0; m],
             t: (0..12 * m).map(|k| (k % 50) as f32 - 10.0).collect(),
             p: (0..12 * m).map(|k| (k % 70) as f32).collect(),
             cobertura: vec![1.0; m],
@@ -923,7 +1189,8 @@ mod tests {
             pre_recortados: 0,
             sin_estaciones: vec![[0.0, 0.0]],
         };
-        let d = desde_nivel_fino(&cfg, fino, cru, vec![u32::MAX; m], 0);
+        let hid = Hidrologia::sin_red(&z);
+        let d = desde_nivel_fino(&cfg, fino, cru, vec![u32::MAX; m], hid, 0);
         assert_eq!(d.niveles.len(), 3);
         // Σ z·A igual en todos los niveles (salvo el redondeo).
         let total = |nv: &Nivel| nv.z.iter().zip(&nv.area).map(|(z, a)| z * a).sum::<f64>();
