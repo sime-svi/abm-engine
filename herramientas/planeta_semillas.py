@@ -77,8 +77,13 @@ def correr(semilla, ajustes):
     for i in range(len(CLASES_MARGEN)):
         m[f'tect_margen_prof_{i}'] = b['margen_prof_m'][i]
         m[f'tect_margen_tect_{i}'] = b['margen_tect_m'][i]
-    # Hundimiento del basamento en ~100 Myr: la clase 80–120 Myr frente a la 0–20.
+    # Hundimiento del basamento en ~100 Myr: la clase 80–120 Myr frente a la 0–20, en todos los
+    # márgenes distales y por clase de estiramiento (nota de hundimiento de los márgenes).
     m['tect_margen_hundimiento_100myr_m'] = b['margen_tect_m'][3] - b['margen_tect_m'][0]
+    for i, c in enumerate(CLASES_BETA):
+        t = b['margen_beta_tect_m'][i]
+        m[f'tect_margen_hundimiento_beta_{i}_m'] = t[3] - t[0] if t[3] and t[0] else 0.0
+    m['tect_ancho_plataforma_final_km'] = b['ancho_plataforma_final_km']
     for i, causa in enumerate(CAUSAS_REINICIO):
         m[f'tect_reinicio_{causa}_km2_100myr'] = b['reinicio_km2_100myr'][i]
     for i, causa in enumerate(['invasion', 'choque', 'desaparece']):
@@ -107,6 +112,16 @@ def referencia():
 CLASES_EDAD = ['0–100', '100–500', '500–1 600', '1 600–2 500', '> 2 500']
 CLASES_MARGEN = ['0–20', '20–50', '50–80', '80–120', '120–200', '> 200']
 CAUSAS_REINICIO = ['rift', 'arco', 'choque', 'delaminacion']
+# Clases de estiramiento de los márgenes (nota de hundimiento de los márgenes), con el hundimiento que
+# da McKenzie (1978) entre las clases 80–120 y 0–20 Myr desde la rotura, para el β del medio de la clase.
+CLASES_BETA = ['1–2', '2–3', '> 3']
+
+
+def mckenzie(beta, t, e0=3.2, tau=62.8):
+    return e0 * beta / math.pi * math.sin(math.pi / beta) * (1.0 - math.exp(-t / tau))
+
+
+MCK_CLASE = [1000.0 * (mckenzie(b, 100.0) - mckenzie(b, 10.0)) for b in (1.5, 2.5, 3.25)]
 
 
 def por_edad_tierra():
@@ -193,6 +208,10 @@ FILAS += [('tect_margen_hundimiento_100myr_m', 'Hundimiento del basamento del ma
            '~2 000–3 000 (McKenzie 1978)', lambda x: 2000.0 <= x <= 3000.0)]
 FILAS += [(f'tect_reinicio_{c}_km2_100myr', f'Área continental reiniciada por {c} (km² por 100 Myr)', None, None)
           for c in CAUSAS_REINICIO]
+FILAS += [(f'tect_margen_hundimiento_beta_{i}_m', f'Hundimiento del basamento con β {c}, 0–20 → 80–120 Myr (m)',
+           f'McKenzie {MCK_CLASE[i]:.0f} ± 15 %', (lambda r: lambda x: abs(x / r - 1.0) <= 0.15)(MCK_CLASE[i]))
+          for i, c in enumerate(CLASES_BETA)]
+FILAS += [('tect_ancho_plataforma_final_km', 'Plataforma al final de la deriva, por km de costa (km)', None, None)]
 
 
 def main():

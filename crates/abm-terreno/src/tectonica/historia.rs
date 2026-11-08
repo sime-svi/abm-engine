@@ -217,6 +217,16 @@ pub struct MetricaMyr {
     pub margen_tect_m: [f64; 6],
     #[serde(default)]
     pub margen_area_km2: [f64; 6],
+    /// Nota de hundimiento de los márgenes §8: el basamento de los márgenes distales, sin su
+    /// sedimento y con agua encima (m), y su área (km²), por clase de estiramiento (1–2, 2–3 y más
+    /// de 3) y de tiempo desde la rotura; y la anchura media de la plataforma continental (km: la
+    /// corteza continental bajo el mar a menos de 200 m, por km de costa), cada 25 Myr.
+    #[serde(default)]
+    pub margen_beta_tect_m: [[f64; 6]; 3],
+    #[serde(default)]
+    pub margen_beta_area_km2: [[f64; 6]; 3],
+    #[serde(default)]
+    pub ancho_plataforma_km: f64,
 }
 
 /// Cuentas del material continental (km³) a lo largo de la deriva (adenda de balance §6 y §8).
@@ -604,6 +614,12 @@ pub struct BalanceMedio {
     pub margen_prof_m: [f64; 6],
     #[serde(default)]
     pub margen_tect_m: [f64; 6],
+    /// El basamento de los márgenes por clase de estiramiento (media de los pasos tras el rodaje,
+    /// por área; m) y la anchura de la plataforma al final (km).
+    #[serde(default)]
+    pub margen_beta_tect_m: [[f64; 6]; 3],
+    #[serde(default)]
+    pub ancho_plataforma_final_km: f64,
     #[serde(default)]
     pub reinicio_km2_100myr: [f64; 4],
 }

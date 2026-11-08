@@ -410,3 +410,30 @@ impl Deriva {
         }
     }
 }
+
+impl Deriva {
+    /// Anchura media de la plataforma continental (km; nota de hundimiento de los márgenes §8): el
+    /// área de corteza continental bajo el mar a menos de 200 m, por km de costa (celdas de tierra
+    /// con una vecina bajo el mar, por su lado).
+    pub(super) fn ancho_de_plataforma(&self) -> f64 {
+        let z = self.alturas();
+        let zeta = self.zeta_m;
+        let (mut a_plat, mut costa) = (0.0, 0.0);
+        for (k, &zk) in z.iter().enumerate() {
+            let Some(c) = self.corteza(k) else { continue };
+            if !c.cont {
+                continue;
+            }
+            if zk < zeta && zk >= zeta - 200.0 {
+                a_plat += self.malla.area[k];
+            } else if zk >= zeta
+                && self.malla.vec[k]
+                    .iter()
+                    .any(|&v| v != NADA && z[v as usize] < zeta)
+            {
+                costa += self.malla.lado_km;
+            }
+        }
+        if costa > 0.0 { a_plat / costa } else { 0.0 }
+    }
+}

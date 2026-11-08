@@ -143,6 +143,11 @@ l_min_km     = 50.0        # litosfera tras un evento (40–80; sale del borde e
 tau_l_myr    = 100.0       # recuperación de la litosfera tras el evento (20–200)
 h0_lit_m     = 3076.9      # constante de referencia, fijada con el nivel del mar real en el ajuste
 eps_del_km   = 1.0         # delaminación mínima en un paso para reiniciar la edad (supuesto)
+# Hundimiento térmico de los márgenes estirados (nota_hundimiento_margenes.md; McKenzie 1978, primer
+# término): S = E_0·(β/π)·sin(π/β)·(1 − e^(−t/τ)) con agua encima, con β = h_0/h_c al romper el rift. Se
+# suma a R4 solo lo que R4 no hunde ya desde la rotura (el crecimiento de su litosfera).
+e0_mck_km    = 3.2         # McKenzie (1978): a = 125 km, ρ = 3 330, α = 3,28·10⁻⁵ /°C, T = 1 333 °C (rango 2,4–3,2)
+tau_mck_myr  = 62.8        # a²/(π²·κ), κ = 8·10⁻⁷ m²/s (rango 50–63)
 # Edades tectonotérmicas de partida: la tierra de hoy de más de 500 Myr (55 %), menos 500, por clases
 # (tipos de corteza de CRUST1.0, alineados con las provincias de Artemieva y Mooney; nota_isostasia_s0.py).
 edad_tt_ini_bordes_myr = [0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0, 1750.0, 2000.0, 2250.0, 2500.0, 2750.0, 3000.0, 3250.0]

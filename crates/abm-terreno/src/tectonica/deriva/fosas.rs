@@ -1552,7 +1552,7 @@ impl Deriva {
                         c.sumar_hc(
                             v_hc * f,
                             d.c.arco,
-                            d.c.edad_tt,
+                            Origen::de(&d.c),
                             rs,
                             rc,
                             h_cont_min,

@@ -4823,3 +4823,91 @@ fn diagnostico_huella_de_la_deriva() {
     }
     println!("huella final de la deriva (semilla {semilla}): {h:016x}");
 }
+
+// --- Hundimiento térmico de los márgenes (nota_hundimiento_margenes.md §10) -----------------------
+
+#[test]
+fn un_margen_estirado_se_hunde_con_la_curva_de_mckenzie() {
+    // §10, prueba 1: el continente de la prueba del rift (35 km) se parte y se rompe; después, el
+    // basamento de cada muestra de los márgenes estirados (β ≥ 1,5), bajo el mar y sin sedimento,
+    // se hunde lo que da McKenzie (1978) para su β, ± 15 %.
+    use abm_terreno::tectonica::isostasia;
+    let cfg = TectonicaCfg {
+        lambda_a_rift: 1e3,
+        n_min: 2,
+        lambda_esp: 0.0,
+        ..TectonicaCfg::default()
+    };
+    let malla = Malla::new(48, 2, 6371.0);
+    let dirs = malla.dir.clone();
+    let mut d = Deriva::desde(&cfg, 3, malla, 0.0, &[10, 20], |k| {
+        let x = dirs[k];
+        if x[0] > 0.0 {
+            let cont = x[0] > 30f64.to_radians().cos();
+            (0, corteza(cont, if cont { 35.0 } else { 7.0 }, 60.0))
+        } else {
+            (1, corteza(false, 7.0, 60.0))
+        }
+    });
+    d.arrancar_con(&[[0.0; 3], [0.0; 3]]);
+    d.dar_paso();
+    d.cfg.lambda_a_rift = 0.0;
+    // Hasta la rotura de los dos lados.
+    for _ in 0..30 {
+        d.paso_cinematico();
+        if d.eventos.iter().filter(|e| e.tipo == "rotura_rift").count() >= 2 {
+            break;
+        }
+    }
+    assert!(
+        d.eventos.iter().filter(|e| e.tipo == "rotura_rift").count() >= 2,
+        "los dos lados del rift se rompen"
+    );
+    let basamento = |d: &Deriva, c: &abm_terreno::tectonica::deriva::Corteza| {
+        isostasia::altura(
+            &d.cfg,
+            &abm_terreno::tectonica::deriva::Corteza { sed: 0.0, ..*c },
+        )
+    };
+    // Las muestras estiradas bajo el mar, con su altura y su tiempo desde la rotura.
+    let mut antes: std::collections::BTreeMap<(u64, u32), (f64, f64, f64)> = Default::default();
+    for p in d.placas.iter().filter(|p| p.viva) {
+        for (s, c) in p.cort.iter().enumerate() {
+            if c.cont && c.beta >= 1.5 && basamento(&d, c) < 0.0 {
+                antes.insert((p.id, p.celda[s]), (basamento(&d, c), c.beta, c.t_rot_myr));
+            }
+        }
+    }
+    assert!(antes.len() >= 10, "hay márgenes estirados: {}", antes.len());
+    for _ in 0..80 {
+        d.paso_cinematico();
+    }
+    let (mut n, mut peor, mut suma) = (0, 0.0f64, 0.0);
+    for p in d.placas.iter().filter(|p| p.viva) {
+        for (s, c) in p.cort.iter().enumerate() {
+            let Some(&(z0, beta, t0)) = antes.get(&(p.id, p.celda[s])) else {
+                continue;
+            };
+            let z1 = basamento(&d, c);
+            if z1 >= 0.0 {
+                continue;
+            }
+            let esperado = 1000.0
+                * (isostasia::hundimiento_mckenzie(&d.cfg, beta, c.t_rot_myr)
+                    - isostasia::hundimiento_mckenzie(&d.cfg, beta, t0));
+            let r = (z0 - z1) / esperado;
+            peor = peor.max((r - 1.0).abs());
+            suma += r;
+            n += 1;
+        }
+    }
+    assert!(n >= 10, "siguen {n} muestras estiradas");
+    let media = suma / n as f64;
+    println!(
+        "hundimiento frente a McKenzie: {media:.4} de media, peor desvío {peor:.4} ({n} muestras)"
+    );
+    assert!(
+        (media - 1.0).abs() <= 0.15 && peor <= 0.15,
+        "el hundimiento sigue a McKenzie: {media:.3} de media, peor desvío {peor:.3} ({n} muestras)"
+    );
+}

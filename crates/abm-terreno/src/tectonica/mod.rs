@@ -721,6 +721,20 @@ fn balance_medio(
         edad_tt_area_final_frac: ultima.edad_tt_area_frac,
         margen_prof_m: media_margen(&val, |m| &m.margen_prof_m),
         margen_tect_m: media_margen(&val, |m| &m.margen_tect_m),
+        margen_beta_tect_m: std::array::from_fn(|b| {
+            std::array::from_fn(|i| {
+                let a: f64 = val.iter().map(|m| m.margen_beta_area_km2[b][i]).sum();
+                if a > 0.0 {
+                    val.iter()
+                        .map(|m| m.margen_beta_tect_m[b][i] * m.margen_beta_area_km2[b][i])
+                        .sum::<f64>()
+                        / a
+                } else {
+                    0.0
+                }
+            })
+        }),
+        ancho_plataforma_final_km: ultima.ancho_plataforma_km,
         reinicio_km2_100myr: std::array::from_fn(|i| {
             val.iter().map(|m| m.reinicio_km2[i]).sum::<f64>() * 100.0 / n
         }),

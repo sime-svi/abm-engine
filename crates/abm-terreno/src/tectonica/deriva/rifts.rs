@@ -245,12 +245,22 @@ impl Deriva {
                 lado.roto = true;
                 // La franja estirada, adelgazada y caliente, empieza su edad tectonotérmica (nota de
                 // isostasia con litosfera §6.2): desde aquí se hunde al enfriarse.
+                // Y guarda su estiramiento, `β = h_0/h_c` (nota de hundimiento de los márgenes
+                // §6.1), con `h_0` el grosor de partida de la franja: desde aquí se hunde también
+                // con la curva de McKenzie.
                 let mut reinicio = 0.0;
+                let beta_max = (lado.h0_km / h_rot).max(1.0);
                 for &l in &lado.celdas {
                     if let Some(c) = self.placas[pi].get_mut(l)
                         && c.cont
                     {
                         c.edad_tt = 0.0;
+                        c.beta = if c.hc > 0.0 {
+                            (lado.h0_km / c.hc).clamp(1.0, beta_max)
+                        } else {
+                            beta_max
+                        };
+                        c.t_rot_myr = 0.0;
                         reinicio += self.malla.area[l as usize];
                     }
                 }

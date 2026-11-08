@@ -86,6 +86,38 @@ pub fn flotacion_litosfera(c: &TectonicaCfg, h_tot: f64, l: f64, drho: f64) -> f
         - drho * (l - h_tot).max(0.0)
 }
 
+/// Hundimiento térmico de un margen estirado (km, con agua encima; nota de hundimiento de los
+/// márgenes §6.2): el primer término de McKenzie (1978),
+/// `S = E_0·(β/π)·sin(π/β)·(1 − e^(−t/τ))`, con `β` su estiramiento y `t` el tiempo desde la rotura.
+/// Sin estirar (`β ≤ 1`), 0.
+pub fn hundimiento_mckenzie(c: &TectonicaCfg, beta: f64, t: f64) -> f64 {
+    if beta <= 1.0 {
+        return 0.0;
+    }
+    let f = beta / std::f64::consts::PI * (std::f64::consts::PI / beta).sin();
+    c.e0_mck_km * f * (1.0 - (-t.max(0.0) / c.tau_mck_myr).exp())
+}
+
+/// Lo que hunde ya R4 (km, con agua encima) desde la rotura de una columna de corteza total `h_tot`
+/// cuya edad tectonotérmica es `edad`: el crecimiento del término del manto litosférico desde la
+/// rotura (edad 0), `[Δρ(t)·max(0, L(t) − h) − Δρ(0)·max(0, L(0) − h)]/(ρ_a − ρ_w)` (§6.3 y §11.1).
+pub fn hundimiento_r4(c: &TectonicaCfg, edad: f64, h_tot: f64) -> f64 {
+    let tapa = |t: f64| drho_ma(c, t) * (litosfera_km(c, t) - h_tot).max(0.0);
+    (tapa(edad) - tapa(0.0)) / (c.rho_ast - c.rho_w)
+}
+
+/// Carga del manto (km·kg/m³, en las unidades de [`flotacion_litosfera`]) que añade el hundimiento
+/// térmico de McKenzie a una columna estirada: solo lo que R4 no hunde ya,
+/// `max(0, S_McK − S_R4)·(ρ_a − ρ_w)`, para que la isostasia dé la altura con cualquier relleno
+/// encima (agua, sedimento o aire). Sin estirar, 0.
+pub fn carga_mckenzie(c: &TectonicaCfg, k: &Corteza, h_tot: f64) -> f64 {
+    if k.beta <= 1.0 {
+        return 0.0;
+    }
+    let s = hundimiento_mckenzie(c, k.beta, k.t_rot_myr) - hundimiento_r4(c, k.edad_tt, h_tot);
+    s.max(0.0) * (c.rho_ast - c.rho_w)
+}
+
 /// Altura (m, respecto al dato) de una flotación de litosfera `b`: `b/ρ_a − H_0` sobre el mar y,
 /// bajo el mar, la profundidad por `ρ_a/(ρ_a − ρ_w)` (el agua también pesa).
 #[inline]
@@ -104,9 +136,10 @@ pub fn altura(c: &TectonicaCfg, k: &Corteza) -> f64 {
         // El sedimento cuenta como corteza (nota de isostasia con litosfera §11.1; la variante del
         // estudio que el motor puede llevar: su reparto del sedimento rellena hasta una cota).
         let l = litosfera_km(c, k.edad_tt);
+        let h_tot = k.h + k.sed;
         altura_de_flotacion(
             c,
-            flotacion_litosfera(c, k.h + k.sed, l, drho_ma(c, k.edad_tt)),
+            flotacion_litosfera(c, h_tot, l, drho_ma(c, k.edad_tt)) - carga_mckenzie(c, k, h_tot),
         )
     } else {
         let sed = (c.rho_m - c.rho_s) * k.sed;
@@ -166,9 +199,14 @@ pub fn sedimento_hasta_columna(c: &TectonicaCfg, k: &Corteza, z_obj: f64) -> f64
         )
     };
     let (cont, h_tot, sed0, f_sed) = (k.cont, k.h + k.sed, k.sed, c.rho_m - c.rho_s);
+    // El hundimiento de McKenzie no depende del sedimento; lo que R4 ya hunde, solo si la corteza
+    // pasa del grosor de la litosfera (nunca en un margen fino), así que se recalcula.
     let altura_con = |ds: f64| -> f64 {
         if cont {
-            altura_de_flotacion(c, flotacion_litosfera(c, h_tot + ds, l, drho))
+            altura_de_flotacion(
+                c,
+                flotacion_litosfera(c, h_tot + ds, l, drho) - carga_mckenzie(c, k, h_tot + ds),
+            )
         } else {
             con_flotacion(c, z0, b0 + f_sed * (sed0 + ds))
         }
@@ -300,6 +338,54 @@ mod tests {
             "en 100 Myr baja {:.0} m (esperado {esperado:.0})",
             p100 - p0
         );
+    }
+
+    #[test]
+    fn sin_estirar_nada_cambia_y_un_margen_estirado_sigue_a_mckenzie() {
+        // Nota de hundimiento de los márgenes §10, prueba 2: una columna sin estirar (β = 1) da la
+        // altura de R4 de antes. Y una estirada (β = 3, 12 km) se hunde con agua encima lo que da
+        // McKenzie, sin contar dos veces lo que R4 ya hunde: a los 100 Myr, ~2,1 km.
+        let c = TectonicaCfg::default();
+        let col = |beta: f64, t: f64| Corteza {
+            beta,
+            t_rot_myr: t,
+            ..cont(12.0, 0.0, t)
+        };
+        let r4 = |t: f64| {
+            let k = cont(12.0, 0.0, t);
+            altura_de_flotacion(
+                &c,
+                flotacion_litosfera(&c, 12.0, litosfera_km(&c, t), drho_ma(&c, t)),
+            ) - altura(&c, &k)
+        };
+        assert_eq!(r4(0.0), 0.0);
+        assert_eq!(r4(100.0), 0.0);
+        assert_eq!(
+            altura(&c, &col(1.0, 100.0)),
+            altura(&c, &cont(12.0, 0.0, 100.0))
+        );
+        let s = |t: f64| altura(&c, &col(3.0, 0.0)) - altura(&c, &col(3.0, t));
+        let mck = hundimiento_mckenzie(&c, 3.0, 100.0);
+        assert!(
+            (mck - 2.11).abs() < 0.01,
+            "McKenzie con β = 3 a los 100 Myr: {mck:.3} km"
+        );
+        assert!(
+            (s(100.0) / 1000.0 - mck).abs() < 1e-6,
+            "se hunde {:.4} km, McKenzie {mck:.4}",
+            s(100.0) / 1000.0
+        );
+        // Más tarde, ~2,65 km; con β = 1,5, ~1,05 km a los 100 Myr.
+        assert!((hundimiento_mckenzie(&c, 3.0, 1e4) - 2.65).abs() < 0.01);
+        assert!((hundimiento_mckenzie(&c, 1.5, 100.0) - 1.05).abs() < 0.01);
+        // Con poco estiramiento, R4 ya hunde más que McKenzie: no se añade nada.
+        let poco = Corteza {
+            beta: 1.02,
+            t_rot_myr: 100.0,
+            ..cont(12.0, 0.0, 100.0)
+        };
+        assert!(hundimiento_mckenzie(&c, 1.02, 100.0) < hundimiento_r4(&c, 100.0, 12.0));
+        assert_eq!(altura(&c, &poco), altura(&c, &cont(12.0, 0.0, 100.0)));
     }
 
     #[test]

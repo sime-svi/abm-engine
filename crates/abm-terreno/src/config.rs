@@ -180,6 +180,10 @@ pub struct TectonicaCfg {
     pub h0_lit_m: f64,
     /// Delaminación mínima en un paso para reiniciar la edad tectonotérmica (km).
     pub eps_del_km: f64,
+    /// Hundimiento térmico de los márgenes estirados (nota de hundimiento de los márgenes; McKenzie
+    /// 1978, primer término): `S = E_0·(β/π)·sin(π/β)·(1 − e^(−t/τ))`, con agua encima (km, Myr).
+    pub e0_mck_km: f64,
+    pub tau_mck_myr: f64,
     /// Edades tectonotérmicas de la corteza continental al empezar la deriva: la distribución de la
     /// Tierra de hoy con las edades de más de 500 Myr, menos 500 (bordes de las clases, Myr, y área
     /// de cada clase). Las más viejas, en el interior de cada continente.
@@ -376,6 +380,8 @@ impl Default for TectonicaCfg {
             tau_l_myr: 100.0,
             h0_lit_m: 3076.9,
             eps_del_km: 1.0,
+            e0_mck_km: 3.2,
+            tau_mck_myr: 62.8,
             edad_tt_ini_bordes_myr: vec![
                 0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0, 1750.0,
                 2000.0, 2250.0, 2500.0, 2750.0, 3000.0, 3250.0,
@@ -975,10 +981,12 @@ impl TectonicaCfg {
             && self.drho_ma_arcaico >= 0.0
             && self.l_min_km > 0.0
             && self.tau_l_myr > 0.0
-            && self.eps_del_km >= 0.0)
+            && self.eps_del_km >= 0.0
+            && self.e0_mck_km >= 0.0
+            && self.tau_mck_myr > 0.0)
         {
             return Err(invalid(
-                "isostasia con litosfera: se requiere rho_c_sup, rho_c_inf < rho_ast, rho_w < rho_ast, z_t, drho_ma, eps_del >= 0 y l_min, tau_l > 0",
+                "isostasia con litosfera: se requiere rho_c_sup, rho_c_inf < rho_ast, rho_w < rho_ast, z_t, drho_ma, eps_del, e0_mck >= 0 y l_min, tau_l, tau_mck > 0",
             ));
         }
         if self.edad_tt_ini_bordes_myr.len() != self.edad_tt_ini_frac.len() + 1
