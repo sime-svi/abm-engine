@@ -18,7 +18,9 @@
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 
-use super::historia::{CuentasCorteza, EventoTectonico, FotoSupercontinente, MetricaMyr};
+use super::historia::{
+    CuentasCorteza, EventoTectonico, FotoSupercontinente, MargenRift, MetricaMyr,
+};
 
 mod diagnostico;
 mod fosas;
@@ -1208,9 +1210,15 @@ pub struct Deriva {
     /// Área continental cuya edad tectonotérmica volvió a 0 en el último paso, por causa: rift,
     /// arco, choque y delaminación (km²; nota de isostasia con litosfera §8).
     pub reinicio_km2_paso: [f64; 4],
-    /// Margen pasivo que dejó de serlo en el último paso, por causa (diagnóstico del
-    /// supercontinente; `MetricaMyr::margen_fin_causa_km`).
-    margen_fin_causa_paso: [f64; 4],
+    /// Márgenes pasivos por sus celdas de costa (longitud, edad media y máxima) y su perfil (corteza
+    /// en la costa y franja estirada): se calculan cada 25 Myr y en el último paso, y se repiten
+    /// entre medias (solo se usan sus valores finales y sus medias).
+    ultimos_margenes: (f64, f64, f64),
+    ultimo_perfil: (f64, f64),
+    /// Los márgenes pasivos como entidades (diagnóstico; `ResumenTectonica::margenes_rift`) y el de
+    /// cada `rift_id`.
+    pub margenes_rift: Vec<MargenRift>,
+    margen_de_rift: std::collections::BTreeMap<u32, usize>,
     /// Myr de la rotura de cada rift (por su número; NaN si aún no se ha roto; diagnóstico).
     pub rotura_rift_myr: Vec<f64>,
     /// Muestras de margen pasivo de la foto anterior del diagnóstico del supercontinente (id de su
@@ -1464,7 +1472,10 @@ impl Deriva {
             hundido_paso: Vec::new(),
             dorsal_fosa_paso: Vec::new(),
             reinicio_km2_paso: [0.0; 4],
-            margen_fin_causa_paso: [0.0; 4],
+            ultimos_margenes: (0.0, 0.0, 0.0),
+            ultimo_perfil: (0.0, 0.0),
+            margenes_rift: Vec::new(),
+            margen_de_rift: Default::default(),
             rotura_rift_myr: vec![f64::NAN],
             margenes_foto: Vec::new(),
             fotos_supercontinente: Vec::new(),
@@ -5443,10 +5454,21 @@ impl Deriva {
             }
         }
         let t0 = std::time::Instant::now();
-        let margenes = self.margenes_pasivos();
+        // Los márgenes por sus celdas de costa y su perfil, cada 25 Myr y en el último paso.
+        let cada = (25.0 / self.cfg.dt_myr).round().max(1.0) as u64;
+        let ultimo = self.paso >= (self.cfg.t_deriva_myr / self.cfg.dt_myr).round() as u64;
+        let toca = self.paso.is_multiple_of(cada) || ultimo;
+        if toca {
+            self.ultimos_margenes = self.margenes_pasivos();
+        }
+        let margenes = self.ultimos_margenes;
         let t1 = std::time::Instant::now();
         let cont = self.celdas_continente();
-        let (costa_margen_km, franja_estirada_km) = self.perfil_de_margenes(&cont);
+        if toca {
+            self.ultimo_perfil = self.perfil_de_margenes(&cont);
+        }
+        let (costa_margen_km, franja_estirada_km) = self.ultimo_perfil;
+        self.margenes_rift_paso();
         let t2 = std::time::Instant::now();
         let (bloques_continentales, bloque_mayor_frac) = self.metricas_de_bloques(&cont);
         let t3 = std::time::Instant::now();
@@ -5545,8 +5567,6 @@ impl Deriva {
             margen_pasivo_km: margenes.0,
             edad_media_margen_myr: margenes.1,
             edad_max_margen_myr: margenes.2,
-            margen_fin_km: margenes.3,
-            margen_fin_vida_km_myr: margenes.4,
             bloques_continentales,
             bloque_mayor_frac,
             rifts_estirando: self.rifts_activos.len() as u32,
@@ -5577,38 +5597,20 @@ impl Deriva {
                 }
             }),
             margen_area_km2: a_margen,
-            margen_fin_causa_km: self.margen_fin_causa_paso,
             costa_margen_km,
             franja_estirada_km,
         });
     }
 
-    /// Márgenes pasivos (nota de fosas v4 §8): celdas continentales (no de arco) con fondo oceánico
-    /// de su placa al lado y sin otra placa a menos de `L_borde`. Su edad es la del fondo más viejo de al lado
-    /// (el tiempo desde que se abrió ese océano). Un margen termina cuando un borde convergente
-    /// (fosa, convergencia difusa o choque) llega a menos de `L_borde` de su celda: entonces cuenta
-    /// su vida, la edad que tenía el paso anterior. Devuelve la longitud (km), la edad media
-    /// ponderada por longitud y la máxima (Myr), y la longitud que termina y Σ longitud·vida.
-    fn margenes_pasivos(&mut self) -> (f64, f64, f64, f64, f64) {
+    /// Márgenes pasivos por sus celdas de costa (nota de fosas v4 §8): celdas continentales (no de
+    /// arco) con fondo oceánico de su placa al lado y sin otra placa a menos de `L_borde`. Su edad es
+    /// la del fondo más viejo de al lado (el tiempo desde que se abrió ese océano). Devuelve la
+    /// longitud (km) y la edad media ponderada por longitud y la máxima (Myr), y deja sus celdas en
+    /// `costa_margen` y `margenes_previos`. La vida de los márgenes se mide como entidades
+    /// ([`MargenRift`]): por celdas de costa, el vaivén de la malla la falsea.
+    fn margenes_pasivos(&mut self) -> (f64, f64, f64) {
         let num = self.malla.num;
         let lado = self.malla.lado_km;
-        let mut conv_cerca = vec![false; num];
-        // Diagnóstico del supercontinente: qué borde convergente hay cerca (choque o, si no, fosa o
-        // convergencia difusa).
-        let mut choque_cerca = vec![false; num];
-        for b in &self.bordes {
-            if matches!(
-                b.tipo,
-                TipoBorde::Subduccion | TipoBorde::Difusa | TipoBorde::Colision
-            ) {
-                for &j in self.vecindad.de(b.k as usize) {
-                    conv_cerca[j as usize] = true;
-                    if b.tipo == TipoBorde::Colision {
-                        choque_cerca[j as usize] = true;
-                    }
-                }
-            }
-        }
         let mut ahora: Vec<((u64, u32), f64)> = Vec::new();
         self.costa_margen.clear();
         let (mut largo, mut edad_l, mut edad_max) = (0.0, 0.0, 0.0f64);
@@ -5642,40 +5644,11 @@ impl Deriva {
             edad_max = edad_max.max(edad);
         }
         ahora.sort_unstable_by_key(|x| x.0);
-        // Los que estaban y ya no: ¿les llegó un borde convergente?
-        let (mut fin_km, mut fin_vida) = (0.0, 0.0);
-        let mut causa = [0.0; 4];
-        let previos = std::mem::take(&mut self.margenes_previos);
-        for &((id, l), edad) in &previos {
-            if ahora.binary_search_by_key(&(id, l), |x| x.0).is_ok() {
-                continue;
-            }
-            // La placa que tiene ahora esa celda local: la misma o una hija.
-            let k = self.placas.iter().filter(|p| p.viva).find_map(|p| {
-                let s = p.mapa[l as usize];
-                (s != NADA && (p.id == id || p.ancestros.contains(&id)))
-                    .then(|| p.mundo[s as usize] as usize)
-            });
-            if k.is_some_and(|k| conv_cerca[k]) {
-                fin_km += lado;
-                fin_vida += lado * edad;
-            }
-            let i = match k {
-                Some(k) if choque_cerca[k] => 1,
-                Some(k) if conv_cerca[k] => 0,
-                Some(_) => 2,
-                None => 3,
-            };
-            causa[i] += lado;
-        }
-        self.margen_fin_causa_paso = causa;
         self.margenes_previos = ahora;
         (
             largo,
             if largo > 0.0 { edad_l / largo } else { 0.0 },
             edad_max,
-            fin_km,
-            fin_vida,
         )
     }
 

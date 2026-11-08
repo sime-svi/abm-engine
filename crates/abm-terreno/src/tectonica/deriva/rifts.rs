@@ -255,6 +255,7 @@ impl Deriva {
                     }
                 }
                 self.reinicio_km2_paso[0] += reinicio;
+                self.margen_nace(lado.rift_id);
                 let rid = (lado.rift_id >> 1) as usize;
                 if let Some(t) = self.rotura_rift_myr.get_mut(rid)
                     && t.is_nan()

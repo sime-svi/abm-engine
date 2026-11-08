@@ -6,7 +6,7 @@
 //! trabajo que se toma y se devuelve) ni consume números del azar.
 
 use super::*;
-use crate::tectonica::historia::{OceanoRift, PlacaConContinente};
+use crate::tectonica::historia::{MargenRift, OceanoRift, PlacaConContinente};
 
 /// Myr entre dos fotos.
 const CADA_MYR: f64 = 25.0;
@@ -319,5 +319,94 @@ impl Deriva {
             });
         }
         foto
+    }
+}
+
+impl Deriva {
+    /// Nace el margen pasivo `rift_id` (un lado de un rift que se rompe).
+    pub(super) fn margen_nace(&mut self, rift_id: u32) {
+        if self.margen_de_rift.contains_key(&rift_id) {
+            return;
+        }
+        self.margen_de_rift
+            .insert(rift_id, self.margenes_rift.len());
+        self.margenes_rift.push(MargenRift {
+            rift_id,
+            rotura_myr: self.t_myr,
+            celdas_max: 0,
+            fin_myr: None,
+            causa: None,
+        });
+    }
+
+    /// Sigue los márgenes pasivos como entidades (cada paso): cuenta las celdas continentales de cada
+    /// uno y las que tienen un borde convergente cerca (a menos de `L_borde`: fosa, convergencia
+    /// difusa o choque). Un margen termina cuando la mitad de sus celdas tiene uno cerca (por choque
+    /// si los choques cubren al menos la mitad de esas celdas; si no, por invasión) o cuando le queda
+    /// menos del 10 % de las celdas que llegó a tener.
+    pub(super) fn margenes_rift_paso(&mut self) {
+        if self.margenes_rift.iter().all(|m| m.fin_myr.is_some()) {
+            return;
+        }
+        let num = self.malla.num;
+        // 0: nada cerca; 1: fosa o convergencia difusa; 2: choque.
+        let mut cerca = vec![0u8; num];
+        for b in &self.bordes {
+            let tipo = match b.tipo {
+                TipoBorde::Subduccion | TipoBorde::Difusa => 1,
+                TipoBorde::Colision => 2,
+                _ => continue,
+            };
+            for &j in self.vecindad.de(b.k as usize) {
+                let c = &mut cerca[j as usize];
+                *c = (*c).max(tipo);
+            }
+        }
+        // (celdas, con fosa o difusa cerca, con choque cerca) de cada margen vivo.
+        let mut cuenta: std::collections::BTreeMap<u32, (u32, u32, u32)> = Default::default();
+        for (k, &ck) in cerca.iter().enumerate() {
+            let Some(c) = self.corteza(k) else { continue };
+            if !c.cont || c.rift_id == 0 {
+                continue;
+            }
+            let Some(&i) = self.margen_de_rift.get(&c.rift_id) else {
+                continue;
+            };
+            if self.margenes_rift[i].fin_myr.is_some() {
+                continue;
+            }
+            let e = cuenta.entry(c.rift_id).or_default();
+            e.0 += 1;
+            match ck {
+                1 => e.1 += 1,
+                2 => e.2 += 1,
+                _ => {}
+            }
+        }
+        let t = self.t_myr;
+        for m in self
+            .margenes_rift
+            .iter_mut()
+            .filter(|m| m.fin_myr.is_none())
+        {
+            let (n, n_inv, n_cho) = cuenta.get(&m.rift_id).copied().unwrap_or((0, 0, 0));
+            m.celdas_max = m.celdas_max.max(n);
+            let activas = n_inv + n_cho;
+            let causa = if n > 0 && 2 * activas >= n {
+                Some(if 2 * n_cho >= activas {
+                    "choque"
+                } else {
+                    "invasion"
+                })
+            } else if 10 * n < m.celdas_max {
+                Some("desaparece")
+            } else {
+                None
+            };
+            if let Some(c) = causa {
+                m.fin_myr = Some(t);
+                m.causa = Some(c.to_string());
+            }
+        }
     }
 }

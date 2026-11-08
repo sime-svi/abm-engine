@@ -81,6 +81,8 @@ def correr(semilla, ajustes):
     m['tect_margen_hundimiento_100myr_m'] = b['margen_tect_m'][3] - b['margen_tect_m'][0]
     for i, causa in enumerate(CAUSAS_REINICIO):
         m[f'tect_reinicio_{causa}_km2_100myr'] = b['reinicio_km2_100myr'][i]
+    for i, causa in enumerate(['invasion', 'choque', 'desaparece']):
+        m[f'tect_margen_rift_fin_{causa}_frac'] = b['margen_rift_fin_frac'][i]
     return m
 
 
@@ -137,11 +139,22 @@ FILAS = [
     ('tect_bal_sedimento_al_mar_au', 'Sedimento al mar (AU)', '≈1,8', lambda x: abs(x - 1.8) <= 0.4),
     ('tect_bal_fosas_km', 'Longitud de fosa (km)', '51 000 ± 25 %', lambda x: abs(x / 51000.0 - 1.0) <= 0.25),
     ('tect_bal_area_subducida_km2_anio', 'Área que se hunde (km²/año)', '2,7–3,4', lambda x: 2.7 <= x <= 3.4),
-    ('tect_bal_vida_media_margen_myr', 'Vida media de los márgenes pasivos que terminan (Myr)', '130–180',
-     lambda x: 130.0 <= x <= 180.0),
-    ('tect_bal_edad_media_margen_final_myr', 'Edad media de los márgenes pasivos al final (Myr)', '~104',
+    # Los márgenes como entidades que nacen en cada rift (desde el 2026-11-08): por celdas de costa,
+    # el vaivén de la malla falsea su vida.
+    ('tect_bal_vida_media_margen_rift_myr', 'Vida media de los márgenes pasivos que terminan, como entidades (Myr)',
+     '130–180', lambda x: 130.0 <= x <= 180.0),
+    ('tect_bal_margenes_rift_nacidos', 'Márgenes pasivos nacidos en rifts', None, None),
+    ('tect_bal_margenes_rift_terminados', 'Márgenes pasivos que terminan', None, None),
+    ('tect_margen_rift_fin_invasion_frac', 'Márgenes que terminan por invasión (fracción)', None, None),
+    ('tect_margen_rift_fin_choque_frac', 'Márgenes que terminan por un choque (fracción)', None, None),
+    ('tect_margen_rift_fin_desaparece_frac', 'Márgenes que desaparecen (fracción)', None, None),
+    ('tect_bal_edad_media_margen_rift_final_myr', 'Edad media de los márgenes pasivos al final, como entidades (Myr)',
+     '~104', lambda x: abs(x - 104.0) <= 26.0),
+    ('tect_bal_edad_max_margen_rift_final_myr', 'Edad máxima de los márgenes pasivos al final, como entidades (Myr)',
+     '~180', lambda x: x <= 225.0),
+    ('tect_bal_edad_media_margen_final_myr', 'Edad media de los márgenes pasivos al final, por celdas de costa (Myr)', '~104',
      lambda x: abs(x - 104.0) <= 26.0),
-    ('tect_bal_edad_max_margen_final_myr', 'Edad máxima de los márgenes pasivos al final (Myr)', '~180',
+    ('tect_bal_edad_max_margen_final_myr', 'Edad máxima de los márgenes pasivos al final, por celdas de costa (Myr)', '~180',
      lambda x: x <= 225.0),
     ('tect_bal_colisiones_km', 'Choques: longitud (km)', 'CCB 23 000 ± 25 %', lambda x: abs(x / 23003.0 - 1.0) <= 0.25),
     ('tect_bal_difusas_km', 'Convergencia difusa: longitud (km)', 'OCB 17 400 ± 50 %', lambda x: abs(x / 17447.0 - 1.0) <= 0.5),

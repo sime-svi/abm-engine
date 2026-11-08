@@ -18,7 +18,8 @@ use crate::config::{TectonicaCfg, TerrenoConfig};
 use crate::geometry::{V3, dot};
 use deriva::{Deriva, TipoBorde};
 use historia::{
-    BalanceMedio, EdadesOceano, EventoTectonico, MetricaMyr, PlacaFinal, ResumenTectonica,
+    BalanceMedio, EdadesOceano, EventoTectonico, MargenRift, MetricaMyr, PlacaFinal,
+    ResumenTectonica,
 };
 use malla::{Malla, NADA};
 
@@ -415,11 +416,17 @@ fn resumen(d: &Deriva, t: &Tectonica) -> ResumenTectonica {
         v_rms_media_cm_anio: media_de(d.v_rms_acum),
         forsyth_uyeda_fosa: media_de(d.fu_fosa),
         forsyth_uyeda_continente: media_de(d.fu_cont),
-        balance: balance_medio(&d.metricas, &d.fosas_por_convergencia_km, &d.eventos),
+        balance: balance_medio(
+            &d.metricas,
+            &d.fosas_por_convergencia_km,
+            &d.eventos,
+            &d.margenes_rift,
+        ),
         placas_final,
         eventos: d.eventos.clone(),
         metricas: d.metricas.clone(),
         fotos_supercontinente: d.fotos_supercontinente.clone(),
+        margenes_rift: d.margenes_rift.clone(),
     }
 }
 
@@ -439,16 +446,33 @@ fn media_margen(val: &[&MetricaMyr], f: impl Fn(&MetricaMyr) -> &[f64; 6]) -> [f
     })
 }
 
+/// Media de una lista (0 si está vacía; el JSON no admite NaN).
+fn media_de_lista(x: &[f64]) -> f64 {
+    if x.is_empty() {
+        0.0
+    } else {
+        x.iter().sum::<f64>() / x.len() as f64
+    }
+}
+
 /// Medias del balance de la corteza sin el rodaje (adenda de balance §10).
 fn balance_medio(
     metricas: &[MetricaMyr],
     fosas_km: &[f64; 10],
     eventos: &[EventoTectonico],
+    margenes: &[MargenRift],
 ) -> BalanceMedio {
     let val: Vec<&MetricaMyr> = metricas.iter().filter(|m| !m.rodaje).collect();
     let Some(ultima) = val.last() else {
         return BalanceMedio::default();
     };
+    // Los márgenes como entidades: los que terminan y la edad al final de los que siguen pasivos.
+    let terminados: Vec<&MargenRift> = margenes.iter().filter(|m| m.fin_myr.is_some()).collect();
+    let vivos: Vec<f64> = margenes
+        .iter()
+        .filter(|m| m.fin_myr.is_none())
+        .map(|m| ultima.myr - m.rotura_myr)
+        .collect();
     let n = val.len() as f64;
     let media = |f: fn(&MetricaMyr) -> f64| val.iter().map(|m| f(m)).sum::<f64>() / n;
     // Eventos de los pasos que cuentan: un evento lleva el Myr del principio de su paso, el de la
@@ -590,15 +614,27 @@ fn balance_medio(
         edad_max_margen_myr: media(|m| m.edad_max_margen_myr),
         edad_media_margen_final_myr: ultima.edad_media_margen_myr,
         edad_max_margen_final_myr: ultima.edad_max_margen_myr,
-        vida_media_margen_myr: {
-            let l: f64 = val.iter().map(|m| m.margen_fin_km).sum();
-            if l > 0.0 {
-                val.iter().map(|m| m.margen_fin_vida_km_myr).sum::<f64>() / l
-            } else {
+        margenes_rift_nacidos: margenes.len() as u32,
+        margenes_rift_terminados: terminados.len() as u32,
+        vida_media_margen_rift_myr: media_de_lista(
+            &terminados
+                .iter()
+                .map(|m| m.fin_myr.unwrap_or(m.rotura_myr) - m.rotura_myr)
+                .collect::<Vec<_>>(),
+        ),
+        margen_rift_fin_frac: ["invasion", "choque", "desaparece"].map(|c| {
+            if terminados.is_empty() {
                 0.0
+            } else {
+                terminados
+                    .iter()
+                    .filter(|m| m.causa.as_deref() == Some(c))
+                    .count() as f64
+                    / terminados.len() as f64
             }
-        },
-        margen_terminado_km_myr: media(|m| m.margen_fin_km),
+        }),
+        edad_media_margen_rift_final_myr: media_de_lista(&vivos),
+        edad_max_margen_rift_final_myr: vivos.iter().copied().fold(0.0, f64::max),
         // Ponderada por la corteza solapada: cuentan los choques grandes, no los roces de un trozo.
         duracion_media_choques_myr: {
             let (mut dv, mut v) = (0.0, 0.0);

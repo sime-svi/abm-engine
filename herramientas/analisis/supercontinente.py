@@ -39,7 +39,6 @@ CERRADO_KM = 300.0
 # Un margen deja de ser pasivo cuando al menos esta fracción de sus celdas tiene un borde convergente
 # cerca.
 ACTIVO_FRAC = 0.25
-CAUSAS = ['invasión', 'choque', 'sin borde convergente', 'muestra desaparecida']
 DESTINOS = ['sigue pasivo', 'activo por invasión (fosa o difusa cerca)', 'activo por choque',
             'ya no es margen, sin borde convergente cerca', 'su muestra ya no está']
 FUERZAS = ['tirón de la losa', 'empuje (dorsales y resto)', 'choques', 'arrastre basal']
@@ -138,16 +137,15 @@ def analizar(t, lado_km):
     con = [f['margen_tras_25myr_frac'] for f in tras if sum(f.get('margen_tras_25myr_frac', [0] * 5)) > 0]
     for i, c in enumerate(DESTINOS):
         r[f'margen_25_{i}'] = media([x[i] for x in con])
-    # Fin de los márgenes pasivos por causa, celda a celda y paso a paso (incluye el vaivén de la costa).
-    fin = [sum(m.get('margen_fin_causa_km', [0, 0, 0, 0])[i] for m in met) for i in range(4)]
-    tot = sum(fin)
-    r['margen_fin_km'] = fin
-    r['margen_fin_frac'] = [x / tot if tot > 0 else 0.0 for x in fin]
-    largo = media([m['margen_pasivo_km'] for m in met])
-    dur = len(met) * (met[1]['myr'] - met[0]['myr'] if len(met) > 1 else 1.0)
-    r['margen_pasivo_medio_km'] = largo
-    # Fracción del margen pasivo medio que pasa a ser activo cada 100 Myr, por causa.
-    r['margen_activado_frac_100myr'] = [fin[i] / largo * 100.0 / dur if largo > 0 else 0.0 for i in range(2)]
+    r['margen_pasivo_medio_km'] = media([m['margen_pasivo_km'] for m in met])
+    # Los márgenes como entidades que nacen en cada rift: cómo terminan y su vida.
+    ms = t.get('margenes_rift', [])
+    fin = [m for m in ms if m['fin_myr'] is not None]
+    r['margenes_rift'] = len(ms)
+    r['margenes_rift_terminados'] = len(fin)
+    for c in ('invasion', 'choque', 'desaparece'):
+        r[f'margen_rift_{c}_frac'] = sum(m['causa'] == c for m in fin) / len(fin) if fin else 0.0
+    r['vida_margen_rift_myr'] = media([m['fin_myr'] - m['rotura_myr'] for m in fin])
     # 5. Fuerzas de las placas con continente y continentes hacia las fosas.
     pot = [0.0] * 4
     pot_pos = [0.0] * 4
@@ -200,6 +198,12 @@ FILAS = [
     ('oceanos_desaparecen', '… cuyo margen desaparece sin cerrarse', '{:.1f}'),
     ('edad_final_abiertos_myr', '… edad al final de los que siguen abiertos (Myr)', '{:.0f}'),
     ('margen_pasivo_medio_km', 'Margen pasivo medio (km)', '{:.0f}'),
+    ('margenes_rift', 'Márgenes pasivos nacidos en rifts (entidades)', '{:.1f}'),
+    ('margenes_rift_terminados', '… que terminan', '{:.1f}'),
+    ('margen_rift_invasion_frac', '… por invasión (fracción de los que terminan)', '{:.2f}'),
+    ('margen_rift_choque_frac', '… por un choque', '{:.2f}'),
+    ('margen_rift_desaparece_frac', '… porque desaparecen', '{:.2f}'),
+    ('vida_margen_rift_myr', '… vida media de los que terminan (Myr)', '{:.0f}'),
 ] + [(f'margen_25_{i}', f'Margen pasivo de una foto, 25 Myr después: {c} (fracción)', '{:.3f}')
      for i, c in enumerate(DESTINOS)] + [
     ('placas_cont_por_foto', 'Placas con ≥ 5 % del continente (por foto)', '{:.1f}'),
@@ -237,13 +241,6 @@ def main():
         v = [res[s][clave] for s in semillas]
         print(f'| {etiqueta} | {fmt.format(media(v))} | {desv(v):.3g} | '
               + ' | '.join(fmt.format(x) for x in v) + ' |')
-    print()
-    print('Fin de los márgenes pasivos, por causa (fracción de la longitud que termina; media de las semillas):')
-    for i, c in enumerate(CAUSAS):
-        print(f'  {c}: {media([res[s]["margen_fin_frac"][i] for s in semillas]):.3f}')
-    print('Fracción del margen pasivo medio que pasa a ser activo cada 100 Myr: '
-          f'invasión {media([res[s]["margen_activado_frac_100myr"][0] for s in semillas]):.3f}, '
-          f'choque {media([res[s]["margen_activado_frac_100myr"][1] for s in semillas]):.3f}')
     print()
     print('Serie cada 25 Myr (media de las semillas): Myr, masa mayor, distancia (km), ritmo (km/Myr), '
           'continente hacia la fosa')

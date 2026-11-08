@@ -2142,11 +2142,17 @@ fn diagnosticar_deriva(semilla: u64, variante: &str) -> InformeDeriva {
     inf.placas = ultima.n_placas;
     let anios = pasos as f64 * tc.dt_myr * 1e6;
     inf.desbordado = d.cuentas.sedimento_desbordado_km3 / anios;
-    let l_fin: f64 = val.iter().map(|m| m.margen_fin_km).sum();
-    inf.vida_margen = if l_fin > 0.0 {
-        val.iter().map(|m| m.margen_fin_vida_km_myr).sum::<f64>() / l_fin
-    } else {
+    // La vida de los márgenes como entidades que nacen en cada rift (por celdas de costa, el vaivén
+    // de la malla la falsea).
+    let vidas: Vec<f64> = d
+        .margenes_rift
+        .iter()
+        .filter_map(|m| m.fin_myr.map(|f| f - m.rotura_myr))
+        .collect();
+    inf.vida_margen = if vidas.is_empty() {
         f64::NAN
+    } else {
+        vidas.iter().sum::<f64>() / vidas.len() as f64
     };
     inf.edad_margen_final = ultima.edad_media_margen_myr;
     inf.edad_max_margen_final = ultima.edad_max_margen_myr;

@@ -173,10 +173,6 @@ pub struct MetricaMyr {
     pub edad_media_margen_myr: f64,
     #[serde(default)]
     pub edad_max_margen_myr: f64,
-    #[serde(default)]
-    pub margen_fin_km: f64,
-    #[serde(default)]
-    pub margen_fin_vida_km_myr: f64,
     /// Nota de rifts §8: bloques continentales que pueden romperse (de al menos `2·A_trozo,min`),
     /// fracción del continente en el mayor bloque, lados de rift que aún se estiran y, en los
     /// márgenes pasivos, el espesor de la corteza en la costa (km, media de los primeros 50 km) y la
@@ -221,11 +217,6 @@ pub struct MetricaMyr {
     pub margen_tect_m: [f64; 6],
     #[serde(default)]
     pub margen_area_km2: [f64; 6],
-    /// Margen pasivo que deja de serlo en el paso (km), por causa: invasión (fosa o convergencia
-    /// difusa cerca), choque, sin borde convergente cerca y muestra desaparecida (diagnóstico del
-    /// supercontinente).
-    #[serde(default)]
-    pub margen_fin_causa_km: [f64; 4],
 }
 
 /// Cuentas del material continental (km³) a lo largo de la deriva (adenda de balance §6 y §8).
@@ -365,6 +356,26 @@ pub struct ResumenTectonica {
     /// Diagnóstico del supercontinente: una foto cada 25 Myr (solo diagnóstico).
     #[serde(default)]
     pub fotos_supercontinente: Vec<FotoSupercontinente>,
+    /// Los márgenes pasivos como entidades: uno por cada lado de cada rift que se rompe.
+    #[serde(default)]
+    pub margenes_rift: Vec<MargenRift>,
+}
+
+/// Un margen pasivo como entidad (medida pedida por el responsable el 2026-11-08: el vaivén de la
+/// malla falsea la vida contada por celdas de costa). Nace cuando se rompe su lado del rift y
+/// termina cuando la mitad de sus celdas tiene un borde convergente cerca (por invasión o por un
+/// choque, según cuál cubra más) o cuando le queda menos del 10 % de las celdas que llegó a tener.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MargenRift {
+    /// Margen: `2·id + lado` (`Corteza::rift_id`).
+    pub rift_id: u32,
+    pub rotura_myr: f64,
+    /// Celdas continentales que llegó a tener.
+    pub celdas_max: u32,
+    /// Myr en que dejó de ser pasivo, y por qué (`invasion`, `choque` o `desaparece`); vacíos si
+    /// sigue pasivo.
+    pub fin_myr: Option<f64>,
+    pub causa: Option<String>,
 }
 
 /// Foto del diagnóstico del supercontinente (pedido del responsable el 2026-11-08; cada 25 Myr). Solo
@@ -505,10 +516,13 @@ pub struct BalanceMedio {
     pub choques_con_losa_au: f64,
     #[serde(default)]
     pub choques_sin_losa_au: f64,
-    /// Márgenes pasivos (v4 §8): longitud media (km); edad media ponderada por longitud y máxima
-    /// (Myr), media de los pasos y al final; vida media de los que terminan (Myr) y su ritmo
-    /// (km/Myr). Choques continente–continente que acaban: duración media ponderada por la corteza
-    /// solapada (Myr) y cuántos.
+    /// Márgenes pasivos (v4 §8), por sus celdas de costa (cada 25 Myr y al final): longitud media
+    /// (km); edad media del fondo de al lado, ponderada por longitud, y máxima (Myr), media de los
+    /// pasos y al final. Como entidades que nacen en cada rift ([`MargenRift`]): cuántos nacen y
+    /// terminan, vida media de los que terminan (Myr), fracción que termina por invasión, por choque
+    /// y porque desaparece, y edad media y máxima de los que siguen pasivos al final (Myr). Choques
+    /// continente–continente que acaban: duración media ponderada por la corteza solapada (Myr) y
+    /// cuántos.
     #[serde(default)]
     pub margen_pasivo_km: f64,
     #[serde(default)]
@@ -520,9 +534,17 @@ pub struct BalanceMedio {
     #[serde(default)]
     pub edad_max_margen_final_myr: f64,
     #[serde(default)]
-    pub vida_media_margen_myr: f64,
+    pub margenes_rift_nacidos: u32,
     #[serde(default)]
-    pub margen_terminado_km_myr: f64,
+    pub margenes_rift_terminados: u32,
+    #[serde(default)]
+    pub vida_media_margen_rift_myr: f64,
+    #[serde(default)]
+    pub margen_rift_fin_frac: [f64; 3],
+    #[serde(default)]
+    pub edad_media_margen_rift_final_myr: f64,
+    #[serde(default)]
+    pub edad_max_margen_rift_final_myr: f64,
     #[serde(default)]
     pub duracion_media_choques_myr: f64,
     #[serde(default)]

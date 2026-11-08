@@ -22,7 +22,14 @@ binario = "terreno"
 descripcion = "el planeta por defecto (relieve tectónico, incremento 4), un año, con el volcado por celda para medir la sombra pluviométrica"
 config = "config/terreno.toml"
 ajustes = ["run.dump_world=true", "run.dump_climate=true"]
-presupuesto_s = 275   # ~20 s con la génesis en caché; si hay que recalcularla, 243 s solo y ~250 con los demás escenarios a la vez. Subido por el responsable: de 200 a 250 el 2026-11-07 (flujo lateral con D_0 = 400 y la corteza que retiene la adenda v7) y a 275 el 2026-11-08 (las placas y bordes de más de los rifts)
+# Regla relativa del tiempo (decisión del responsable, 2026-11-08): el planeta no puede ser más de un
+# 5 % más lento que la versión anterior medida en la misma tanda (las dos a la vez, sin nada más y sin
+# la caché de la génesis), con un techo absoluto de 330 s con el planeta solo (se comprueba con el
+# tiempo de la tanda, algo mayor). Sustituye al presupuesto fijo, que pasó
+# de 200 a 250 (2026-11-07) y a 275 s (2026-11-08): el tiempo de la máquina varía ~13 % de un momento a
+# otro (la versión ba3609c dio 256 s y, horas después, 288,6).
+presupuesto_relativo = 0.05
+techo_s = 330
 
 # Márgenes del 2026-11-05 con el relieve tectónico (incremento 4; incremento-4-diseno.md §8). Se
 # movieron a propósito al cambiar el relieve: el valor anterior (relieve de ruido) va en cada nota. La
