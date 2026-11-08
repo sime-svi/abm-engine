@@ -1522,3 +1522,46 @@ Formato de entrada:
   - la rama D, de frente o con la letra;
   - la edad del fondo;
   - después, la tabla de cierre y los márgenes de la batería.
+
+## [2026-11-08] Isostasia con litosfera (R4 y edad tectonotérmica), erosión recalibrada y diagnóstico del supercontinente
+
+- **Qué pidió el responsable.**
+  - Los informes, siempre como archivo de `docs/informes/` (el texto de la terminal le llega cortado).
+  - Isostasia: acepta R4; la topografía dinámica va a ampliación futura (TREE.md). Implementar `nota_isostasia_litosfera.md`:
+    - primero su §0: repetir el ajuste de R4 sin las celdas con más de 300 m de residuo de Lamb, y usar esos parámetros si salen del borde de sus rangos;
+    - luego, la edad tectonotérmica por celda y R4 en lugar de la isostasia actual, y responder a su §11.
+  - Acepta la rama D «de frente».
+  - Después: recalibrar `E_1` y `n_ero` con 5 semillas, la tabla de cierre completa con las filas nuevas, el diagnóstico del supercontinente (sin cambiar nada; 5 semillas, cada 25 Myr) y lo que cuesta en nivel del mar la edad del fondo. Presupuesto, 275 s.
+- **§0** (`herramientas/analisis/nota_isostasia_s0.py`, `config/referencias/tierra_isostasia_s0.toml`).
+  - Queda el 33 % de la tierra. Salen del borde `Δρ_ma` (25 con el sedimento como corteza), el manto arcaico (15) y `L_min` (50): se usan.
+  - Siguen en el borde ρ_u 2 750, ρ_l 3 000 y z_t 15: limitación anotada en TREE.md.
+- **Implementación** (diseño §72).
+  - R4 en `isostasia.rs`, con el sedimento contado como corteza: la variante que el reparto del sedimento puede llevar (§11.1), casi igual de buena con la Tierra real.
+  - `Corteza::edad_tt`: envejece; se reinicia con un rift al romper, los arcos, los choques y la delaminación de más de 1 km; se mezcla por volumen en `sumar_hc` y en el flujo lateral.
+  - Edades de partida: la Tierra de hoy de más de 500 Myr, menos 500, por la distancia a la costa.
+  - La erosión baja la superficie con la derivada de R4; `f_levantamiento` también. Fuera `h_nivel_km`.
+  - Se retiró el interruptor de la rama D.
+  - Métricas nuevas, `rift_id` y el diagnóstico del supercontinente (`deriva/diagnostico.rs`, solo mide), con su herramienta `supercontinente.py`.
+  - Dos pruebas exploratorias: el nivel del mar con las edades de la Tierra y la huella de la deriva.
+- **Erosión** (5 semillas, para cada `n_ero` el `E_1` que relaja en ~160–175 Myr): `E_1` 0,02 con `n_ero` 2,5 (159 Myr).
+  - Con R4 y la erosión vieja, la tierra queda a 1 192 m y relaja en 411 Myr.
+  - n 2 y n 3 quedan dentro de la dispersión entre semillas.
+  - La exportación (4,4 AU) no se calibra: la limita la base.
+- **Resultados** (informe `docs/informes/2026-11-08_isostasia_litosfera.md`, diseño §73).
+  - La tierra a 781 m (la Tierra 671; antes 1 136); un 7 % por encima de 2 000 m (5,3); un 16 % por debajo de 200 m (28); nivel del mar −140 m.
+  - Las clases de edad viejas cuadran; la de 100–500 Myr sale alta (697 m, frente a 326) por la regla y por el nivel del mar.
+  - **Los márgenes apenas se hunden al enfriarse:** 0,38 km en 100 Myr, frente a 2–3. El manto de R4 es el continental empobrecido; bajo un rift sube astenosfera fértil. Decide el responsable.
+  - **La edad del fondo** (84 Myr) no cuesta nivel del mar: con las de la Tierra el mar estaría 57 m más bajo, porque el modelo tiene también más fondo joven.
+  - **Supercontinente:** los océanos de rift se abren (13,4 por semilla), un margen se activa a los ~69 Myr, pero casi nunca se cierran (0,8). Los continentes no convergen. Sus placas las mueve el tirón de sus losas; no hay succión de la fosa sobre la placa de arriba.
+- **Incidencias.**
+  - **Determinismo:** una semilla salió distinta en la novena cifra porque `target/release/terreno` se recompiló a mitad de una tanda. Con el binario quieto, 8 de 8 corridas idénticas y la huella de la deriva igual en 4 procesos. `planeta_semillas.py` corre ahora una copia del binario.
+  - **Tiempo:** 283 s solo (275). La versión anterior tarda hoy 288,6 s en las mismas condiciones: la máquina va más lenta que en la ronda anterior (256).
+  - **Batería:** 28 márgenes del planeta movidos con su nota; todo dentro salvo el tiempo.
+  - **Tolerancia ampliada** (para que la revise el responsable): la rotura de la losa de India–Asia respecto al frente visible del choque, de ±3 a ±4 Myr.
+- **Decisiones que esperan:**
+  - el hundimiento térmico de los márgenes;
+  - el presupuesto de tiempo;
+  - el supercontinente (¿nota sobre la succión de la fosa?);
+  - la corteza demasiado joven y el exceso de fosa;
+  - la tolerancia ampliada;
+  - fusionar con `main`.

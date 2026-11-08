@@ -7,7 +7,7 @@
 > Complementa a `TREE.md` (qué archivos hay) y a los documentos de `docs/design/` (el porqué de cada
 > regla). Se actualiza en cada ronda que añade, quita o reordena una regla.
 
-Última actualización: 2026-11-08 (tercera ronda) — rama `terreno-demografia-placas`, sin fusionar con `main`: nota de demografía de placas v2 (fuera la soldadura A1; subducción de dorsales, rama D, con la fosa delante de la dorsal) y nota de rifts v2 (reloj de cada bloque continental). Estudio de isostasia continental (Lamb et al. 2020 y reglas R0–R4) con la Tierra real, sin cambiar el motor: decide el responsable. En `main` (7c54bbd) la etapa 12 tiene la absorción de toda placa de menos de `A_min` sin losa y los rifts sin reloj.
+Última actualización: 2026-11-08 (cuarta ronda) — rama `terreno-demografia-placas`, sin fusionar con `main`: isostasia con litosfera (regla R4 del estudio de isostasia continental) con la edad tectonotérmica de cada celda; erosión recalibrada (`E_1` 0,02); diagnóstico del supercontinente (solo mide). Antes, en esta rama: nota de demografía de placas v2 (sin la soldadura A1; subducción de dorsales, rama D, con la fosa delante de la dorsal, ya sin interruptor) y nota de rifts v2 (reloj de cada bloque continental). En `main` (7c54bbd): la isostasia vieja (`h_nivel` 32 km), la absorción de toda placa de menos de `A_min` sin losa y los rifts sin reloj.
 
 Leyenda del estado de un parámetro (CLAUDE §2.8):
 - **medido**: lleva su valor físico real;
@@ -68,6 +68,7 @@ conservan exactamente: la deriva nunca copia corteza.
 | # | Etapa | Qué hace | Código | Diseño |
 |---|---|---|---|---|
 | 1 | Velocidades | Equilibrio de fuerzas por placa: tirón de la losa, empuje de dorsal, rozamiento basal (recalibrado a `v_obj`), resistencia de los choques | `velocidades` | principal §6.2; nota de fosas v2 |
+| 0 | Edad tectonotérmica | Toda la corteza envejece Δt; la edad vuelve a 0 donde la calientan un rift al romper, un arco, un choque o una delaminación de más de `ε_del`, y se mezcla por volumen al juntar corteza | `envejecer_tt`; los reinicios, en `estirar_rifts`, `procesos_de_fosa`, `engrosar_choques` y `delaminar`; la mezcla, en `sumar_hc` y `flujo_lateral` | nota de isostasia con litosfera §6.1–6.3 |
 | 2 | Giro | Cada placa gira con su velocidad angular (y el empujón de apertura de un rift) | `dar_paso` | principal §6.1 |
 | 3 | Rasterizar, solapes, dientes, huecos | Qué placa ve cada celda del mundo; los solapes se consumen (fosa) o chocan; los dientes de borde se recolocan; los huecos se rellenan con fondo nuevo | `rasterizar`, `resolver_solapes`, `recolocar_dientes`, `rellenar_huecos`, `reconstruir_mapas` | nota de bordes |
 | 4 | Rifts que se estiran | La abertura de un rift joven se rellena estirando la corteza de sus bordes en rampa hasta la rotura | `rifts.rs: estirar_rifts` | adenda v8 §6.10 |
@@ -77,10 +78,10 @@ conservan exactamente: la deriva nunca copia corteza.
 | 8 | Choques | Lo que se solapa en un choque se queda arriba con `η = a·η_arco + (1 − a)·η(h)` y engruesa el frente | `reconstruir_mapas`, `engrosar_choques` | adenda §6.5 (v7 y v9) |
 | 9 | Delaminación | La raíz de más de `h_del` se desprende | `delaminar` | adenda §6.6 |
 | 10 | Flujo lateral | La corteza inferior de más de `h_flujo` se desparrama: `D = D_0·(c/c_ref)³` | `flujo_lateral` | adenda v6 §6.6b |
-| 11 | Erosión y sedimento | `E = E_1·z^n_ero` en la tierra emergida; nivel del mar con el agua de la Tierra; el sedimento va a las cuencas cerradas y al mar abierto, hasta la plataforma | `erosion_y_envejecimiento`, `nivel_del_mar`, `sedimento_al_mar` | adenda v5 §6.7 |
+| 11 | Erosión y sedimento | `E = E_1·z^n_ero` en la tierra emergida; las alturas con la isostasia de la litosfera en los continentes (regla R4: corteza más densa abajo y manto litosférico del grosor de su edad tectonotérmica) y con la curva de la placa en el océano; nivel del mar con el agua de la Tierra; el sedimento va a las cuencas cerradas y al mar abierto, hasta la plataforma | `erosion_y_envejecimiento`, `isostasia.rs: altura`, `nivel_del_mar`, `sedimento_al_mar` | adenda v5 §6.7; nota de isostasia con litosfera §6.4 |
 | 12 | Eventos de placas | Suturas (dos placas en choque lento se funden; reinician el reloj de los bloques que se juntan), rifts (por bloques y por suturas, con la probabilidad que crece con el tiempo que el bloque lleva unido), subducción de dorsales (una dorsal con la fosa delante a menos de `d_dc`: su franja pasa a la placa del otro lado y la fosa se apaga), captura de microplacas, saltos de dorsal | `suturas`, `rifts.rs: rifts`, `subduccion_de_dorsales`, `capturas`, `saltos_de_dorsal` | principal §6.4–6.5; nota de rifts v2; nota de demografía de placas v2 (A2 y rama D) |
 | 13 | Fosas | Estado de cada tramo convergente: nacimiento inducido, muerte, rotura de la losa; invasión de transformantes y márgenes pasivos; nacimientos espontáneos | `fosas.rs: avanzar_fosas`, `invadir`, `nacimientos_espontaneos` | nota de fosas v6 |
-| 14 | Métricas | Métricas del Myr, balance de la corteza (error ~10⁻¹⁵), márgenes pasivos y su perfil, bloques continentales | `metricas_del_paso` | adenda §8; notas |
+| 14 | Métricas | Métricas del Myr, balance de la corteza (error ~10⁻¹⁵), márgenes pasivos y su perfil, bloques continentales, la tierra por clase de edad tectonotérmica y los márgenes estirados por tiempo desde la rotura; cada 25 Myr, la foto del diagnóstico del supercontinente (solo mide) | `metricas_del_paso`, `diagnostico.rs` | adenda §8; notas; nota de isostasia con litosfera §8 |
 
 **Parámetros que mandan** (`[tectonica]` de `config/terreno.toml`, donde cada uno lleva su origen):
 
@@ -88,22 +89,24 @@ conservan exactamente: la deriva nunca copia corteza.
 |---|---|---|
 | Planeta y agua | `gel_m` 2 617 m, `f_cont` 0,40 al empezar | medido; supuesto |
 | Isostasia y fondo | densidades; curva de profundidad (`d_inf` 5 310, `a_pl` 2 373, `τ_pl` 31) | medido; ajustado al zócalo real (Seton, GlobSed) |
-| Isostasia continental | `h_nivel` 32 km (corteza a nivel del mar), con `ρ_c`, `ρ_s` y `ρ_m` | supuesto (relación empírica). **Con la corteza real de CRUST1.0 no da el relieve real** (la tierra al doble de altura). El estudio de isostasia continental (tercera ronda del 2026-11-08) propone una regla de litosfera completa (R4: litosfera de la edad tectonotérmica, corteza más densa abajo y sedimento de relleno), que aún no cumple todos sus criterios: decide el responsable |
+| Isostasia continental (R4) | `ρ_ast` 3 255; `ρ_c_sup` 2 750 hasta `z_t` 15 km y `ρ_c_inf` 3 000 debajo; `Δρ_ma` 25 (arcaico 15, desde `t_arc` 2 500 Myr); `L = L_min + (93,6 + 0,04·t − L_min)·(1 − e^(−t/τ_L))` con `L_min` 50 y `τ_L` 100; `H_0` 3 077 m; el sedimento cuenta como corteza | ajustados a la Tierra real (Lamb et al. 2020, TC1 y CRUST1.0) sin las celdas de topografía dinámica (comprobación del §0 de la nota). **`ρ_c_sup`, `ρ_c_inf` y `z_t` quedan en el borde de sus rangos publicados** (limitación conocida, TREE.md). La topografía dinámica, ampliación futura |
+| Edad tectonotérmica | `ε_del` 1 km; edades de partida: la Tierra de hoy de más de 500 Myr, menos 500, las más viejas en el interior de cada continente | supuesto; medido (tipos de CRUST1.0 con las provincias de Artemieva y Mooney) |
 | Fuerzas | `f_sp`, `f_rp`; `c_col` 90 000; `v_obj` 4,39 cm/año | supuesto; calibrado (India–Asia); medido (NNR-MORVEL56) |
 | Bordes | `θ_tr` 20°; `L_borde` 150 km | medido (Bird); calibrado (longitudes de Bird) |
 | Fosas | `X_ini` 150 km; `τ_muerte` 10; `λ_esp` 4·10⁻⁶; `v_inv` 25 km/Myr; `a_inv` 60; `t_rot` 10–25 Myr | supuesto (rango de modelos); supuesto; calibrado (vida de los márgenes) |
 | Arcos y erosión por subducción | `p_arc_oc` 1,2, `p_arc_cont` 0,8, `p_se` 0,4; `f_acr` 0,2 | medido (Clift et al. 2009); calibrado |
 | Choques | `η_arco` 0,9; `η_min` 0,5 (techo), `h_1` 20, `h_2` 35 | medido (Luzón–Taiwán); calibrado; físico |
 | Delaminación y flujo | `h_del` 50; `τ_del` 25; `h_flujo` 50; `D_0` 400 | físico; calibrado; físico; calibrado (India–Asia, 70–80 km) |
-| Erosión | `E_1` 0,0075; `n_ero` 2,5 | calibrado (relajación de un orógeno en 100–200 Myr); rango de Montgomery y Brandon |
+| Erosión | `E_1` 0,02; `n_ero` 2,5 | calibrado con la isostasia nueva (relajación de India–Asia en 159 Myr; 100–200); `n_ero`, rango de Montgomery y Brandon (2 y 3 dan lo mismo dentro de la dispersión entre semillas) |
 | Rifts | `λ_A` 4·10⁻⁴; `τ_ais` 100 Myr (reloj del bloque, nota de rifts v2); `A_trozo,min` 0,5 Mkm²; `L_sut,min` 450 km; `W_m` 150; `h_rot` 10 | calibrado (placas de ≥ 1 %: 13,8 frente a 13 de Bird); supuesto (no se forma ningún supercontinente con que calibrarlo); físico; numérico; físico |
-| Muerte de placas | `A_micro` 0,5 Mkm², `τ_micro` 10 Myr (A2); `d_dc` 300 km y `θ_dc` 45° (rama D; interruptor `subduccion_dorsales`) | supuestos; `θ_dc`, geométrico (la fosa delante de la dorsal, no a su costado) |
+| Muerte de placas | `A_micro` 0,5 Mkm², `τ_micro` 10 Myr (A2); `d_dc` 300 km y `θ_dc` 45° (rama D, de frente, aceptada por el responsable) | supuestos; `θ_dc`, geométrico (la fosa delante de la dorsal, no a su costado) |
 
 ### 2.3 Del estado final de la deriva al relieve
 
 `tectonica/mod.rs: estado_final` interpola la corteza, el sedimento, la edad y las fosas de la malla
 tectónica (nivel 2, ~52 km) a las celdas del terreno y calcula la altura isostática. El ruido de
-detalle fino continúa el espectro real (ETOPO), según la altura.
+detalle fino continúa el espectro real (ETOPO), según la altura. El levantamiento de la génesis
+geológica usa la derivada de R4 en corteza gruesa (`(ρ_ast − ρ_c_inf + Δρ_ma)/ρ_ast` = 0,086).
 
 ---
 
@@ -143,12 +146,14 @@ Rebrote, orden, forrajeo, reproducción, mortalidad y aplicación de cambios
   - `no_regresion.sh`;
   - `planeta_semillas.py` (tabla de cierre con 5 semillas);
   - `analisis/tierra_regla_modelo.py` y `analisis/tierra_corteza_regla.py` (la Tierra real con la regla del modelo: el océano y los continentes);
-  - `analisis/estudio_isostasia.py` (estudio de isostasia continental: Lamb et al. 2020 y las reglas R0–R4);
+  - `analisis/estudio_isostasia.py` (estudio de isostasia continental: Lamb et al. 2020 y las reglas R0–R4) y `analisis/nota_isostasia_s0.py` (su ajuste sin la topografía dinámica, la Tierra por clase de edad y las edades de partida);
+  - `analisis/supercontinente.py` (diagnóstico del supercontinente, sobre las corridas de `planeta_semillas.py`);
   - `analisis/`.
 - **Diagnósticos de la tectónica:** las pruebas `#[ignore]` de `crates/abm-terreno/tests/tectonica.rs`:
   - `deriva_en_varias_semillas`;
   - `diagnostico_demografia_placas`;
   - `diagnostico_procedencia_del_fondo`;
+  - `diagnostico_nivel_del_mar_y_edad_del_fondo` (el nivel del mar con las edades del fondo del modelo y con las de la Tierra);
   - `calibracion_*`.
 - **Diseño y resultados:** `docs/design/<fase>/`, con su `README.md` en lenguaje llano y la nota técnica de cada incremento.
 - **Informes de cada ronda:** `docs/informes/`.
@@ -161,7 +166,9 @@ Rebrote, orden, forrajeo, reproducción, mortalidad y aplicación de cambios
 - **Agentes:** incremento 1 y revisión 1 hechos; siguen las cohortes y los individuos persistentes.
 - **Terreno:** incrementos 1–3 cerrados.
   - El 4 (relieve tectónico) está en medida: antes de congelarlo se arregla el exceso de fosas (nota de demografía de placas).
-  - **La base de la isostasia continental falla con la corteza real** (segunda ronda del 2026-11-08). El estudio de isostasia continental (tercera ronda) da la regla que más se acerca, sin cumplir todos sus criterios: decide el responsable.
-  - Nota de demografía v2 y nota de rifts v2 implementadas (tercera ronda): placas grandes en número terrestre (13,8), fosa ×1,40 y 3,55 km²/año; el fondo envejece (110 Myr al final). Sin la tabla de cierre del relieve, que espera a la isostasia.
-  - Lejos de la Tierra quedan la longitud de fosa y el fondo que se hunde, el relieve demasiado alto, el sedimento al mar, la pérdida en los choques y los márgenes pasivos del estado inicial.
-  - Ver `docs/design/terreno/incremento-4-diseno.md` §65 y el informe de la ronda en `docs/informes/`.
+  - **Isostasia con litosfera** (cuarta ronda del 2026-11-08): la regla R4 con la edad tectonotérmica de cada celda y la erosión recalibrada (`E_1` 0,02). La tierra baja a 781 m de media (la Tierra 671) y a un 7 % por encima de 2 000 m (5,3 %); el nivel del mar, a −140 m. **Los márgenes estirados casi no se hunden al enfriarse** (0,38 km en 100 Myr, frente a 2–3): decide el responsable.
+  - Diagnóstico del supercontinente (cuarta ronda): los océanos de rift se abren pero casi nunca se cierran, y los continentes no convergen; el modelo no tiene succión de la fosa sobre la placa de arriba.
+  - Nota de demografía v2 y nota de rifts v2 implementadas (tercera ronda).
+  - Lejos de la Tierra quedan la longitud de fosa (×1,7) y el fondo que se hunde, la tierra baja y la plataforma, el sedimento al mar, la pérdida en los choques, los márgenes pasivos y una corteza demasiado joven (el 71 % de la tierra de menos de 500 Myr).
+  - El planeta tarda 283 s solo (presupuesto 275); la versión anterior, 288,6 s el mismo día.
+  - Ver `docs/design/terreno/incremento-4-diseno.md` §73–§74 y el informe de la ronda en `docs/informes/`.

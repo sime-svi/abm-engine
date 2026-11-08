@@ -1884,3 +1884,107 @@ Protocolo del responsable: `estudio_isostasia_continental.md`. Herramienta: `her
 3. **La edad del fondo** (110 Myr al final con el reloj de los rifts; objetivo ≤ 88).
 4. **La tabla de cierre del relieve y los márgenes de la batería**, tras la isostasia.
 5. Lo que sigue de §65.
+
+## 72. Isostasia con litosfera: implementación (nota_isostasia_litosfera.md; 2026-11-08, cuarta ronda)
+
+Decisiones del responsable de esta ronda: se acepta R4; la topografía dinámica pasa a ampliación futura (TREE.md); la rama D se queda «de frente» (franja de delante de la dorsal) y se retira su interruptor.
+
+### 72.1 Comprobación del §0 (`herramientas/analisis/nota_isostasia_s0.py`)
+
+Se repite el ajuste de R4 sin las celdas de tierra donde la regla de Lamb et al. (2020), con la litosfera observada, deja más de 300 m de residuo: queda el 33 % de la tierra (5 735 de 19 710 celdas de 1°). Descenso por coordenadas sobre los rangos publicados.
+
+| | ρ_u | ρ_l | z_t | Δρ_ma | Δρ arcaico | L_min | τ_L | H_0 | Error medio (toda la tierra / ajuste) |
+|---|---|---|---|---|---|---|---|---|---|
+| Estudio (todas las celdas) | 2 750 | 3 000 | 15 | 20 | 10 | 40 | 100 | 3 005 | 432 / 432 m |
+| §0, sin la topografía dinámica | 2 750 | 3 000 | 15 | 20 | 15 | 50 | 100 | 3 051 | 435 / 288 m |
+| **§0, el sedimento como corteza (el motor)** | **2 750** | **3 000** | **15** | **25** | **15** | **50** | **100** | **3 077** | **449 / 285 m** |
+
+- Salen del borde `Δρ_ma` (con el sedimento como corteza), el manto arcaico y `L_min`: se usan los valores del §0.
+- **Siguen en el borde ρ_u, ρ_l y z_t**: se anota en TREE.md como limitación conocida.
+- Validación cruzada entre mitades (sin la dinámica): 468 m en B y 444 m en A.
+
+### 72.2 La regla en el motor (`isostasia.rs`)
+
+Para una columna continental de corteza `h` con su sedimento `s` (que cuenta como corteza: `h_tot = h + s`), sobre una litosfera de `L(t)` km:
+
+- `B = (ρ_a − ρ_u)·min(h_tot, z_t) + (ρ_a − ρ_l)·max(0, h_tot − z_t) − Δρ_ma(t)·max(0, L(t) − h_tot)`;
+- `L(t) = L_min + (l0 + l_pend·t − L_min)·(1 − e^(−t/τ_L))` (Artemieva 2006 con la recuperación de R3b);
+- `Δρ_ma(t) = Δρ_ma,arcaico` si `t > t_arc` (2 500 Myr), si no `Δρ_ma`;
+- `H = 1000·B/ρ_a − H_0`; bajo el mar, `H·ρ_a/(ρ_a − ρ_w)`.
+
+El océano sigue igual (curva de la placa ajustada y flotación de los arcos). Con la regla cambian también:
+
+- **la erosión:** lo que baja la superficie por km de roca quitada es la derivada de `B` (`isostasia::baja_por_km`: `(ρ_a − ρ_l + Δρ_ma)/ρ_a` = 0,086 en una corteza gruesa, antes 0,15);
+- **el reparto del sedimento:** cuánto sedimento lleva una columna hasta una cota se calcula con su propia isostasia (`sedimento_hasta_columna`), con la misma bisección de antes;
+- **el levantamiento de la génesis geológica** (`f_levantamiento`): la derivada en corteza gruesa, 0,086 (antes 0,15).
+- Se retira `h_nivel_km` y la regla vieja (R0). El rebote de la erosión de la génesis geológica (`f_rebote` = ρ_c/ρ_m) no cambia.
+
+### 72.3 La edad tectonotérmica (`Corteza::edad_tt`)
+
+- **Envejece** al principio de cada paso (también en los pasos de prueba sin movimiento y cinemáticos).
+- **Vuelve a 0** donde actúa un evento: la franja estirada de un rift al romper (`estirar_rifts`), las celdas de arco que reciben corteza, la franja que engruesa un choque y las celdas que pierden más de `ε_del` = 1 km por delaminación en el paso. La corteza que rellena la abertura de un rift nace con edad 0.
+- **Se mezcla por volumen** al juntar corteza (`sumar_hc`: dientes, fusión, islas, convergencia difusa, con la edad de la corteza que llega; arcos, acreción y choques con edad 0) y viaja con el volumen en el flujo lateral (como la fracción de arco). Una columna oceánica que pasa a continental toma la edad de su corteza de tipo continental.
+- **Edades de partida:** la distribución de la Tierra de hoy con las edades de más de 500 Myr, menos 500 (tipos de CRUST1.0 con las edades de las provincias de Artemieva y Mooney; el TC1 libre de 5° no trae edades, y la inversión de su grosor con la recta de Artemieva sirve de comprobación). Dentro de cada continente de partida, las celdas se ordenan de la más interior a la más costera (distancia a la costa por dentro del continente, desempate por índice) y la fracción de área que queda por dentro de cada una le da su cuantil.
+
+### 72.4 Medidas nuevas
+
+- Por paso (`MetricaMyr`): fracción del continente por clase de edad (0–100, 100–500, 500–1 600, 1 600–2 500, > 2 500 Myr), altura y área de la tierra por clase, área reiniciada por causa, y los márgenes estirados distales (corteza de menos de 20 km con su rift) por tiempo desde la rotura (0–20, 20–50, 50–80, 80–120, 120–200, > 200 Myr): profundidad del agua y del basamento sin el sedimento (lo que da el «backstripping», comparable con McKenzie 1978).
+- `Corteza::rift_id` (diagnóstico): el margen de rift de cada muestra, `2·id + lado`.
+- Diagnóstico del supercontinente (`deriva/diagnostico.rs`, solo mide): una foto cada 25 Myr (`fotos_supercontinente`) y el fin de los márgenes pasivos por causa (`margen_fin_causa_km`). Lo resume `herramientas/analisis/supercontinente.py`.
+- Coste de la edad del fondo en el nivel del mar: `diagnostico_nivel_del_mar_y_edad_del_fondo` (prueba exploratoria), con las edades del modelo y con las de Seton et al. (2020) en los mismos cuantiles.
+
+### 72.5 Pruebas
+
+1. **Regla aislada:** `la_isostasia_con_litosfera_da_los_numeros_del_estudio` (siete columnas; a 0,1 m de `estudio_isostasia.py`).
+2. **Margen:** `un_margen_estirado_se_hunde_al_envejecer` (la regla) y, en `un_rift_estira_sus_bordes…`, que las franjas llevan su margen a cada lado y su edad cuenta desde la rotura.
+3. **Conservación:** `la_mezcla_de_edades_es_por_volumen_y_no_cambia_ningun_volumen`; el balance exacto de las pruebas de la deriva sigue en 10⁻⁹.
+4. **Determinismo:** `las_edades_tectonotermicas_de_partida_son_viejas_por_dentro_y_deterministas`, y las de siempre.
+
+## 73. Isostasia con litosfera: resultados (5 semillas; informe `docs/informes/2026-11-08_isostasia_litosfera.md`)
+
+### 73.1 Erosión recalibrada
+
+Con R4 y la erosión vieja (`E_1` 0,0075), India–Asia relaja en 411 Myr y la tierra queda a 1 192 m: un engrosamiento levanta la tierra 0,086 km por km (antes 0,15) y la erosión la gasta más despacio. Para cada `n_ero`, el `E_1` que relaja en ~160–175 Myr:
+
+| | n 2, E_1 0,03 | **n 2,5, E_1 0,02** | n 3, E_1 0,01 |
+|---|---|---|---|
+| Relajación | 166 Myr | **159** | 174 |
+| Altura media de la tierra (671) | 736 m | **781** | 948 |
+| Tierra < 200 m / > 2 000 m | 0,189 / 0,070 | **0,162 / 0,070** | 0,128 / 0,101 |
+| Nivel del mar | −172 m | **−140** | −229 |
+| Sedimento al mar (≈1,8) | 4,7 AU | **4,4** | 3,7 |
+| Cambio de volumen; corteza máxima al final | −11,7 %; 85 km | **−7,4 %; 78** | −8,8 %; 79 |
+
+Se queda `n_ero` 2,5 con `E_1` 0,02: las diferencias con n 2 están dentro de la dispersión entre semillas. La exportación no se calibra: la limita lo que añaden arcos y choques (§63).
+
+### 73.2 Tabla de cierre y criterios de la nota (§10)
+
+| Criterio | Planeta | Objetivo | |
+|---|---|---|---|
+| Altura media de la tierra | 781 ± 67 m | 671 ± 100 | ✗ (por 10 m) |
+| Tierra < 200 m; > 2 000 m | 0,162; 0,070 | no peor que R4 con la Tierra (0,222; 0,031) | ✗; ✓ |
+| Plataforma | 9,7 km | no peor que R4 con la Tierra (33,0) | ✗ |
+| Altura por clase de edad | 1 484 / 697 / 450 / 401 / 482 m | 1 247 / 326 / 491 / 421 / 543 ± 300 | 4 de 5 |
+| Hundimiento de los márgenes en 100 Myr | 0,38 km (basamento sin sedimento) | 2–3 km | ✗ |
+| Distribución de edades | 71 % de la tierra de menos de 500 Myr | TC1 (45 %) | blando: joven |
+| Nivel del mar | −140 ± 60 m | ≥ −150 | ✓ |
+
+El resto de la tabla, en el §4 del informe: fondo de 84 Myr de media (12 % de más de 180), fosa 85 200 km, `f_cont` 0,326 y −7,4 % de volumen, 18,8 placas de ≥ 1 % (13,8 con n 2: varía mucho con 5 semillas).
+
+### 73.3 Hallazgos
+
+- **Los márgenes no se hunden al enfriarse** (§6 del informe). El hundimiento inicial (~1,8 km) es el de McKenzie, pero el térmico es 0,34 km en 100 Myr: `Δρ_ma·ΔL/(ρ_a − ρ_w)` con el manto continental empobrecido (25 kg/m³, de 50 a 80 km). Bajo un rift sube astenosfera fértil que se enfría como el fondo oceánico (~70 kg/m³ desde ~0 km). Hace falta un cambio de la regla: decide el responsable.
+- **Las clases viejas cuadran** (a menos de 70 m de la Tierra). La de 100–500 Myr sale alta por la regla (+120–160 m también con la corteza real) y por el nivel del mar (−140 m, frente a +34 con la Tierra real). No es el estado inicial: toda esa tierra nace o se reinicia en la deriva.
+- **La edad del fondo no cuesta nivel del mar** (§7 del informe): con las edades de la Tierra en los mismos cuantiles, el mar estaría 57 m más bajo. El fondo viejo de más (14 % de más de 160 Myr) hunde el fondo medio 75 m, pero hay menos fondo de edad media y más fondo joven, que lo suben 120 m.
+- **Supercontinente** (§8 del informe): los océanos de rift se abren (13,4 por semilla) y un margen se activa a los ~69 Myr, pero solo 0,8 por semilla se cierran. Los continentes no convergen (+1,1 km/Myr). Sus placas las mueve el tirón de sus propias losas (77 % de la potencia); no hay succión de la fosa sobre la placa de arriba.
+- **Determinismo:** una corrida salió distinta en la novena cifra de la génesis porque el binario se recompiló a mitad. La deriva da la misma huella en 4 procesos y el planeta lo mismo en 8 corridas con el binario quieto. `planeta_semillas.py` corre ahora una copia del binario.
+- **Tiempo:** 283 s solo (275). La versión anterior tarda hoy 288,6 s en las mismas condiciones: la máquina va más lenta que en la ronda anterior (256 s). En la deriva, +9 s (eventos de placas, métricas nuevas, rasterización, fosas) y −14 s en el reparto del sedimento; el resto de la génesis, −14 s.
+
+## 74. Pendientes (2026-11-08, cuarta ronda; decide el responsable)
+
+1. **El hundimiento térmico de los márgenes** (§73.3): manto térmico para la litosfera nueva bajo los rifts (McKenzie), R4 con dos capas de manto o limitación anotada.
+2. **El presupuesto de tiempo** (283 s solo hoy, también la versión anterior se pasa: 288,6 s).
+3. **El supercontinente:** los océanos de rift no se cierran; falta la succión de la fosa sobre la placa de arriba.
+4. **La corteza demasiado joven** (71 % de la tierra de menos de 500 Myr) y el exceso de fosa (×1,7).
+5. La tolerancia ampliada de `la_losa_sigue_tirando_tras_el_choque_y_se_rompe_a_los_t_rot` (±4 Myr).
+6. Fusionar con `main`.

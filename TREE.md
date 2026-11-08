@@ -34,6 +34,7 @@ abm/
 │   │   ├── [x] tierra_nivel_mar.toml # La Tierra real con la regla del modelo: nivel del mar, zócalo por edad y curvas de placa ajustadas; escalones de edad (zonas de fractura)
 │   │   ├── [x] tierra_corteza.toml # La corteza real (CRUST1.0) con la isostasia del modelo: relieve, por grosor y por tipo de corteza, residuo frente a LITHO1.0
 │   │   ├── [x] tierra_isostasia.toml # Estudio de isostasia continental: reproducción de Lamb et al. (2020) y reglas R0–R4 con validación cruzada
+│   │   ├── [x] tierra_isostasia_s0.toml # Comprobación del §0 de la nota de isostasia con litosfera: R4 sin la topografía dinámica, la Tierra por clase de edad y las edades de partida
 │   │   └── [x] tierra_lluvia.toml  # Lluvia observada (WorldClim, CHELSA) a 26 km con las definiciones del planeta
 │   └── experiments/
 │       └── [x] terreno_relieve_ruido.toml # Relieve de ruido: referencia de la no regresión mientras se mide (se borra con el interruptor)
@@ -80,16 +81,17 @@ abm/
 │   │   │   └── tectonica/           # Relieve tectónico (incremento 4): deriva de placas → relieve de nacimiento
 │   │   │       ├── [x] mod.rs       # Génesis tectónica, estado final, interpolación a las celdas del terreno
 │   │   │       ├── [x] malla.rs     # Malla tectónica (nivel 2 del cubo) y cuaterniones
-│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques con η según el grosor (adenda v7) y el origen de arco por fracción (adenda v9), delaminación, flujo lateral cúbico (adenda v6; la red se amplía en vez de rehacerse), erosión, sedimento (solo al océano mundial), eventos (con la soldadura de placas y la captura de microplacas de la nota de demografía, en su rama), márgenes pasivos y su perfil; procedencia de cada muestra (diagnóstico: cómo nació, lote, vías de su corteza continental)
+│   │   │       ├── [x] deriva.rs    # Placas, fuerzas, huecos y solapes, dientes, fosas (arcos, erosión por subducción, prisma), choques con η según el grosor (adenda v7) y el origen de arco por fracción (adenda v9), delaminación, flujo lateral cúbico (adenda v6; la red se amplía en vez de rehacerse), erosión, sedimento (solo al océano mundial), eventos (captura de microplacas y subducción de dorsales, nota de demografía v2), márgenes pasivos y su perfil; edad tectonotérmica de cada muestra (envejece, se reinicia y se mezcla por volumen; edades de partida por la distancia a la costa); procedencia de cada muestra (diagnóstico: cómo nació, lote, vías de su corteza continental)
 │   │   │       ├── [x] deriva/suavizado.rs # Borde suavizado (nota de bordes): pertenencia φ, normal, tipo de tramo, suavizado de la pertenencia, islas
 │   │   │       ├── [x] deriva/fosas.rs     # Ciclo de las fosas (nota de fosas v6): tramos difusos y activos, nacimientos (espontáneos solo en transformantes), invasión de transformantes y márgenes pasivos, polaridad, losa, rotura de la losa tras un choque, convergencia difusa
-│   │   │       ├── [x] deriva/rifts.rs     # Rifts (nota de rifts): suturas como líneas, bloques continentales, ruptura por área (λ_A), trazado por la sutura más larga o un círculo, división por cualquier corte; adelgazamiento de los márgenes (adenda v8 §6.10): la abertura se rellena estirando la corteza en rampa, conservando el volumen, hasta la rotura
-│   │   │       ├── [x] isostasia.rs # Altura isostática (con el agua), Parsons y Sclater, fosas, nivel del mar
+│   │   │       ├── [x] deriva/rifts.rs     # Rifts (nota de rifts): suturas como líneas, bloques continentales, ruptura por área (λ_A) con el reloj del bloque, trazado por la sutura más larga o un círculo, división por cualquier corte; adelgazamiento de los márgenes (adenda v8 §6.10): la abertura se rellena estirando la corteza en rampa, conservando el volumen, hasta la rotura (que reinicia la edad tectonotérmica de la franja)
+│   │   │       ├── [x] deriva/diagnostico.rs # Diagnóstico del supercontinente (solo mide): fotos cada 25 Myr de las masas continentales, los océanos de rift, el destino del margen pasivo, las fuerzas de las placas con continente y si van hacia las fosas
+│   │   │       ├── [x] isostasia.rs # Altura isostática: continentes con la litosfera completa (regla R4, edad tectonotérmica; nota de isostasia con litosfera), océano con la curva de la placa, el agua, fosas, nivel del mar
 │   │   │       └── [x] historia.rs  # Eventos, métricas de cada Myr y cuentas de la corteza continental
 │   │   └── tests/
 │   │       ├── [x] terreno.rs       # incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación…) + lluvia y w vs resolución + diagnóstico
 │   │       ├── [x] erosion.rs       # incr. 3 (material, hondonadas, camino, tope, caché…) + relieve orográfico + mundo plano
-│   │       └── [x] tectonica.rs     # incr. 4: determinismo, giro rígido, sin continentes, India–Asia, rifts (por la sutura, bloque pequeño, determinismo), soldadura y captura de placas, caché (+ exploratorias: deriva_en_varias_semillas, diagnostico_demografia_placas, calibraciones, diagnostico_pilas, diagnostico_fondo_viejo)
+│   │       └── [x] tectonica.rs     # incr. 4: determinismo, giro rígido, sin continentes, India–Asia, rifts (por la sutura, bloque pequeño, determinismo, reloj, márgenes con su edad), captura de placas, subducción de dorsales, edades tectonotérmicas de partida, caché (+ exploratorias: deriva_en_varias_semillas, diagnostico_demografia_placas, diagnostico_nivel_del_mar_y_edad_del_fondo, diagnostico_huella_de_la_deriva, calibraciones, diagnostico_pilas, diagnostico_fondo_viejo)
 │   │
 │   ├── abm-metrics/               # OBSERVADORES + LOD de almacenamiento (→ core, ruleset, persistence)
 │   │   ├── [x] Cargo.toml
@@ -135,6 +137,8 @@ abm/
 │       ├── [x] tierra_regla_modelo.py # La Tierra real (Seton, GlobSed) con la curva de profundidad y la isostasia del modelo: nivel del mar y zonas de fractura
 │       ├── [x] tierra_corteza_regla.py # La corteza real (CRUST1.0, LITHO1.0) con la isostasia continental del modelo: relieve frente a ETOPO y corteza del planeta
 │       ├── [x] estudio_isostasia.py # Estudio de isostasia continental: reproduce a Lamb et al. (2020) y evalúa las reglas R0–R4 con la Tierra real (validación cruzada)
+│       ├── [x] nota_isostasia_s0.py # §0 de la nota de isostasia con litosfera: R4 sin las celdas de topografía dinámica, con el sedimento como corteza, por clase de edad, y las edades de partida
+│       ├── [x] supercontinente.py # Diagnóstico del supercontinente sobre las corridas de planeta_semillas.py (5 semillas, cada 25 Myr)
 │       ├── [x] lluvia_observada.py # Lluvia observada de la Tierra a 26 km, frente a la del planeta
 │       └── [x] tiffmini.py        # Lector mínimo de GeoTIFF (tiras, Deflate) también por peticiones parciales
 │
@@ -154,7 +158,8 @@ abm/
 │   │   ├── [x] 2026-11-08_demografia_placas.md # Diagnóstico de la demografía de placas (D1–D5), rama A y tabla de cierre con el relieve
 │   │   ├── [x] 2026-11-08_corteza_real_en_la_regla.md # La corteza real en la isostasia del modelo: no da el relieve real (la ronda se para)
 │   │   ├── [x] 2026-11-08_estudio_isostasia_continental.md # Estudio de isostasia: reproducción de Lamb et al. (2020), reglas R0–R4 con validación cruzada, tabla del §4 y criterios del §5
-│   │   └── [x] 2026-11-08_demografia_placas_v2.md # Rama D (subducción de dorsales), D6, rifts con reloj, calibración de λ_A y τ_ais, placas y fosas, tiempo
+│   │   ├── [x] 2026-11-08_demografia_placas_v2.md # Rama D (subducción de dorsales), D6, rifts con reloj, calibración de λ_A y τ_ais, placas y fosas, tiempo
+│   │   └── [x] 2026-11-08_isostasia_litosfera.md # Isostasia con litosfera (§0, R4, edad tectonotérmica), erosión recalibrada, tabla de cierre, márgenes, nivel del mar y edad del fondo, diagnóstico del supercontinente, tiempo
 │   └── design/                    # Modelos matemáticos y ecuaciones (precede al código)
 │       ├── inicial/               # Una carpeta por fase (ver CLAUDE §8.1)
 │       │   ├── [x] README.md          # Explicación llana de la fase + consideraciones
@@ -178,7 +183,8 @@ abm/
 │       │   ├── [x] nota_ciclo_fosas.md                    # Nota del responsable (v6): nacimiento, vida y muerte de las fosas (IMPLEMENTADA; incremento-4-diseno.md §24–§27, §31, §40 y §51)
 │       │   ├── [x] nota_rifts.md                          # Nota del responsable, v2: rifts por área y por suturas, con el reloj del bloque (τ_ais; IMPLEMENTADA, rama terreno-demografia-placas; incremento-4-diseno.md §59–§65, §69)
 │       │   ├── [x] nota_demografia_placas.md              # Nota del responsable, v2: demografía de placas; A2, retirada de las fantasma y rama D (subducción de dorsales) con D6 (IMPLEMENTADA, rama terreno-demografia-placas; §66, §69)
-│       │   └── [x] estudio_isostasia_continental.md       # Protocolo del responsable: estudio de isostasia continental previo al diseño (HECHO con datos reales; §70; informe en docs/informes/)
+│       │   ├── [x] estudio_isostasia_continental.md       # Protocolo del responsable: estudio de isostasia continental previo al diseño (HECHO con datos reales; §70; informe en docs/informes/)
+│       │   └── [x] nota_isostasia_litosfera.md            # Nota del responsable: isostasia con litosfera (R4) y edad tectonotérmica (IMPLEMENTADA, rama terreno-demografia-placas; §72–§73; los márgenes no se hunden: decide el responsable)
 │       ├── paquetes/              # Fase: código dividido en el workspace de paquetes
 │       │   └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)
@@ -261,29 +267,33 @@ nacimientos y muertes continuos, gracias a la relación `g < m < apetito` (regen
 metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
 
 - **Relieve tectónico (incremento 4, `docs/design/terreno/incremento-4-diseno.md`; en medida: antes de congelarla se arregla el exceso de fosas, nota de demografía de placas):**
-  - deriva de placas de 500 Myr en la malla de nivel 2 (~52 km), en la caché de la génesis; el planeta entero tarda 243 s sin caché, y 250 en la batería (presupuesto 275);
+  - deriva de placas de 500 Myr en la malla de nivel 2 (~52 km), en la caché de la génesis; el planeta entero tarda 283 s sin caché (2026-11-08, cuarta ronda; la versión anterior, 288,6 s el mismo día) y 307 en la batería (presupuesto 275);
+  - **isostasia con litosfera** (regla R4 y edad tectonotérmica por celda; nota de isostasia con litosfera): la tierra a 781 m de media (la Tierra 671), un 7 % por encima de 2 000 m (5,3 %) y el nivel del mar a −140 m, con `E_1` 0,02;
   - placas a 4,65 cm/año (la Tierra 4,39), con las correlaciones de Forsyth y Uyeda; India–Asia frena a 1/3 (`c_col` calibrado);
   - balance de la corteza continental (adenda de balance v9): arcos, erosión por subducción, prisma, choques con `η` según el grosor y el origen de arco por fracción, delaminación, flujo lateral cúbico, erosión con la altura y sedimento al mar, con balance exacto por paso;
   - bordes de placa (nota de bordes) y ciclo de las fosas (nota de fosas v6): nacimiento, invasión de márgenes pasivos, rotura de la losa;
   - rifts por bloques y por suturas (nota de rifts): ~5,8 rupturas por 100 Myr, ~1 de cada 4 por una sutura, con márgenes que se estiran (adenda v8);
-  - tabla de cierre (5 semillas, `herramientas/planeta_semillas.py`): fondo oceánico de 88 Myr de media (la Tierra 64), nivel del mar a −164 m, ΔV_cont −8 %, choques de 21 200 km (Bird 23 000). Siguen lejos de la Tierra la fosa (×1,9), el sedimento al mar (5,1 AU, ≈1,8), la pérdida en choques (1,4 AU, 0,4–0,7), los márgenes pasivos y el relieve (tierra a 1 235 m de media, la Tierra 671);
+  - tabla de cierre (5 semillas, `herramientas/planeta_semillas.py`; 2026-11-08, cuarta ronda): fondo oceánico de 84 Myr de media (la Tierra 64), nivel del mar a −140 m, ΔV_cont −7,4 %, choques de 17 700 km (Bird 23 000). Siguen lejos de la Tierra la fosa (×1,7), el sedimento al mar (4,4 AU, ≈1,8), la pérdida en choques (1,2 AU, 0,4–0,7), los márgenes pasivos, la tierra baja (16 %, la Tierra 28 %), la plataforma (10 km, 43) y el hundimiento de los márgenes (0,38 km en 100 Myr, 2–3);
   - referencias de la Tierra en `config/referencias/`;
   - interruptor `worldgen.relieve`: con `"ruido"`, el relieve de ruido de antes.
 
 **Pendiente (fases siguientes):**
 - **Pendientes obligatorios de realismo** (CLAUDE §2.8; responsable, 2026-11-05), en orden:
   - **relieve tectónico, lo que falta para que sea el de la Tierra** (hallazgos de `incremento-4-diseno.md` §6–§7):
-    0. **la isostasia continental** (decide el responsable; `incremento-4-diseno.md` §67–§68 y §70–§71; `tierra_corteza_regla.py` y `estudio_isostasia.py`).
-       - Con la corteza real de CRUST1.0, la regla del modelo pone la tierra al doble de altura: 1 389 m, frente a 671. Tiene el 19,7 % por encima de 2 km (5,3 %) y el 4,7 % por debajo de 200 m (28,3 %).
-       - El estudio (Lamb et al. 2020 reproducido) propone una litosfera completa con la edad tectonotérmica, la corteza más densa abajo y el sedimento de relleno (R4): altura media real y un tercio menos de error, pero un 15 % de tierra baja (28 %) y sin los casos de topografía dinámica (Kenia, llanura rusa).
-       - Mientras no se decida, el relieve, la erosión y el sedimento al mar del planeta se calibran sobre una base irreal;
-    0b. **la edad del fondo oceánico:** con el reloj de los rifts hay menos océano nuevo y el fondo llega a 110 Myr al final (objetivo ≤ 88; Tierra 64);
+    0. ~~la isostasia continental~~ **hecha** (2026-11-08, cuarta ronda; nota de isostasia con litosfera, `incremento-4-diseno.md` §72–§73): la regla R4 con la edad tectonotérmica por celda. **Limitaciones conocidas:**
+       - **la densidad de la corteza (`rho_c_sup` 2 750, `rho_c_inf` 3 000) y la profundidad de su paso (`z_t_km` 15) quedan en el borde de sus rangos publicados** (Christensen y Mooney 1995) también sin las celdas con más de 300 m de residuo de Lamb (comprobación del §0 de la nota, `nota_isostasia_s0.py`). El ajuste empuja hacia una corteza más ligera arriba y más densa abajo de lo publicado: lo que la regla no tiene (la topografía dinámica, la flexión) se cuela en esos tres parámetros;
+       - el sedimento cuenta como corteza (con la densidad de la capa en que está), no como relleno sin flotación: el reparto del sedimento del motor necesita que el sedimento suba la columna (§11.1 de la nota);
+       - **los márgenes estirados apenas se hunden al enfriarse**: la litosfera de R4 es la continental empobrecida (contraste de 25 kg/m³ que crece desde 50 km), no el manto fértil y caliente que sube bajo un rift (McKenzie 1978). Ver §73 del diseño;
+    0a. **el hundimiento térmico de los márgenes** (decide el responsable; `incremento-4-diseno.md` §73): con R4, el basamento de los márgenes estirados se hunde 0,38 km en 100 Myr, frente a 2–3 km (McKenzie 1978). El manto de R4 es el continental empobrecido; bajo un rift sube astenosfera fértil que se enfría como el fondo oceánico;
+    0b. **la edad del fondo oceánico:** 84 Myr al final con la isostasia nueva (objetivo ≤ 88; Tierra 64). No cuesta nivel del mar: con las edades de la Tierra el mar quedaría 57 m más bajo. Sigue el 12 % de fondo de más de 180 Myr;
+    0c. **el supercontinente** (diagnóstico, `herramientas/analisis/supercontinente.py`): los océanos de rift no se cierran (0,8 por semilla de 13,4) y los continentes no convergen; el modelo no tiene succión de la fosa sobre la placa de arriba;
     1. ~~adenda de balance~~ y ~~nota de bordes~~ hechas. **Siguen:** las fuerzas de las placas (las fosas miden 2 veces las de la Tierra con cualquier `L_borde` de 100–300 km; nota de bordes §11.2); la exportación al mar (3,1 AU, ≈1,8): no depende de `τ_ero`; falta la delaminación (0,05 AU, ≈1,1): ¿raíces de los arcos o erosión no lineal? (decide el responsable); rifts que estiren conservando (`F_rift` provisional); los 3 pasos de 500 que pasan la alarma de 80 km; después, calibrar `τ_del` y revisar `f_acr`;
     2. inicio de subducción en márgenes pasivos viejos (hoy sobrevive un 15 % de fondo de más de 200 Myr);
     3. **mecanismo pendiente: mesetas oceánicas, montes submarinos y puntos calientes**, unos 150 m de nivel del mar en la Tierra real.
        - Con las edades y el sedimento reales, la curva de profundidad del modelo, que desde el 2026-11-07 es la placa ajustada a la mediana del zócalo real, deja el mar a −150 m. Con la media, que incluye esos relieves, quedaría a −25 m (`tierra_regla_modelo.py`, `incremento-4-diseno.md` §46).
        - Con la curva vieja de Parsons y Sclater, a −386 m.
        - Siguen pendientes el sedimento abisal propio y los márgenes continentales sumergidos;
+    3b. **ampliación futura: la topografía dinámica** (decisión del responsable, 2026-11-08): los empujes del manto profundo (plumas, la superelevación africana), hasta unos cientos de metros. Va junto con los puntos calientes del punto 3. Hoy la regla R4 no la tiene: Kenia y la llanura rusa no salen (estudio de isostasia continental, §4);
     4. acortamiento andino, flexión de la litosfera (cuencas de antepaís), microplacas. ~~Ciclo de Wilson (rifts por suturas viejas)~~ hecho (nota de rifts, 2026-11-08); quedan la ruptura por plumas, los rifts fallidos y el aislamiento térmico de los supercontinentes;
     5. ~~reducir el remuestreo de la deriva~~ hecho: conservación exacta (2·10⁻¹⁵); la polaridad de la subducción y los papeles de un choque se deciden **por par de placas**, provisional: en la Tierra quién se hunde puede cambiar a lo largo de un mismo borde;
     5b. ~~umbral de transformantes a 20°~~ hecho (`theta_tr_grados`, nota de bordes);

@@ -660,3 +660,30 @@ Iba a ser la última ronda del relieve tectónico. Antes de congelar la capa, el
   - Ni la regla publicada de Lamb explica esos lugares.
 
 **Lo que queda por decidir.** Ninguna regla cumple todos los objetivos del estudio. El responsable decide si se adopta la mejor como base, dejando la topografía dinámica para más adelante, o si antes se estudia también esa topografía. Después habrá que recalibrar la erosión y el nivel del mar, y empezar los continentes con edades terrestres, con cratones viejos.
+
+### Continentes que flotan con toda su litosfera (08-11-2026, cuarta parte)
+
+**Lo que se hizo.** El responsable aceptó la mejor regla del estudio (R4) y se puso en el motor.
+- **La litosfera** es la capa rígida de las placas: la corteza y, debajo, el **manto litosférico**, un manto frío algo más denso que el manto blando de debajo. Cuanto más gruesa, más se hunde el continente.
+- **Su grosor depende de la edad tectonotérmica**: el tiempo desde que algo calentó la zona por última vez (un rift, un volcán de arco, un choque de continentes o el desprendimiento de una raíz). Las zonas jóvenes tienen una litosfera fina y quedan altas; los escudos viejos, gruesa, y quedan bajos.
+- **Ahora cada trozo de corteza lleva su edad.** Envejece con el tiempo, vuelve a cero cuando la calienta uno de esos sucesos y se mezcla al juntarse corteza de sitios distintos.
+- **Al empezar**, hace 500 millones de años, los continentes reciben las edades de la Tierra de entonces, con las más viejas en su interior, como crecen los continentes reales.
+- **Antes**, se comprobó que lo que la regla no tiene (los empujes del manto profundo, la «topografía dinámica») no deformaba el ajuste: se repitió sin las zonas donde esos empujes pesan. Tres parámetros siguen en el borde de lo publicado (la densidad de la corteza arriba y abajo y la profundidad a la que cambia), y queda anotado como limitación.
+
+**Lo que salió.**
+- **El relieve se acerca mucho a la Tierra:** la tierra baja de 1 136 a 781 m de altura media (la Tierra, 671), y la tierra por encima de 2 000 m, del 15 % al 7 % (la Tierra, 5 %).
+- **Hubo que reajustar la erosión.** Con la regla nueva, engrosar la corteza la levanta algo más de la mitad que antes. La erosión, que depende de la altura, se la llevaba más despacio y las cordilleras duraban 400 millones de años. Se ha ajustado para que una cordillera como el Himalaya, cuando deja de empujarla el choque, vuelva a una corteza normal en ~160 millones de años.
+- **Las zonas viejas tienen la altura de las de la Tierra.** Las jóvenes, de 100–500 millones de años, salen algo altas.
+
+**Lo que no sale.**
+- **Los márgenes de los continentes casi no se hunden.** Cuando un continente se parte, sus bordes estirados deberían hundirse 2–3 km en 100 millones de años al enfriarse (como el fondo del océano), y sobre ellos se forman las plataformas continentales. Aquí solo se hunden ~0,4 km.
+  - La regla trata el manto de debajo como el de los continentes viejos, que pesa poco porque es químicamente ligero.
+  - Bajo un rift, en cambio, sube manto caliente y normal, que al enfriarse pesa más.
+  - Arreglarlo es un cambio de la regla; decide el responsable.
+- **El planeta tarda 283 segundos**, por encima de los 275 del presupuesto. La versión anterior, medida igual el mismo día, tarda más (289): la máquina va más lenta que cuando se midió en la ronda anterior.
+
+**Por qué no se forma un supercontinente** (diagnóstico, sin cambiar nada).
+- Los continentes se parten y abren océanos entre sus trozos, como el Atlántico. Pero esos océanos casi nunca se vuelven a cerrar, y los continentes no tienden a juntarse.
+- En la Tierra, una placa que tiene una fosa delante se mueve hacia ella cuando la losa que se hunde retrocede, y así se cierran los océanos. El modelo no tiene esa fuerza: un continente solo va hacia una fosa si su propia placa se hunde en ella.
+
+**La edad del fondo del océano** ya no cuesta nivel del mar. El modelo tiene fondo muy viejo de más, pero también más fondo joven, y lo uno compensa lo otro.
