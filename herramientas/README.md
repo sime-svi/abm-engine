@@ -242,6 +242,7 @@ Las otras pruebas exploratorias:
 ```bash
 herramientas/planeta_semillas.py                        # semillas 42,1,2,3,4, a la vez (~5 min)
 herramientas/planeta_semillas.py --semillas 7,8 --set tectonica.e1_km_myr=0.004
+herramientas/planeta_semillas.py --semillas 42,1,2 --salida output/explora/eps_0.1 --set tectonica.eps_suc=0.1   # varias tandas a la vez
 ```
 
 Corre el planeta entero (génesis, relieve y un año de clima) con cada semilla y lo analiza como la batería (`analisis/terreno.py`). Da la media, la desviación y los extremos de cada fila:
@@ -263,6 +264,12 @@ herramientas/escenarios.py --solo planeta,humanos_hambruna
 ```
 
 Escribe las salidas en `output/escenarios/` y el informe en `output/escenarios/informe.json`. Por cada métrica guarda el valor, el margen y si pasa; también el tiempo y las etapas que más tardan.
+
+**La regla relativa del tiempo** (decisión del responsable, 2026-11-08), para los escenarios con `presupuesto_relativo` y `techo_s` (el planeta): no puede ser más de un 5 % más lento que la versión anterior medida en la misma tanda, ni pasar de 330 s.
+- La versión anterior es `--referencia REF`: por defecto `main` desde otra rama, y en `main` el commit anterior (o el último, si hay cambios sin commitear).
+- Se compila una vez por commit en `output/referencia/<commit>/` (un worktree y sus binarios).
+- Las dos versiones corren a la vez, sin la caché de la génesis y sin nada más en marcha; después, el resto de escenarios. Así ven las mismas condiciones de la máquina: uno tras otro, el segundo salía un 2–5 % más lento.
+- `--sin-referencia` comprueba solo el techo.
 
 **Escenarios:**
 - **`planeta`:** el planeta por defecto, con el relieve tectónico (relieve frente a la Tierra, deriva de placas, lluvia, biomas, ríos, sombra pluviométrica, conservación del agua).

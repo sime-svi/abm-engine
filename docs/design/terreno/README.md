@@ -687,3 +687,26 @@ Iba a ser la última ronda del relieve tectónico. Antes de congelar la capa, el
 - En la Tierra, una placa que tiene una fosa delante se mueve hacia ella cuando la losa que se hunde retrocede, y así se cierran los océanos. El modelo no tiene esa fuerza: un continente solo va hacia una fosa si su propia placa se hunde en ella.
 
 **La edad del fondo del océano** ya no cuesta nivel del mar. El modelo tiene fondo muy viejo de más, pero también más fondo joven, y lo uno compensa lo otro.
+
+### Márgenes que se hunden, puntos calientes y losas que tiran desde el fondo (08-11-2026, quinta parte)
+
+**Tres piezas nuevas, una tras otra.**
+- **Los márgenes se hunden al enfriarse.** Cuando un continente se parte, el manto que sube bajo la zona estirada está caliente; al enfriarse se contrae y el margen se hunde poco a poco, como el fondo del océano joven (McKenzie, 1978). Ahora el modelo lo hace, según cuánto se estiró cada trozo: unos 1,5 km en 100 millones de años, lo que dice la teoría.
+- **Puntos calientes.** Del manto profundo suben columnas de roca caliente que se quedan quietas mientras las placas pasan por encima. Hay 12:
+  - levantan el fondo del mar a su alrededor (un abombamiento de ~1 km);
+  - van dejando cadenas de volcanes, como Hawái;
+  - a veces, al nacer, sueltan una erupción enorme que forma una meseta en el océano o un mar de basalto en un continente.
+  - Las mesetas flotan y, al llegar a una fosa, se pegan al continente en vez de hundirse. Con ellas el mar sube: el océano tiene menos hueco.
+- **Las losas tiran desde el fondo.** La placa que se hunde en una fosa, al llegar al manto profundo, sigue bajando y arrastra el manto a su alrededor, que empuja a las placas cercanas hacia ella. Pasa también con las losas que ya se separaron, hasta que tocan el fondo del manto (~180 millones de años después).
+  - En la Tierra, así se cierran los océanos y se juntan los continentes.
+  - Ahora el reparto de fuerzas sale como el real: la mitad de lo que mueve las placas es el tirón de las losas.
+
+**Lo que salió.** Cada pieza hace lo que pide su nota. Pero con la tercera el planeta empeora:
+- los continentes se acercan y chocan más;
+- en el modelo, un choque nunca termina de pararse: los dos continentes siguen apretándose a ~1,3 cm al año aunque lleven 80 millones de años chocando. En la Tierra, la India frenó de 15 a 5 cm al año en unos 10 millones de años, y las cordilleras viejas, como los Urales, están paradas del todo;
+- como no se paran, los choques engruesan la corteza y la destruyen (por debajo se desprende y por arriba se erosiona). El continente pierde un 13 % en 500 millones de años, el mar baja y la tierra queda alta;
+- y como no se paran, las placas que chocan no se sueldan en una: no se forma ningún supercontinente.
+
+**Lo que queda por decidir.** Cómo debe frenarse un choque hasta pararse. Mientras tanto, si se deja la succión encendida o no. También se mide ahora la vida de los márgenes como piezas que nacen en cada rift (no celda a celda): viven ~86 millones de años, frente a 130–180 en la Tierra.
+
+**El tiempo.** El planeta ya no tiene un presupuesto fijo. No puede tardar más de un 5 % más que la versión anterior, medidas las dos a la vez, ni pasar de 330 segundos. Con las tres piezas tarda justo un 5 % más.

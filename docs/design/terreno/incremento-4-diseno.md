@@ -1988,3 +1988,67 @@ El resto de la tabla, en el §4 del informe: fondo de 84 Myr de media (12 % de m
 4. **La corteza demasiado joven** (71 % de la tierra de menos de 500 Myr) y el exceso de fosa (×1,7).
 5. La tolerancia ampliada de `la_losa_sigue_tirando_tras_el_choque_y_se_rompe_a_los_t_rot` (±4 Myr).
 6. Fusionar con `main`.
+
+## 75. Hundimiento de los márgenes, puntos calientes y succión de las losas: implementación (2026-11-08, quinta ronda)
+
+Decisiones del responsable de esta ronda: fusionar la rama de la isostasia con `main`; el presupuesto de tiempo pasa a una regla relativa (el planeta no puede ser más de un 5 % más lento que la versión anterior medida en la misma tanda, con un techo de 330 s); se acepta la tolerancia de ±4 Myr de la prueba de la losa; tres notas, en orden, midiendo tras cada una; la vida de los márgenes pasivos, como entidades.
+
+### 75.1 La regla del tiempo y los márgenes como entidades (fusionado en `main`, 473b805)
+
+- `herramientas/escenarios.py`: los escenarios con `presupuesto_relativo` y `techo_s` (el planeta) corren a la vez con su versión anterior (`--referencia`; por defecto `main`, o el commit anterior en `main`), compilada en un worktree de `output/referencia/`, sin la caché de la génesis. Uno tras otro, el segundo salía un 2–5 % más lento: la máquina cambia. El techo se comprueba con ese tiempo (algo mayor que solo).
+- Al fusionar: la rama, 251,2 s; `main`, 241,0 a la vez (+4,2 %). Para caber, el recuento de los márgenes por celdas de costa y su perfil pasaron a calcularse cada 25 Myr y en el último paso (solo se usan sus valores finales); la salida del modelo es idéntica salvo esas medidas.
+- **Márgenes como entidades** (`MargenRift`, `deriva/diagnostico.rs`): uno por lado de cada rift, nace al romper; termina cuando la mitad de sus celdas tiene un borde convergente cerca (por choque si los choques cubren al menos la mitad de esas celdas; si no, por invasión) o cuando le queda menos del 10 % de las celdas que llegó a tener. Sustituye a la vida contada por celdas de costa, que el vaivén de la malla falseaba.
+
+### 75.2 Nota de hundimiento de los márgenes (McKenzie)
+
+- Cada muestra guarda `beta` (= `h_0/h_c` al romper su rift, con `h_0` el grosor de partida de la franja; 1 fuera de los márgenes) y `t_rot_myr` (tiempo desde la rotura).
+- `isostasia::carga_mckenzie`: a la flotación R4 se le resta `max(0, S_McK − S_R4)·(ρ_a − ρ_w)`, con `S_McK = E_0·(β/π)·sin(π/β)·(1 − e^(−t/τ))` (`E_0` 3,2 km, `τ` 62,8 Myr) y `S_R4` lo que R4 ya hunde desde la rotura (el crecimiento de su término del manto). También en el sedimento que cabe en una columna.
+- `β` vuelve a 1 con un arco, un choque, una delaminación o una gran erupción; al juntar corteza, `β` y `t_r` de la parte con más volumen (`Origen`).
+- Métricas: el basamento de los márgenes distales por clase de `β` (1–2, 2–3, > 3) y de tiempo desde la rotura; la anchura de la plataforma por km de costa, cada 25 Myr.
+
+### 75.3 Nota de puntos calientes (`deriva/calientes.rs`)
+
+- `N_hs` puntos calientes fijos en el marco del manto (la malla del mundo, sin rotación neta), con vida `T_hs` y edades de partida al azar; al morir nace otro y, con probabilidad `f_cabeza = λ_LIP·T_hs/N_hs`, empieza con una gran erupción (`A` log-uniforme 0,2–2 Mkm², `Δt` 2 Myr).
+- **Grandes erupciones:** en las columnas oceánicas del disco, `h_LIP` (15 km) de corteza flotante no continental; en las continentales, `h_CFB` (3 km) de corteza, que reinicia su edad.
+- **Trazas:** `q·Δt` en las columnas oceánicas a menos de `r_tr` (100 km); montes submarinos (corteza oceánica que se hunde en las fosas) salvo donde la columna pasa de 20 km, que pasan a flotar.
+- La corteza flotante de mesetas y trazas lleva fracción de arco 1 (en `hc`) y **no pasa la columna a continental**: con R4, una meseta de 22 km quedaría a ~0,6–0,9 km bajo el mar; con la isostasia del océano, a ~2,6 km (§11.2). En las fosas se acreciona con `η_arco` (0,9).
+- **Abombamiento:** `U = H·cos²(π·d/W)` sobre la litosfera oceánica (`isostasia::altura_mundo`), en las alturas, la erosión y el sedimento.
+- **Balance:** `F_int` (`cuentas.intraplaca_km3`: mesetas, basaltos y la parte de las trazas que flota) entra en `explicado()`. Métricas del magmatismo, de las mesetas, del océano (media y mediana) y de las islas; eventos de nacimiento y muerte y de gran erupción.
+
+### 75.4 Nota de succión de las losas (`deriva/succion.rs`)
+
+- **Losas profundas:** para cada borde con losa que tira y fosa activa, `L_inf = L_j − L_losa`, en la posición de la fosa desplazada `d_off` (500 km) hacia la placa de arriba, con peso por longitud `B = f_sp·min(1, √(edad/t_sat))·L_inf/L_losa` (las unidades del tirón). Una línea por par de placas.
+- **Restos:** cuando una celda de fosa muere o su losa se rompe (`avanzar_fosas`), su losa entera (`L_j`) pasa a un resto, fijo en el marco del manto, cuyo peso baja linealmente hasta 0 en `τ_hund = 2 200 km / v_hund` (183 Myr).
+- **Tracción:** `τ = ε_suc·B·(1 − d/W)/W` hacia el punto más cercano de cada línea, sumada sobre todas, en la malla del nivel 0 (~190 km) con las vecinas a menos de `W` (1 500 km) precalculadas; el par se suma por las celdas finas de cada placa (una microplaca solo recibe la tracción de su área). Entra en `T` del equilibrio de fuerzas; `c_b` se recalibra a `v_obj`, así que el arrastre basal se reajusta solo (§6.5).
+- **Soldadura** (las suturas de siempre): ahora pide la losa del choque ya rota y `τ_sold` = 20 Myr (antes 10).
+- Métricas: reparto de la potencia (tirón, succión y empuje), retroceso de las fosas respecto al manto (la fosa va con la placa de arriba: retrocede si `v_q·n < 0`), restos, convergencia de los choques por su edad, soldaduras; y la tierra de menos de 500 Myr por lo que reinició su edad (`Corteza::causa_tt`).
+- Prueba aparte: `la_losa_sigue_tirando…` se corre sin succión (mide la rotura; con la succión la India llega por otro camino y rompe a los 25 Myr).
+
+## 76. Hundimiento de los márgenes, puntos calientes y succión: resultados (informe `docs/informes/2026-11-08_margenes_calientes_succion.md`)
+
+| | Tras (a), McKenzie | Tras (b), puntos calientes | Tras (c), succión y recalibración |
+|---|---|---|---|
+| Altura media de la tierra (671) | 849 m | 800 | 963 |
+| Nivel del mar (≥ −150) | −188 m | −100 | −202 |
+| Plataforma (43) | 9,3 km | 11,1 | 9,3 |
+| `f_cont`; cambio de volumen | 0,317; −9,2 % | 0,328; −6,0 % | 0,295; −13,3 % |
+| Hundimiento de los márgenes, β 2–3 y > 3 (McKenzie 1,57 y 1,77 km) | 1,54 y 1,71 km | 1,50 (β > 3) | 1,50 y 1,64 |
+| Magmatismo intraplaca oceánico (1,3–1,7 AU); grandes erupciones (~4,3 por 100 Myr) | — | 1,20; 4,1 | 1,41; 4,1 |
+| Tirón / succión / empuje (tirón ~0,5) | — | — | 0,58 / 0,23 / 0,19 |
+| Fosas que retroceden (62–78 %); velocidad (1,3–1,5 cm/año) | — | — | 66 %; 1,0 |
+| Vida de los márgenes, como entidades (130–180 Myr) | 79 Myr | 67 | 86 |
+| Longitud de fosa; área que se hunde (10 semillas) | — | — | 82 900 km; 3,68 km²/año |
+
+- **Los choques no se agotan** (§11.3 de la nota de succión): convergen a 1,56 cm/año en sus primeros 10 Myr y a 1,26 con más de 80 Myr, nunca por debajo de `v_sold` (0,5). Solo se sueldan 0,8–1,0 pares por 100 Myr. La resistencia de los choques (`c_col`) frena a 1/3, no para.
+- **La succión empeora la base:** las masas continentales se acercan (−1,7 km/Myr) y chocan más (30 000 km de choque), y los choques, que no paran, engruesan y destruyen corteza (delaminación y sedimento subducido). El continente pierde un 13 %, el mar baja y la tierra sube. El mayor bloque de una placa baja al 14 %.
+- **La tierra joven:** de la de menos de 500 Myr, los arcos reiniciaron el 54 % y los choques el 40 %.
+- `ε_suc` 0,05 (calibrado con el reparto de la potencia); caudal de las trazas 1,25·10⁵ km³/Myr; `E_1` sin cambiar (la relajación no cambia).
+- Tiempo: el planeta, +5,0 % frente a `main` a la vez (la regla, justo); la succión, ~7 s directos.
+
+## 77. Pendientes (2026-11-08, quinta ronda; decide el responsable)
+
+1. **La resistencia de los choques:** no se agotan y destruyen corteza. Lo realista es que la convergencia caiga hasta pararse en unas decenas de Myr (la India, de 15 a 5 cm/año en ~10 Myr).
+2. **La succión** (`ε_suc` 0,05): dejarla o apagarla hasta arreglar los choques.
+3. **El retroceso de las fosas** (1,0 cm/año frente a 1,3–1,5) y los restos de losa (~1 900, `L_j` sin tope).
+4. **Los basaltos continentales** (0,03 AU frente a ~0,12).
+5. Lo que sigue: la plataforma, la tierra joven (arcos y choques), el exceso de fosa (×1,6) y fusionar la rama con `main`.

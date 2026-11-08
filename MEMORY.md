@@ -1565,3 +1565,38 @@ Formato de entrada:
   - la corteza demasiado joven y el exceso de fosa;
   - la tolerancia ampliada;
   - fusionar con `main`.
+
+## [2026-11-08] Fusión con main, regla relativa del tiempo; notas de hundimiento de los márgenes, de puntos calientes y de succión de las losas
+
+- **Qué pidió el responsable.**
+  - Fusionar la rama de la isostasia con `main`.
+  - El presupuesto de tiempo, como regla relativa: no más de un 5 % más lento que la versión anterior medida en la misma tanda, con un techo de 330 s.
+  - Acepta la tolerancia de ±4 Myr de la prueba de la losa.
+  - Tres notas en orden, midiendo con 5 semillas tras cada una, y responder a su §11: hundimiento de McKenzie en las franjas estiradas; puntos calientes (abombamiento, trazas, grandes erupciones, mesetas que flotan y se acrecionan, `F_int` en el balance); succión de las losas profundas y de los restos, y soldadura tras un choque agotado.
+  - La vida de los márgenes, como entidades que nacen en cada rift.
+  - Recalibrar (`E_1`, `ε_suc`, el arrastre basal y los caudales de los puntos calientes) y la tabla de cierre completa, con la tierra joven que reinician arcos y choques, y la fosa y el área que se hunde con 10 semillas.
+- **Fusión y regla** (`main` = 473b805).
+  - La batería corre el planeta a la vez que su versión anterior (worktree en `output/referencia/`). Uno tras otro, el segundo salía un 2–5 % más lento.
+  - La rama pasaba en +5,4 %. Se dejó en +4,2 % calculando cada 25 Myr el recuento de márgenes por celdas de costa y su perfil (salida del modelo idéntica salvo esas medidas).
+  - Los márgenes, como entidades `MargenRift`.
+- **Las notas** (rama `terreno-margenes-calientes-succion`: fde4e69, f15c5b4 y 7153f47; diseño §75–§77; informe `docs/informes/2026-11-08_margenes_calientes_succion.md`).
+  - **McKenzie:** `β` y `t_rot` por muestra; la carga `max(0, S_McK − S_R4)` en R4. El rift aislado sigue la curva exacta; en el planeta, 1,5–1,6 km con β 2–3 y > 3. La plataforma no mejora; el mar baja 48 m.
+  - **Puntos calientes:** 12, con mesetas que no pasan a continentales (con R4 quedarían a ~0,7 km bajo el mar). El mar sube 88 m. Magmatismo oceánico 1,41 AU con `q` 1,25·10⁵; 4,1 grandes erupciones por 100 Myr. Los basaltos continentales dan 0,03 AU frente a ~0,12: no se fuerza `h_CFB`.
+  - **Succión:** calculada en la malla gruesa, con el par repartido por las celdas finas. Hubo un fallo: una microplaca disparaba su velocidad.
+    - `ε_suc` 0,05: el tirón es el 58 % de la potencia y las fosas retroceden en el 66 %, a 1,0 cm/año (objetivo 1,3–1,5).
+    - La soldadura (suturas) pide ahora la losa rota y 20 Myr.
+- **El hallazgo: los choques no se agotan nunca.** Convergen a 1,56 → 1,26 cm/año con la edad, nunca por debajo de 0,5; solo hay ~0,9 soldaduras por 100 Myr.
+  - Con la succión, los continentes se acercan y chocan más (30 000 km): la corteza se destruye (−13 %), el mar baja a −202 m y la tierra sube a 963 m.
+  - El mayor bloque de una placa, 14 %: no hay supercontinente.
+- **Otros números.**
+  - Fosa 82 900 ± 7 000 km y 3,68 ± 0,38 km²/año (10 semillas).
+  - La tierra de menos de 500 Myr la reiniciaron los arcos (54 %) y los choques (40 %).
+  - Los márgenes (entidades) viven 86 Myr.
+  - Tiempo +5,0 % frente a `main` (la regla, justo); la succión, ~7 s directos.
+  - La batería: 29 márgenes movidos con su nota.
+- **Decisiones que esperan:**
+  - la resistencia de los choques;
+  - dejar o apagar la succión;
+  - el retroceso de las fosas y los restos de losa;
+  - los basaltos continentales;
+  - fusionar la rama.
