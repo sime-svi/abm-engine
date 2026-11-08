@@ -33,6 +33,66 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
             (StaticGen::con_tectonica(cfg, Arc::new(t)), Some(r))
         }
     };
+    let mut world = malla_inicial(cfg, statgen);
+
+    // Refinamiento inicial (solo criterios estáticos: T y θ aún son uniformes), génesis geológica
+    // (erosión y suelo, incr. 3 §8) y estado inicial sobre la malla final: la génesis no transfiere
+    // agua al mar.
+    // El relleno de hondonadas artificiales del refinado inicial (acondicionamiento, incr. 3 §3)
+    // también entra en el balance de material de la génesis.
+    let mut pre = if cfg.lod.enabled() {
+        lod::refine_initial(&mut world, cfg)
+    } else {
+        lod::LodReport::default()
+    };
+    // G6 (relieve tectónico): acondicionamiento hidrológico de los hoyos del ruido de detalle.
+    if world.statgen.tectonica().is_some() && cfg.erosion.enabled() {
+        pre.absorb(&lod::acondicionar_detalle(&mut world, cfg));
+    }
+    let mut geo = erosion::genesis(&mut world, cfg);
+    geo.lod_fill_m3 += pre.fill_m3;
+    geo.lod_conditioned_m3 += pre.conditioned_m3;
+    // Agotamiento de humedad y factor c_P (nota de sombra pluviométrica): se calculan sobre el
+    // relieve ya envejecido y se mantienen al día durante la simulación.
+    humedad::activar(&mut world, cfg);
+    if cfg.lod.enabled() || cfg.erosion.geo_steps > 0 {
+        set_initial_state(&mut world, cfg);
+    }
+    if let Some(mut r) = historia {
+        r.nivel_mar_tras_prerrodaje_m = nivel_mar_malla(&world, cfg);
+        world.historia = Some(Arc::new(r));
+    }
+    (world, geo)
+}
+
+/// Mundo del modo Tierra (`modo-tierra-diseno.md` §2.3): la misma malla, la hidrología del motor y
+/// el refinado inicial del LOD sobre la altura de ETOPO 2022. Sin deriva, génesis geológica ni
+/// agotamiento de humedad: el relieve queda tal cual (ni se erosiona ni se rellenan sus hondonadas).
+pub fn generate_tierra(
+    cfg: &TerrenoConfig,
+    datos: Arc<crate::tierra::DatosTierra>,
+) -> (World, GeoSummary) {
+    let mut world = malla_inicial(cfg, StaticGen::con_tierra(cfg, datos));
+    let pre = if cfg.lod.enabled() {
+        lod::refine_initial(&mut world, cfg)
+    } else {
+        lod::LodReport::default()
+    };
+    let foto = erosion::snapshot(&world);
+    let geo = GeoSummary {
+        lod_fill_m3: pre.fill_m3,
+        lod_conditioned_m3: pre.conditioned_m3,
+        before: foto,
+        after: foto,
+        ..GeoSummary::default()
+    };
+    set_initial_state(&mut world, cfg);
+    (world, geo)
+}
+
+/// Malla uniforme del nivel base con sus estáticos, su vecindad, sus derivados globales y el estado
+/// dinámico inicial.
+fn malla_inicial(cfg: &TerrenoConfig, statgen: StaticGen) -> World {
     let l = cfg.lod.l_min;
     let n = face_n(cfg.planet.n0, l);
     let num = 6 * (n as usize) * (n as usize);
@@ -76,6 +136,7 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
     let mut k_perm = Vec::with_capacity(num);
     let mut fert = Vec::with_capacity(num);
     let mut resource = Vec::with_capacity(num);
+    let mut hielo = Vec::with_capacity(num);
     let mut oro0_e = Vec::with_capacity(num);
     let mut oro0_n = Vec::with_capacity(num);
     let mut oro_air0_e = Vec::with_capacity(num);
@@ -98,6 +159,7 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
         k_perm.push(st.k_perm);
         fert.push(st.fert);
         resource.push(st.resource);
+        hielo.push(statgen.hielo(c, lv, i, j));
         let (oe, on, oa) = statgen.oro_gradient0_air(&g, lv);
         oro0_e.push(oe);
         oro0_n.push(on);
@@ -125,6 +187,7 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
         k_perm,
         fert,
         resource,
+        hielo,
         e: vec![0.0; num],
         z_soil: vec![cfg.soil.z_init; num],
         h,
@@ -160,35 +223,7 @@ pub fn generate_with_report(cfg: &TerrenoConfig) -> (World, GeoSummary) {
     world.hydro_lock = vec![false; world.topo.num_cells];
     lod::update_hydro_lock(&mut world);
     set_initial_state(&mut world, cfg);
-
-    // Refinamiento inicial (solo criterios estáticos: T y θ aún son uniformes), génesis geológica
-    // (erosión y suelo, incr. 3 §8) y estado inicial sobre la malla final: la génesis no transfiere
-    // agua al mar.
-    // El relleno de hondonadas artificiales del refinado inicial (acondicionamiento, incr. 3 §3)
-    // también entra en el balance de material de la génesis.
-    let mut pre = if cfg.lod.enabled() {
-        lod::refine_initial(&mut world, cfg)
-    } else {
-        lod::LodReport::default()
-    };
-    // G6 (relieve tectónico): acondicionamiento hidrológico de los hoyos del ruido de detalle.
-    if world.statgen.tectonica().is_some() && cfg.erosion.enabled() {
-        pre.absorb(&lod::acondicionar_detalle(&mut world, cfg));
-    }
-    let mut geo = erosion::genesis(&mut world, cfg);
-    geo.lod_fill_m3 += pre.fill_m3;
-    geo.lod_conditioned_m3 += pre.conditioned_m3;
-    // Agotamiento de humedad y factor c_P (nota de sombra pluviométrica): se calculan sobre el
-    // relieve ya envejecido y se mantienen al día durante la simulación.
-    humedad::activar(&mut world, cfg);
-    if cfg.lod.enabled() || cfg.erosion.geo_steps > 0 {
-        set_initial_state(&mut world, cfg);
-    }
-    if let Some(mut r) = historia {
-        r.nivel_mar_tras_prerrodaje_m = nivel_mar_malla(&world, cfg);
-        world.historia = Some(Arc::new(r));
-    }
-    (world, geo)
+    world
 }
 
 /// Nivel del mar (m, respecto al de la génesis) que llena las cuencas de la malla del planeta con el
@@ -213,9 +248,11 @@ fn set_initial_state(world: &mut World, cfg: &TerrenoConfig) {
     world.w = (0..num)
         .map(|s| if ocean[s] { 0.0 } else { 0.5 * world.w_cap[s] })
         .collect();
+    // El hielo nace sin vegetación (en el planeta inventado `hielo` = 0 y el factor es exactamente 1).
     world.veg = ocean
         .iter()
-        .map(|&o| if o { 0.0 } else { v_init })
+        .zip(&world.hielo)
+        .map(|(&o, &h)| if o { 0.0 } else { v_init * (1.0 - h) })
         .collect();
     world.biome = ocean
         .iter()

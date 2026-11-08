@@ -21,6 +21,80 @@ pub struct TerrenoConfig {
     pub erosion: ErosionCfg,
     pub tectonica: TectonicaCfg,
     pub persistence: PersistenceCfg,
+    /// Qué mundo da los campos de nacimiento y el clima: el planeta inventado o la Tierra real.
+    pub mundo: MundoCfg,
+    /// Modo Tierra real (`docs/design/terreno/diseno_modo_tierra.md`, Fase 1).
+    pub tierra: TierraCfg,
+}
+
+/// Proveedor de mundo (`diseno_modo_tierra.md` §3): el resto del motor recibe los mismos campos
+/// venga el mundo de donde venga.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Modo {
+    /// El planeta inventado: génesis de `worldgen.relieve`, clima del modelo (incrementos 1–4).
+    #[default]
+    Inventado,
+    /// La Tierra real: relieve, hielo y clima medidos (ETOPO 2022, CHELSA, CRU TS).
+    Tierra,
+}
+
+/// Elección del mundo.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct MundoCfg {
+    pub modo: Modo,
+}
+
+/// Modo Tierra real (`diseno_modo_tierra.md` §5). Las fuentes se bajan con
+/// `herramientas/tierra/descargar.sh` a `output/referencias/` (ignorado por git).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct TierraCfg {
+    /// ETOPO 2022 superficie, cada 2' (float32 big-endian, 5 400 × 10 800, filas desde el sur).
+    pub etopo_superficie: String,
+    /// ETOPO 2022 roca en las franjas polares (latitud < −60° y > 59°), con el mismo formato.
+    pub etopo_roca_sur: String,
+    pub etopo_roca_norte: String,
+    /// Carpeta con los 24 GeoTIFF mensuales de CHELSA V2.1 1981–2010 (`tas` y `pr`).
+    pub chelsa: String,
+    /// Series mensuales de CRU TS 4.09 (NetCDF-3 comprimido con gzip): temperatura y lluvia.
+    pub cru_tmp: String,
+    pub cru_pre: String,
+    /// Espesor mínimo (superficie − roca, m) que se cuenta como hielo, y solo con la superficie sobre el
+    /// nivel del mar. Por debajo, la diferencia entre las dos versiones de ETOPO es ruido de sus
+    /// fuentes (medido: con 0, 1,2 Mkm² de «hielo» sobre el mar del Ártico).
+    pub hielo_min_m: f64,
+    /// Nivel más fino de la malla al que se cargan los datos; por debajo, reparto conservativo.
+    pub nivel_carga: u32,
+    /// Años seguidos de cada bloque de años reales remuestreado.
+    pub l_bloque: u32,
+    /// Tope del cociente de precipitación de un mes frente a su climatología.
+    pub r_max: f64,
+    /// Periodo al que se refiere el clima, `[desde, hasta]` (años incluidos). La climatología de
+    /// CHELSA es la de 1981–2010; otro periodo la corrige con CRU TS (§5 de la nota).
+    pub periodo_base: [i32; 2],
+    /// Año real que se usa en todos los años simulados (0 = remuestreo por bloques).
+    pub anio_forzado: i32,
+}
+
+impl Default for TierraCfg {
+    fn default() -> Self {
+        Self {
+            etopo_superficie: "output/referencias/etopo2022_superficie_2m.f32be".to_string(),
+            etopo_roca_sur: "output/referencias/etopo2022_roca_sur_2m.f32be".to_string(),
+            etopo_roca_norte: "output/referencias/etopo2022_roca_norte_2m.f32be".to_string(),
+            chelsa: "output/referencias/chelsa_mensual".to_string(),
+            cru_tmp: "output/referencias/cru_ts/cru_ts4.09.1901.2024.tmp.dat.nc.gz".to_string(),
+            cru_pre: "output/referencias/cru_ts/cru_ts4.09.1901.2024.pre.dat.nc.gz".to_string(),
+            hielo_min_m: 10.0,
+            nivel_carga: 3,
+            l_bloque: 10,
+            r_max: 5.0,
+            periodo_base: [1981, 2010],
+            anio_forzado: 0,
+        }
+    }
 }
 
 /// Generador del relieve de nacimiento. Interruptor mientras se mide el relieve tectónico frente al
@@ -922,10 +996,39 @@ impl TerrenoConfig {
         if self.vegetation.n_veg == 0 {
             return Err(invalid("vegetation.n_veg debe ser >= 1"));
         }
-        if self.worldgen.relieve == Relieve::Tectonico {
+        if self.mundo.modo == Modo::Tierra {
+            let t = &self.tierra;
+            if t.nivel_carga < self.lod.l_min || t.nivel_carga > 6 {
+                return Err(invalid("tierra: se requiere lod.l_min <= nivel_carga <= 6"));
+            }
+            if t.l_bloque == 0 || !(t.r_max >= 1.0 && t.r_max.is_finite()) || t.hielo_min_m < 0.0 {
+                return Err(invalid(
+                    "tierra: se requiere l_bloque >= 1, r_max >= 1 y hielo_min_m >= 0",
+                ));
+            }
+            if t.periodo_base[1] < t.periodo_base[0] {
+                return Err(invalid(
+                    "tierra: periodo_base debe ser [desde, hasta] con desde <= hasta",
+                ));
+            }
+            // El calendario es el real: 365 días, con los meses de 31, 28, 31…
+            if self.climate.t_year != 365.0 {
+                return Err(invalid("tierra: se requiere climate.t_year = 365"));
+            }
+            if self.planet.sea_level != 0.0 || (self.planet.r_km - 6371.0).abs() > 1e-9 {
+                return Err(invalid(
+                    "tierra: se requiere planet.sea_level = 0 y planet.r_km = 6371 (los datos son de la Tierra actual)",
+                ));
+            }
+        } else if self.worldgen.relieve == Relieve::Tectonico {
             self.tectonica.validate(self.planet.n0)?;
         }
         Ok(())
+    }
+
+    /// `true` en el modo Tierra real.
+    pub fn es_tierra(&self) -> bool {
+        self.mundo.modo == Modo::Tierra
     }
 }
 

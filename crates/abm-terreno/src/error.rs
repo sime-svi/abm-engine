@@ -12,4 +12,7 @@ pub enum TerrenoError {
     Io(#[from] std::io::Error),
     #[error("error de serialización JSON")]
     Serialize(#[from] serde_json::Error),
+    /// Modo Tierra: una fuente que falta o que no tiene el formato esperado.
+    #[error("modo Tierra: {0}")]
+    Tierra(String),
 }

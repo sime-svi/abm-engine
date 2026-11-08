@@ -179,6 +179,9 @@ pub struct World {
     pub k_perm: Vec<f64>,   // permeabilidad (0..1)
     pub fert: Vec<f64>,     // fertilidad efectiva (0..1)
     pub resource: Vec<f64>, // recurso genérico extraíble
+    /// Fracción de la celda cubierta de hielo (modo Tierra: casquetes de ETOPO; 0 en el planeta
+    /// inventado). Sin vegetación ni vida terrestre en esa parte.
+    pub hielo: Vec<f64>,
 
     // --- Relieve y suelo vivos (incr. 3): cambian con la erosión, despacio ---
     pub e: Vec<f64>,      // erosión (−) / depósito (+) acumulados (m); h = h0 + e

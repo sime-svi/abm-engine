@@ -70,9 +70,22 @@ class Salida:
         return an_t.analizar(self.dir, self.nombre)
 
     @functools.cached_property
+    def doc(self):
+        """El JSON del terreno tal cual (modo Tierra: `diagnostico.tierra`, `run.tierra`)."""
+        with open(f'{self.dir}/{self.nombre}_terreno.json') as f:
+            return json.load(f)
+
+    @functools.cached_property
     def tiempos(self):
         with open(f'{self.dir}/{self.nombre}_tiempos.json') as f:
             return json.load(f)
+
+
+def _ruta(d, ruta):
+    """Valor de un JSON por su ruta con puntos (`diagnostico.tierra.hielo_frac`, `a.0.b`)."""
+    for k in ruta.split('.'):
+        d = d[int(k)] if isinstance(d, list) else d[k]
+    return d
 
 
 def _pob(s, especie):
@@ -87,6 +100,9 @@ MEDIDAS = {
     'terreno.hipsometria_frac': lambda s, franja: s.terreno['hipsometria_frac'][franja],
     'terreno.sotavento': lambda s, campo: s.terreno['sotavento'][campo],
     'terreno.resto_latitudes_medias': lambda s, campo: s.terreno['resto_latitudes_medias'][campo],
+    # Cualquier valor del JSON del terreno por su ruta (el modo Tierra).
+    'doc.valor': lambda s, ruta: _ruta(s.doc, ruta),
+    'doc.residuo_agua_max': lambda s: max(abs(t['water_residual_rel']) for t in s.doc['ticks']),
     # Agentes.
     'agentes.resumen': lambda s, especie, campo, desde=0, hasta=None:
         an_a.resumen(s.agentes, especie, desde, hasta)[campo],

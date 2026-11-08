@@ -255,6 +255,31 @@ Desde la cuarta ronda del 2026-11-08 tiene también las filas de la nota de isos
 
 Escribe cada corrida en `output/semillas/` y el resumen en `output/semillas/cierre.json`. El tiempo de cada semilla está medido con las cinco a la vez: el de una sola es el de la batería. Corre una copia del binario (`output/semillas/terreno_de_la_tanda`): si se recompila a mitad de una tanda, sus procesos no cargan a medias el binario nuevo.
 
+## El modo Tierra
+
+```bash
+herramientas/tierra/descargar.sh                        # las fuentes, a output/referencias/ (una vez; ~6 GB)
+python3 -I herramientas/tierra/validar.py               # el §10 de la nota (~15 min)
+python3 -I herramientas/tierra/validar.py --sin-correr --sin-pruebas --sin-chelsa   # solo rehace la tabla
+target/release/terreno --set mundo.modo=tierra          # una corrida del modo Tierra (~10 s con las cachés)
+```
+
+- **`descargar.sh`** baja lo que falte, sin repetir lo que ya está completo:
+  - ETOPO 2022 a 2' (lo baja `referencia_tierra.py`);
+  - CHELSA V2.1, 24 GeoTIFF mensuales;
+  - CRU TS 4.09;
+  - HydroRIVERS y la NPP de MODIS a 0,5° del ICDC, solo para validar.
+
+  Nada va a git, y las licencias están en `docs/design/terreno/modo-tierra-diseno.md` §1.3. El servidor de datos de HydroSHEDS (detrás de Cloudflare) puede estar bloqueado por el operador de la red: entonces la validación de los ríos queda pendiente.
+- **`validar.py`** corre el modo Tierra un año con el volcado por celda, y las pruebas `--ignored` de `crates/abm-terreno/tests/tierra.rs`. Compara con:
+  - ETOPO a la misma resolución (`config/referencias/tierra_relieve.toml`);
+  - una estimación independiente de CHELSA (1 de cada 40 filas y 1 de cada 8 columnas de cada GeoTIFF);
+  - CRU TS: variabilidad, autocorrelación y años secos en 13 regiones, y el Sahel de 1984;
+  - HydroRIVERS: las 20 mayores desembocaduras, con el área del modelo a menos de 150 km;
+  - MODIS: el total y la correlación del mapa, con la vegetación del motor y con Miami.
+
+  Escribe `output/tierra_validacion/validacion.json`.
+
 ## La batería de escenarios
 
 ```bash

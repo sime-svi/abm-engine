@@ -22,7 +22,7 @@ use crate::tectonica::historia::ResumenTectonica;
 use crate::tectonica::malla::Malla;
 use crate::world::{Biome, Pair, Surface, Topology, World};
 
-const MAGIC: &[u8; 8] = b"ABMGEN04";
+const MAGIC: &[u8; 8] = b"ABMGEN05";
 const FINGERPRINT: &str = env!("ABM_TERRENO_FINGERPRINT");
 
 fn fnv1a(mut h: u64, bytes: &[u8]) -> u64 {
@@ -33,7 +33,8 @@ fn fnv1a(mut h: u64, bytes: &[u8]) -> u64 {
     h
 }
 
-/// Clave de la génesis de una config: huella del código + config sin los campos de la corrida.
+/// Clave de la génesis de una config: huella del código + config sin los campos de la corrida (y, en el
+/// modo Tierra, la huella de sus fuentes).
 pub fn key(cfg: &TerrenoConfig) -> Result<u64, TerrenoError> {
     let mut c = cfg.clone();
     c.run.name = String::new();
@@ -46,7 +47,11 @@ pub fn key(cfg: &TerrenoConfig) -> Result<u64, TerrenoError> {
     c.persistence = PersistenceCfg::default();
     let json = serde_json::to_string(&c)?;
     let h = fnv1a(0xcbf2_9ce4_8422_2325, FINGERPRINT.as_bytes());
-    Ok(fnv1a(h, json.as_bytes()))
+    let h = fnv1a(h, json.as_bytes());
+    if cfg.es_tierra() {
+        return Ok(fnv1a(h, &crate::tierra::carga::huella(cfg)?.to_le_bytes()));
+    }
+    Ok(h)
 }
 
 /// Ruta del fichero de caché de una config (`None` si la caché está desactivada).
@@ -58,15 +63,19 @@ pub fn path(cfg: &TerrenoConfig) -> Result<Option<PathBuf>, TerrenoError> {
     Ok(Some(PathBuf::from(&cfg.run.genesis_cache).join(name)))
 }
 
-/// Carga la génesis de la caché, si existe y es válida para esta config y este código.
-pub fn load(cfg: &TerrenoConfig) -> Result<Option<(World, GeoSummary)>, TerrenoError> {
+/// Carga la génesis de la caché, si existe y es válida para esta config y este código. En el modo
+/// Tierra hacen falta sus datos (el generador de estáticos se reconstruye con ellos).
+pub fn load(
+    cfg: &TerrenoConfig,
+    tierra: Option<&std::sync::Arc<crate::tierra::DatosTierra>>,
+) -> Result<Option<(World, GeoSummary)>, TerrenoError> {
     let Some(p) = path(cfg)? else {
         return Ok(None);
     };
     let Ok(bytes) = std::fs::read(&p) else {
         return Ok(None);
     };
-    Ok(decode(&bytes, cfg, key(cfg)?))
+    Ok(decode(&bytes, cfg, key(cfg)?, tierra))
 }
 
 /// Guarda la génesis en la caché (escritura atómica: a un temporal y luego renombrado).
@@ -216,7 +225,7 @@ fn surface_from(c: u8) -> Option<Surface> {
 }
 
 /// Nº de columnas `f64` del mundo que se guardan.
-const N_F64: usize = 31;
+const N_F64: usize = 32;
 
 /// Columnas `f64` del mundo, en orden fijo (el mismo al guardar y al cargar).
 fn f64_columns(w: &World) -> [&Vec<f64>; N_F64] {
@@ -252,6 +261,7 @@ fn f64_columns(w: &World) -> [&Vec<f64>; N_F64] {
         &w.oro_n,
         &w.oro_air0_e,
         &w.w_hum,
+        &w.hielo,
     ]
 }
 
@@ -399,7 +409,12 @@ fn decode_tectonica(
     Some(Some((t, historia)))
 }
 
-fn decode(bytes: &[u8], cfg: &TerrenoConfig, key: u64) -> Option<(World, GeoSummary)> {
+fn decode(
+    bytes: &[u8],
+    cfg: &TerrenoConfig,
+    key: u64,
+    tierra: Option<&std::sync::Arc<crate::tierra::DatosTierra>>,
+) -> Option<(World, GeoSummary)> {
     let mut r = Reader { b: bytes, p: 0 };
     if r.take(8)? != MAGIC || r.u64()? != key {
         return None;
@@ -450,12 +465,16 @@ fn decode(bytes: &[u8], cfg: &TerrenoConfig, key: u64) -> Option<(World, GeoSumm
     if r.p != bytes.len() {
         return None;
     }
-    let (statgen, historia) = match tect {
-        Some((t, h)) => (
+    let (statgen, historia) = match (tect, tierra) {
+        (Some((t, h)), _) => (
             StaticGen::con_tectonica(cfg, std::sync::Arc::new(t)),
             Some(std::sync::Arc::new(h)),
         ),
-        None => (StaticGen::new(cfg), None),
+        (None, Some(d)) if cfg.es_tierra() => {
+            (StaticGen::con_tierra(cfg, std::sync::Arc::clone(d)), None)
+        }
+        (None, _) if cfg.es_tierra() => return None,
+        (None, _) => (StaticGen::new(cfg), None),
     };
 
     // Coherencia de tamaños antes de construir nada.
@@ -540,10 +559,12 @@ fn decode(bytes: &[u8], cfg: &TerrenoConfig, key: u64) -> Option<(World, GeoSumm
         oro_n: next(),
         oro_air0_e: next(),
         w_hum: next(),
+        hielo: next(),
         c_p,
         desvio_lluvia,
-        // La caché guarda mundos ya envejecidos: el agotamiento ya está activo.
-        humedad_activa: true,
+        // La caché guarda mundos ya envejecidos: el agotamiento ya está activo (salvo en el modo
+        // Tierra, que no lo tiene).
+        humedad_activa: !cfg.es_tierra(),
         anillos: None,
         historia,
         sample_count,

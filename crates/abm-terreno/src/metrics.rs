@@ -35,6 +35,9 @@ pub const SCHEMA_VERSION: u32 = 5;
 /// Versión del esquema con el relieve tectónico o el diagnóstico ampliado del relieve.
 pub const SCHEMA_VERSION_RELIEVE: u32 = 7;
 
+/// Versión del esquema del modo Tierra (`run.tierra` y `diagnostico.tierra`).
+pub const SCHEMA_VERSION_TIERRA: u32 = 8;
+
 /// Franjas de profundidad del océano (m, positivas) del diagnóstico ampliado.
 pub const HIPSOMETRIA_OCEANO_LIMITES_M: [f64; 8] =
     [0.0, 200.0, 1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 6000.0];
@@ -113,6 +116,69 @@ pub struct TerrenoRunMeta {
     /// Historia geológica de la génesis tectónica (esquema v6; solo con el relieve tectónico).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tectonica: Option<crate::tectonica::historia::ResumenTectonica>,
+    /// Modo Tierra (esquema v8): fuentes, parámetros y el año real de cada año simulado.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tierra: Option<TierraMeta>,
+}
+
+/// Año real que usa un año simulado (evento del §7 de la nota del modo Tierra).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AnioReal {
+    pub anio_simulado: u64,
+    pub anio_real: i32,
+}
+
+/// Metadatos del modo Tierra.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TierraMeta {
+    pub fuentes: Vec<String>,
+    pub nivel_carga: u32,
+    pub l_bloque: u32,
+    pub r_max: f64,
+    pub periodo_base: [i32; 2],
+    pub anio_forzado: i32,
+    /// Años y celdas de tierra de CRU TS, y meses de lluvia recortados a 6 553,5 mm (deberían ser 0).
+    pub cru_anios: [i32; 2],
+    pub cru_celdas: u64,
+    pub cru_pre_recortados: u64,
+    /// Por década de CRU TS: `[primer año, fracción del área de tierra sin estaciones en la
+    /// temperatura, en la lluvia]`. Allí CRU TS vuelve a su climatología: sin variabilidad propia.
+    pub cru_sin_estaciones_por_decada: Vec<[f64; 3]>,
+    pub anios: Vec<AnioReal>,
+}
+
+/// Cuenca que llega al mar: su desembocadura (la celda de tierra que vierte en el mar) y su área.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Cuenca {
+    pub lat_deg: f64,
+    pub lon_deg: f64,
+    pub area_km2: f64,
+}
+
+/// Diagnóstico del modo Tierra (esquema v8).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DiagnosticoTierra {
+    /// Fracción con hielo de toda la superficie y de la tierra.
+    pub hielo_frac: f64,
+    pub hielo_tierra_frac: f64,
+    /// Climatología del periodo base sobre la tierra: temperatura media (°C) y lluvia anual (mm).
+    pub temp_tierra_climatologia_c: f64,
+    pub lluvia_tierra_climatologia_mm: f64,
+    /// Lo mismo con el clima de la corrida (los años reales que tocaron), si dura años enteros.
+    pub temp_tierra_corrida_c: f64,
+    pub lluvia_tierra_corrida_mm: f64,
+    /// Fracción del área de las celdas con dato de CHELSA (el resto, al norte de 84° N, toma el
+    /// clima de su meridiano).
+    pub cobertura_chelsa_frac: f64,
+    /// Área de los lagos del motor (km²).
+    pub lagos_km2: f64,
+    /// Conservación del relieve: mayor diferencia relativa de `Σ z·A` entre un nivel de las tablas y el
+    /// de carga, y entre la malla activa (niveles mezclados) y el de carga (debe ser de redondeo).
+    pub conservacion_niveles_rel: f64,
+    pub conservacion_malla_rel: f64,
+    /// Las 50 mayores cuencas que llegan al mar (o a una depresión bajo el nivel del mar, como el
+    /// Caspio), de mayor a menor.
+    pub cuencas: Vec<Cuenca>,
 }
 
 /// Lluvia total sobre tierra (nota de sombra pluviométrica §2).
@@ -202,6 +268,9 @@ pub struct DiagnosticoPlaneta {
     /// Diagnóstico ampliado del relieve (esquema v6).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub relieve: Option<DiagnosticoRelieve>,
+    /// Diagnóstico del modo Tierra (esquema v8).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tierra: Option<DiagnosticoTierra>,
 }
 
 /// Documento completo de salida.
@@ -232,10 +301,15 @@ pub fn diagnostico(world: &World, cfg: &TerrenoConfig) -> DiagnosticoPlaneta {
     let (mut h_tierra, mut prof_mar, mut lluvia_tierra, mut lluvia_mar) = (0.0, 0.0, 0.0, 0.0);
     let (mut w_bajo, mut ppn) = (0.0, 0.0);
     let mut alturas: Vec<(f64, f64)> = Vec::new();
+    // En el modo Tierra, el clima medio es la climatología del periodo base de cada celda.
+    let tierra = world.statgen.tierra();
     for s in 0..world.topo.num_cells {
         let a = world.topo.area[s];
         let h = world.h[s] - mar;
-        let lluvia = systems::lluvia_media_anual_mm(world, cfg, s);
+        let lluvia = match tierra {
+            Some(d) => d.clima_anual(world.topo.keys[s]).1,
+            None => systems::lluvia_media_anual_mm(world, cfg, s),
+        };
         a_total += a;
         if world.es_oceano(s) {
             a_mar += a;
@@ -252,7 +326,10 @@ pub fn diagnostico(world: &World, cfg: &TerrenoConfig) -> DiagnosticoPlaneta {
         if world.w_hum[s] < 0.5 {
             w_bajo += a;
         }
-        let t_media = systems::temp_annual_mean(cfg, world.topo.lat[s], world.h[s], false);
+        let t_media = match tierra {
+            Some(d) => d.clima_anual(world.topo.keys[s]).0,
+            None => systems::temp_annual_mean(cfg, world.topo.lat[s], world.h[s], false),
+        };
         ppn += ppn_miami(t_media, lluvia) * a;
     }
     alturas.sort_by(|x, y| x.0.total_cmp(&y.0));
@@ -277,6 +354,128 @@ pub fn diagnostico(world: &World, cfg: &TerrenoConfig) -> DiagnosticoPlaneta {
         tierra_w_bajo_frac: por(w_bajo, a_tierra),
         ppn_miami_tierra: por(ppn, a_tierra),
         relieve: None,
+        tierra: None,
+    }
+}
+
+/// Diagnóstico del modo Tierra con el estado final del mundo (sumas en orden de celda).
+pub fn diagnostico_tierra(world: &World) -> Option<DiagnosticoTierra> {
+    let d = world.statgen.tierra()?;
+    let n = world.topo.num_cells;
+    let (mut a_tot, mut a_tierra, mut hielo, mut hielo_tierra) = (0.0, 0.0, 0.0, 0.0);
+    let (mut t_clim, mut p_clim, mut t_run, mut p_run) = (0.0, 0.0, 0.0, 0.0);
+    let (mut cob, mut lagos) = (0.0, 0.0);
+    let muestras = world.sample_count.max(1) as f64;
+    let mut salidas: Vec<(f64, usize)> = Vec::new();
+    for s in 0..n {
+        let a = world.topo.area[s];
+        a_tot += a;
+        hielo += world.hielo[s] * a;
+        let (lv, k) = d.celda_de_clave(world.topo.keys[s]);
+        cob += d.niveles[lv].cobertura[k] as f64 * a;
+        if world.es_oceano(s) {
+            continue;
+        }
+        a_tierra += a;
+        hielo_tierra += world.hielo[s] * a;
+        let (t, p) = d.clima_anual(world.topo.keys[s]);
+        t_clim += t * a;
+        p_clim += p * a;
+        t_run += world.temp_sum[s] / muestras * a;
+        p_run += world.precip_sum[s] / muestras * 365.0 * a;
+        if matches!(world.surface[s], Surface::Lago) {
+            lagos += a;
+        }
+        let r = world.receiver[s];
+        if r >= 0 && world.es_oceano(r as usize) {
+            salidas.push((world.drainage_area[s], s));
+        }
+    }
+    salidas.sort_by(|x, y| y.0.total_cmp(&x.0).then(x.1.cmp(&y.1)));
+    let por = |x: f64, a: f64| if a > 0.0 { x / a } else { 0.0 };
+    // Σ z·A por nivel (y Σ |z|·A del nivel de carga, como escala) y el de la malla activa.
+    let suma =
+        |nv: &crate::tierra::Nivel| nv.z.iter().zip(&nv.area).map(|(z, a)| z * a).sum::<f64>();
+    let fino = &d.niveles[d.nivel_carga as usize];
+    let escala: f64 = fino
+        .z
+        .iter()
+        .zip(&fino.area)
+        .map(|(z, a)| z.abs() * a)
+        .sum();
+    let ref_fino = suma(fino);
+    let conservacion_niveles_rel = d
+        .niveles
+        .iter()
+        .map(|nv| (suma(nv) - ref_fino).abs() / escala)
+        .fold(0.0, f64::max);
+    let malla: f64 = (0..n).map(|s| world.h0[s] * world.topo.area[s]).sum();
+    Some(DiagnosticoTierra {
+        hielo_frac: por(hielo, a_tot),
+        hielo_tierra_frac: por(hielo_tierra, a_tierra),
+        temp_tierra_climatologia_c: por(t_clim, a_tierra),
+        lluvia_tierra_climatologia_mm: por(p_clim, a_tierra),
+        temp_tierra_corrida_c: por(t_run, a_tierra),
+        lluvia_tierra_corrida_mm: por(p_run, a_tierra),
+        cobertura_chelsa_frac: por(cob, a_tot),
+        lagos_km2: lagos / 1e6,
+        conservacion_niveles_rel,
+        conservacion_malla_rel: (malla - ref_fino).abs() / escala,
+        cuencas: salidas
+            .iter()
+            .take(50)
+            .map(|&(area, s)| Cuenca {
+                lat_deg: world.topo.lat[s].to_degrees(),
+                lon_deg: world.topo.lon[s].to_degrees(),
+                area_km2: area / 1e6,
+            })
+            .collect(),
+    })
+}
+
+/// Metadatos del modo Tierra de una corrida de `n_sim` años simulados.
+pub fn meta_tierra(
+    e: &crate::tierra::clima::Estado,
+    cfg: &TerrenoConfig,
+    n_sim: usize,
+) -> TierraMeta {
+    let d = e.datos();
+    let t = &cfg.tierra;
+    let cru = &d.cru;
+    let mut decadas: Vec<[f64; 3]> = Vec::new();
+    for (q, chunk) in cru.sin_estaciones.chunks(10).enumerate() {
+        let n = chunk.len() as f64;
+        decadas.push([
+            (cru.anio0 + 10 * q as i32) as f64,
+            chunk.iter().map(|x| x[0] as f64).sum::<f64>() / n,
+            chunk.iter().map(|x| x[1] as f64).sum::<f64>() / n,
+        ]);
+    }
+    TierraMeta {
+        fuentes: vec![
+            "ETOPO 2022 v1 (NOAA NCEI), superficie y roca, cada 2'".to_string(),
+            "CHELSA V2.1, climatologías mensuales 1981–2010 (tas, pr), 30''".to_string(),
+            format!(
+                "CRU TS 4.09, series mensuales {}–{} (tmp, pre), 0,5°",
+                cru.anio0,
+                cru.anio_final()
+            ),
+        ],
+        nivel_carga: d.nivel_carga,
+        l_bloque: t.l_bloque,
+        r_max: t.r_max,
+        periodo_base: t.periodo_base,
+        anio_forzado: t.anio_forzado,
+        cru_anios: [cru.anio0, cru.anio_final()],
+        cru_celdas: cru.n_celdas() as u64,
+        cru_pre_recortados: cru.pre_recortados,
+        cru_sin_estaciones_por_decada: decadas,
+        anios: (0..n_sim as u64)
+            .map(|y| AnioReal {
+                anio_simulado: y,
+                anio_real: e.anio_real(y as i64),
+            })
+            .collect(),
     }
 }
 

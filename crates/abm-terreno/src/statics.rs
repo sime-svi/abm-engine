@@ -94,6 +94,8 @@ pub struct StaticGen {
     /// Relieve tectónico (incremento 4): si está, la altura sale de él y del ruido de detalle.
     tect: Option<Arc<crate::tectonica::Tectonica>>,
     detalle: Detalle,
+    /// Modo Tierra (`diseno_modo_tierra.md`): si está, la altura y el hielo son los de la Tierra.
+    tierra: Option<Arc<crate::tierra::DatosTierra>>,
 }
 
 /// Ruido de detalle del relieve tectónico (§6.8 y decisión del responsable): empieza por debajo de
@@ -206,6 +208,7 @@ impl StaticGen {
             oro_delta: cfg.climate.d_oro_km / cfg.planet.r_km,
             tect: None,
             detalle: Detalle::new(cfg),
+            tierra: None,
         };
         let n = face_n(g.n0, g.l_min);
         let (mut mn, mut mx) = (f64::INFINITY, f64::NEG_INFINITY);
@@ -234,6 +237,25 @@ impl StaticGen {
     /// Estado tectónico final, si el relieve es tectónico.
     pub fn tectonica(&self) -> Option<&Arc<crate::tectonica::Tectonica>> {
         self.tect.as_ref()
+    }
+
+    /// Generador del modo Tierra: la altura de una celda es la media de ETOPO 2022 en ella, a su
+    /// nivel (o a la del nivel de carga, si la celda es más fina). La textura del suelo y el recurso
+    /// siguen siendo los del modelo (provisional hasta SoilGrids).
+    pub fn con_tierra(cfg: &TerrenoConfig, t: Arc<crate::tierra::DatosTierra>) -> Self {
+        let mut g = Self::new(cfg);
+        g.tierra = Some(t);
+        g
+    }
+
+    /// Datos de la Tierra, en el modo Tierra.
+    pub fn tierra(&self) -> Option<&Arc<crate::tierra::DatosTierra>> {
+        self.tierra.as_ref()
+    }
+
+    /// Fracción con hielo de la celda `(c, l, i, j)`: la de la Tierra, o 0 en el planeta inventado.
+    pub fn hielo(&self, c: u8, l: u32, i: u32, j: u32) -> f64 {
+        self.tierra.as_ref().map_or(0.0, |t| t.hielo(c, l, i, j))
     }
 
     /// Altura de la base tectónica en `d` (con la fosa y sin el ruido de detalle); `None` sin
@@ -297,6 +319,9 @@ impl StaticGen {
     /// Elevación (m) en la dirección `d` con el detalle del nivel `l`.
     #[inline]
     pub fn h_at(&self, d: V3, l: u32) -> f64 {
+        if let Some(t) = &self.tierra {
+            return t.h_en(d, l);
+        }
         match &self.tect {
             Some(t) => {
                 let b = t.base_en(d);

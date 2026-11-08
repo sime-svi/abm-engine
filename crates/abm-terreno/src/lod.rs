@@ -709,6 +709,7 @@ struct Cols {
     k_perm: Vec<f64>,
     fert: Vec<f64>,
     resource: Vec<f64>,
+    hielo: Vec<f64>,
     w: Vec<f64>,
     swe: Vec<f64>,
     veg: Vec<f64>,
@@ -762,6 +763,7 @@ impl Cols {
         self.k_perm.push(w.k_perm[s]);
         self.fert.push(w.fert[s]);
         self.resource.push(w.resource[s]);
+        self.hielo.push(w.hielo[s]);
         self.w.push(w.w[s]);
         self.swe.push(w.swe[s]);
         self.veg.push(w.veg[s]);
@@ -809,6 +811,7 @@ impl Cols {
         self.k_perm.push(st.k_perm);
         self.fert.push(st.fert);
         self.resource.push(st.resource);
+        self.hielo.push(w.statgen.hielo(c, l, i, j));
         self.w.push(0.0);
         self.swe.push(0.0);
         self.veg.push(0.0);
@@ -1093,6 +1096,7 @@ fn rebuild(
     world.k_perm = cols.k_perm;
     world.fert = cols.fert;
     world.resource = cols.resource;
+    world.hielo = cols.hielo;
     world.w = cols.w;
     world.swe = cols.swe;
     world.veg = cols.veg;
@@ -1286,6 +1290,8 @@ pub fn update_hydro_lock(world: &mut World) {
 fn biome_for(world: &World, cfg: &TerrenoConfig, s: usize) -> Biome {
     if world.es_oceano(s) {
         Biome::Oceano
+    } else if world.hielo[s] >= 0.5 {
+        Biome::Hielo
     } else if world.sample_count == 0 {
         Biome::Desierto
     } else {

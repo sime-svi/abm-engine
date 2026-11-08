@@ -9,6 +9,7 @@ build = "build.rs"
 
 [dependencies]
 abm-core.workspace = true
+miniz_oxide.workspace = true
 rand.workspace = true
 rand_chacha.workspace = true
 serde.workspace = true

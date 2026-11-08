@@ -466,6 +466,93 @@ max = 0.155
 nota = "fracción de las rupturas que sigue una sutura (nota de rifts: ciclo de Wilson; 0,125 en la semilla 42 el 2026-11-08, 3 de 24; media de 5 semillas 0,29). Vigila que siga habiendo rupturas por suturas sin pasar de lo que da el modelo; 0 con el hundimiento de McKenzie en los márgenes, los puntos calientes y la succión de las losas (notas de hundimiento, de puntos calientes y de succión; 2026-11-08, quinta ronda: otra realización del planeta)"
 
 [[escenario]]
+nombre = "tierra"
+binario = "terreno"
+descripcion = "el modo Tierra real (diseno_modo_tierra.md, Fase 1), un año; necesita las fuentes (herramientas/tierra/descargar.sh)"
+config = "config/terreno.toml"
+ajustes = ['mundo.modo="tierra"']
+presupuesto_s = 60
+# Márgenes del 2026-11-08 (sexta ronda, primera versión del modo Tierra; modo-tierra-diseno.md §3). El
+# relieve y el clima son los de las fuentes: sus márgenes son estrechos, y solo se mueven si cambia la
+# carga o una fuente. Lo que el motor calcula (lagos, cuencas) puede moverse con la hidrología.
+
+[[escenario.metrica]]
+medida = "doc.residuo_agua_max"
+min = 0.0
+max = 1e-09
+nota = "conservación del agua en el modo Tierra: peor residual relativo de un tick (hoy ~1e-12)"
+
+[[escenario.metrica]]
+medida = "doc.valor"
+ruta = "diagnostico.tierra.conservacion_niveles_rel"
+min = 0.0
+max = 1e-12
+nota = "conservación del relieve entre los niveles de las tablas (Σ z·A): redondeo"
+
+[[escenario.metrica]]
+medida = "doc.valor"
+ruta = "diagnostico.tierra.conservacion_malla_rel"
+min = 0.0
+max = 1e-12
+nota = "conservación del relieve entre la malla activa (niveles mezclados) y el nivel de carga: redondeo"
+
+[[escenario.metrica]]
+medida = "doc.valor"
+ruta = "diagnostico.tierra_frac"
+min = 0.2876
+max = 0.2934
+nota = "tierra emergida en la malla del modo Tierra (0,2905; ETOPO superficie a 26 km en una malla uniforme, 0,2912, config/referencias/tierra_relieve.toml)"
+
+[[escenario.metrica]]
+medida = "doc.valor"
+ruta = "diagnostico.altura_media_tierra_m"
+min = 784.5
+max = 800.3
+nota = "altura media de la tierra en la malla del modo Tierra (792,4 m; ETOPO superficie a 26 km en una malla uniforme, 791,1)"
+
+[[escenario.metrica]]
+medida = "doc.valor"
+ruta = "diagnostico.tierra.hielo_frac"
+min = 0.0302
+max = 0.0308
+nota = "fracción de la superficie con hielo (0,0305 = 15,6 Mkm²: Antártida 13,9 y Groenlandia 1,8; hielo_min_m = 10)"
+
+[[escenario.metrica]]
+medida = "doc.valor"
+ruta = "diagnostico.tierra.temp_tierra_climatologia_c"
+min = 8.81
+max = 8.99
+nota = "temperatura media de la tierra en la climatología de CHELSA 1981–2010 (8,90 °C, con la Antártida)"
+
+[[escenario.metrica]]
+medida = "doc.valor"
+ruta = "diagnostico.tierra.lluvia_tierra_climatologia_mm"
+min = 852.5
+max = 869.8
+nota = "lluvia anual media de la tierra en la climatología de CHELSA 1981–2010 (861 mm, con la Antártida)"
+
+[[escenario.metrica]]
+medida = "doc.valor"
+ruta = "run.tierra.anios.0.anio_real"
+min = 1990
+max = 1990
+nota = "año real del año simulado 0 con la semilla 42 (determinismo del remuestreo por bloques)"
+
+[[escenario.metrica]]
+medida = "doc.valor"
+ruta = "diagnostico.tierra.cuencas.0.area_km2"
+min = 5.34e6
+max = 5.9e6
+nota = "la mayor cuenca que llega al mar (el Amazonas, 5,62 Mkm²; HydroSHEDS ~5,9)"
+
+[[escenario.metrica]]
+medida = "doc.valor"
+ruta = "diagnostico.tierra.lagos_km2"
+min = 8.97e6
+max = 9.91e6
+nota = "lagos del motor (9,44 Mkm²): hondonadas del relieve medio a 26 km y cuencas cerradas que se rellenan hasta desbordar (hallazgo; la Tierra tiene ~2,7 Mkm² de lagos de más de 10 ha)"
+
+[[escenario]]
 nombre = "agentes_equilibrio"
 binario = "agentes"
 descripcion = "la config de agentes por defecto, 100 años con clima constante (medias de los años 40-100)"

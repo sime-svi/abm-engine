@@ -34,6 +34,8 @@ rand_chacha = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] } # lectura exacta de f64 (la caché de la génesis guarda su resumen en JSON)
 toml = "1.1"
+# Descompresión Deflate en Rust puro (modo Tierra: las tiras de los GeoTIFF de CHELSA y el gzip de CRU TS).
+miniz_oxide = "0.8"
 # Errores de librería.
 thiserror = "2"
 # Errores en el binario (solo abm-runner).

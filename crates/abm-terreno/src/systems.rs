@@ -24,6 +24,8 @@ pub struct Scratch {
     /// Tiempo de cada paso (informe de rendimiento; no lo lee ninguna regla, CLAUDE §6). Cada paso
     /// suma el tiempo desde la última anotación: quien llama a [`step`] pone la marca.
     pub cron: Cronometro,
+    /// Clima del modo Tierra (años reales y mapas mensuales); `None` en el planeta inventado.
+    pub tierra: Option<crate::tierra::clima::Estado>,
 }
 
 impl Scratch {
@@ -35,6 +37,7 @@ impl Scratch {
             gen_vol: vec![0.0; num],
             q: vec![0.0; num],
             cron: Cronometro::default(),
+            tierra: None,
         }
     }
 
@@ -145,7 +148,10 @@ pub fn step(
     store_before: f64,
     lod: &LodReport,
 ) -> TickAccount {
-    climate(world, cfg, t);
+    match sc.tierra.as_mut() {
+        Some(tierra) => tierra.clima(world, t),
+        None => climate(world, cfg, t),
+    }
     sc.cron.anotar("clima");
     snow(world, cfg, sc);
     sc.cron.anotar("nieve");
@@ -443,7 +449,9 @@ fn vegetation(world: &mut World, cfg: &TerrenoConfig) {
         let f_hum = (-((theta - v.theta_opt) / v.sigma_theta).powi(2)).exp();
         let f_temp = (-((tbar - v.t_opt) / v.sigma_t).powi(2)).exp();
         let suit = f_hum * f_temp * world.fert[id];
-        let k = v.k_max * suit;
+        // El hielo no tiene vegetación (modo Tierra; en el planeta inventado `hielo` = 0 y el factor
+        // es exactamente 1).
+        let k = v.k_max * suit * (1.0 - world.hielo[id]);
         if k > 1e-6 {
             world.veg[id] += v.r_veg * world.veg[id] * (1.0 - world.veg[id] / k) * n;
         } else {
@@ -452,7 +460,11 @@ fn vegetation(world: &mut World, cfg: &TerrenoConfig) {
         world.veg[id] = world.veg[id].max(0.0);
 
         let p_annual = world.precip_sum[id] / count * cfg.climate.t_year;
-        world.biome[id] = whittaker(tbar, p_annual);
+        world.biome[id] = if world.hielo[id] >= 0.5 {
+            Biome::Hielo
+        } else {
+            whittaker(tbar, p_annual)
+        };
     }
 }
 
@@ -479,7 +491,7 @@ pub fn habitabilidad(world: &World, cfg: &TerrenoConfig, id: usize) -> f64 {
     let f_hum = (-((theta - v.theta_opt) / v.sigma_theta).powi(2)).exp();
     let f_temp = (-((world.temp[id] - v.t_opt) / v.sigma_t).powi(2)).exp();
     let g_agua = (agua_disponible(world, id)).clamp(0.0, 1.0);
-    f_hum * f_temp * g_agua
+    f_hum * f_temp * g_agua * (1.0 - world.hielo[id])
 }
 
 /// Agua disponible: humedad del suelo + bonus por río/lago adyacente.
