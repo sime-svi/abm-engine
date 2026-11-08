@@ -1806,3 +1806,81 @@ Encargo del responsable: meter el grosor real de la corteza (CRUST1.0) y su sedi
    - la tabla de cierre con 5 semillas.
    - La rama D y los rifts no dependen de la isostasia.
 3. Lo que sigue de §65.
+
+## 69. Nota de demografía de placas v2 y nota de rifts v2: implementación (2026-11-08, tercera ronda)
+
+Encargo del responsable: implementar la nota de demografía v2 (rama D y medida D6, sin la soldadura A1) y la nota de rifts v2 (reloj del supercontinente), calibrar `λ_A` y `τ_ais` con las placas grandes (~13) y medir placas y fosas, sin la tabla de cierre del relieve (la isostasia la va a cambiar). Informe: `docs/informes/2026-11-08_demografia_placas_v2.md`.
+
+**A1 fuera.** Se retiran `soldaduras`, su contador por par (`Par::inactivo_myr`), `v_fus_cm_anio`, `tau_fus_myr`, el lote `SOLDADURA` y sus dos pruebas. Se quedan A2 (`capturas`) y la retirada de las placas fantasma. Como A1 no actuaba nunca, la deriva sin la rama D ni el reloj reproduce la ronda anterior (fosa 89 800 km, 4,48 km²/año, 4,73 cm/año, fondo de 72/86 Myr).
+
+**Rama D** (`subduccion_de_dorsales`, en la etapa 12 tras los rifts y antes de A2; parámetros `d_dc_km` 300, `theta_dc_grados` 45 e interruptor `subduccion_dorsales`):
+- Para cada par (p, r) con un tramo de dorsal entre los dos y una fosa activa donde `p` se hunde bajo una **tercera** placa `u`: la distancia por dentro de `p` desde la fosa (`distancias_y_fuente_en_placa`, con la fosa más cercana de cada celda).
+  - Una dorsal y una fosa entre las mismas dos placas no cuentan: son un solo borde que cambia de tipo cerca de su polo de rotación.
+- Un tramo de dorsal está en encuentro si la fosa está a menos de `d_dc` **y delante de él**: el tramo de fosa más cercano, a menos de `θ_dc` de la dirección de apertura hacia dentro de `p` (−normal del borde).
+- La franja: las celdas de `p` a menos de `d_dc` de la fosa cuya suma de distancias a la fosa y al tramo de dorsal no pasa de `d_dc` más una celda (las que quedan entre los dos).
+- La franja pasa a `r` con la conservación de `fundir` (`trasladar_franja`; el movimiento de una muestra, `mover_muestra`, se separó de `fundir` sin cambiarlo). No pasan ni el estado de sus tramos convergentes (la fosa se apaga) ni el de su invasión, y `r` no hereda a `p` como antepasada (los tramos de `u` que miraban a `p` no miran a `r`).
+- Si `p` se queda sin muestras, se retira. Evento `subduccion_dorsal` (placas p, r y las de arriba; dorsal en km, área de la franja, `fosa_km` apagada; clase `captura` o `retirada`); lote de procedencia `DORSAL_FOSA`.
+- Orden fijo por pares (p, r); una franja por placa y por paso, sin tocar una placa que ya cambió en el paso.
+
+**D6** (`Deriva::dorsal_fosa_paso`, también con la regla apagada; en `MetricaMyr`, `dorsal_fosa_n` y `dorsal_fosa_km`; en el balance, subducciones de dorsal, placas retiradas y fosa apagada por 100 Myr). En `diagnostico_demografia_placas`: encuentros que empiezan por 100 Myr (un par que entra en encuentro), su duración y cómo acaban (por la regla, con la placa de la franja muerta o viva).
+
+**Decisión: la fosa delante de la dorsal (`θ_dc`), contra la letra.** Con la letra («si a menos de `d_dc` del tramo hay una fosa activa en la que se hunde `p`»), cualquier punto triple dorsal–fosa–fosa cumple la condición en el costado de la dorsal, y la regla se come cada paso una franja de hasta `d_dc` a lo largo de la fosa: el punto triple corre a ~30 cm/año. La franja «entre la dorsal y la fosa» de la nota es la de delante de la dorsal (Farallón), no la de su costado. Se implementa esa lectura y se miden las dos (con `θ_dc` = 180°, la letra).
+
+**Nota de rifts v2** (`rifts.rs`):
+- Cada muestra lleva el reloj de su bloque (`Corteza::reinicio_myr`, el Myr del último reinicio; −∞ en la corteza nueva, que no cambia el reloj de su bloque).
+- El reloj de un bloque es el tiempo desde el reinicio más reciente de sus muestras (`reloj_bloque`): al juntarse dos bloques, el menor, como pide la nota. Sin ningún reinicio, ∞.
+- `p_k = 1 − exp(−λ_A·A_k·min(1, t_k/τ_ais)·Δt)` (`tau_ais_myr` 100).
+- Reinicios: los dos trozos de un rift, en el Myr de la ruptura (`reiniciar_reloj`), y, en una sutura, los bloques de las dos placas que tocan el frente de choque si las dos tienen uno (`reiniciar_reloj_de_sutura`, antes de fundirlas): un choque que añade un continente.
+- **Estado inicial** (la nota no lo fija): cada cratón de partida empieza con un tiempo unido al azar en [0, `τ_ais`], de su generador sembrado, para no sincronizar sus rupturas.
+
+**Métrica de supercontinentes** (nota de rifts v2 §10): `supercontinentes_terminados` y `duracion_media_supercontinente_myr` en el balance, con la histéresis de los ciclos (se forma al llegar el índice a 0,7 y se rompe al bajar de 0,5); y el bloque continental mayor (media y máximo) en el diagnóstico.
+
+**Pruebas nuevas:**
+- `una_dorsal_que_llega_a_la_fosa_muere_y_su_franja_pasa_a_la_placa_del_otro_lado`: una placa de 220 km entre su dorsal y su fosa pasa entera a la del otro lado y se retira; la fosa se apaga y el balance de la corteza cierra (< 10⁻⁹). El escenario baja `v_obj`: con solo esa placa moviéndose, el rozamiento calibrado a la velocidad de la Tierra le daría 79 cm/año.
+- `con_la_rama_d_apagada_solo_se_miden_los_encuentros`.
+- `un_bloque_recien_unido_no_se_rompe_y_uno_viejo_si`: con `τ_ais` enorme, un bloque con el reloj recién puesto no se rompe en 10 Myr; uno unido hace 500 Myr se rompe en el primer paso, y sus trozos empiezan el reloj en el Myr de la ruptura.
+- India–Asia apaga la rama D, como ya apagaba la invasión: en las esquinas de sus meridianos artificiales el océano exterior tiene a la vez una dorsal con Asia y una fosa bajo la placa de la India, y la regla movía la rotura de la losa de 22 a 25 Myr.
+
+**Medidas** (5 semillas, tras el rodaje; informe, §2–§4):
+
+| | Sin D ni reloj | Solo el reloj | D con la letra y reloj | **D de frente y reloj** | Objetivo |
+|---|---|---|---|---|---|
+| Placas de ≥ 1 % (media) | 18,3 | 14,9 | 15,1 | **13,8** | ~13 |
+| Rupturas por 100 Myr | 5,0 | 3,6 | 4,1 | 3,5 | 4–7 en la ruptura de un supercontinente |
+| Fosa (km) | 89 758 | 77 851 | 86 657 | **71 807** | 51 309 ± 25 % |
+| Fondo que se hunde (km²/año) | 4,48 | 3,79 | 3,99 | **3,55** | 2,7–3,4 |
+| Edad del fondo, deriva / final (Myr) | 72 / 86 | 85 / 109 | 80 / 102 | 87 / 110 | no peor que 88 |
+| Subducciones de dorsal por 100 Myr | — | — | 538 | 316 | — |
+
+- **D6, sin la regla:** ~400 encuentros por 100 Myr, de ~3 Myr; el 94 % acaba con la placa viva.
+- **Calibración** (`λ_A` 2, 3 y 4·10⁻⁴; `τ_ais` 50, 100 y 200): `λ_A` = 4·10⁻⁴ y `τ_ais` = 100 dan 13,8 ± 2,4 placas grandes; 3·10⁻⁴ da lo mismo, 2·10⁻⁴ se queda corto (11,8), `τ_ais` 50 sobra (16,4) y 200 no mejora (14,1).
+- **No se forma ningún supercontinente:** el bloque continental mayor es como mucho el 36–46 % del continente. El índice de supercontinente mide contactos y oscila; su «duración» (9–42 Myr) no es la de un supercontinente. `τ_ais` queda en su supuesto.
+- **Tiempo:** 256 s el planeta solo, 256,7 en la batería (presupuesto 275).
+- **Batería:** 35 métricas del planeta fuera de sus márgenes (otra realización). No se mueven hasta después de la isostasia.
+
+## 70. Estudio de isostasia continental (2026-11-08, tercera ronda)
+
+Protocolo del responsable: `estudio_isostasia_continental.md`. Herramienta: `herramientas/analisis/estudio_isostasia.py`; salida, `config/referencias/tierra_isostasia.toml`; informe, `docs/informes/2026-11-08_estudio_isostasia_continental.md`. No cambia el motor.
+
+- **Reproducción de Lamb et al. (2020).**
+  - α = 7,8 y β = 93, de sus rejillas (Zenodo 4031646); 32 km de corteza a nivel del mar con 100 km de litosfera.
+  - Con CRUST1.0 (corteza más sedimento) y CAM2016, nuestra anomalía y la suya se correlacionan 0,92 en la tierra continental, con 307 m de diferencia RMS.
+  - Su altura reducida coincide con su tabla por continentes.
+- **Reglas R0–R4** con validación cruzada (Eurasia, África y Australia frente a América y la Antártida). Error medio por celda en las mitades de prueba:
+  - R0, 772 m; R1, 640; R2 con CAM2016, 677 (TC1, 680; LITHO1.0, 816); R3a, 680; R3b, 675;
+  - R3b con el sedimento de relleno, 539; R3c (manto arcaico propio), 529;
+  - **R4, 451.**
+- **R4:** ρ_u 2 750 hasta 15 km y ρ_l 3 000 por debajo; Δρ_ma 20 (arcaico 10); L de la edad con L_min 40 km y τ_L 100 Myr; el sedimento, de relleno; H_0 3 005 m.
+  - Cumple la altura media (648 m) y el error (un 33 % mejor que R2 con L observado).
+  - No cumple la tierra baja (15,3 %, objetivo 28 ± 5), la alta (3,2 %, objetivo 3,3–7,3), la plataforma (25,0 km, objetivo ≥ 26,8) ni los casos (llanura rusa 813 m, Kenia 549, Tíbet 3 669).
+- **Ninguna regla cumple el §5.** Los parámetros acaban en los bordes de sus rangos publicados. Lo que queda (450–560 m por celda, más de 1 km en los casos con nombre) es la escala de la topografía dinámica y de la flexión.
+- **Reparto del error de R0 (Shapley):** densidad de la corteza ~45 %, sedimento que levanta ~1/3, manto litosférico ~1/4.
+- **Para el motor:** basta con la edad tectonotérmica (R3b iguala a R2 con la litosfera observada).
+
+## 71. Pendientes (2026-11-08, tercera ronda; decide el responsable)
+
+1. **La regla de isostasia continental** (§70; opciones en el §11 del informe del estudio): R4 como base, con la topografía dinámica como ampliación futura; R4 sin el manto arcaico propio; o un estudio de la topografía dinámica. Después, recalibrar `E_1`, `n_ero` y el nivel del mar, y dar edades terrestres a los continentes de partida.
+2. **La rama D:** de frente (`θ_dc` 45°, por defecto) o la letra; después, retirar los interruptores.
+3. **La edad del fondo** (110 Myr al final con el reloj de los rifts; objetivo ≤ 88).
+4. **La tabla de cierre del relieve y los márgenes de la batería**, tras la isostasia.
+5. Lo que sigue de §65.

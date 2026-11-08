@@ -1493,3 +1493,32 @@ Formato de entrada:
   - el motor no cambia;
   - la rama `terreno-demografia-placas` sigue sin fusionar, con la rama A;
   - `main` sigue en 7c54bbd.
+
+## [2026-11-08] Estudio de isostasia continental; nota de demografía de placas v2 (rama D, D6) y nota de rifts v2 (reloj del bloque)
+
+- **Qué pidió el responsable.**
+  - «Bien parado.» Un estudio, sin tocar el motor (`estudio_isostasia_continental.md`):
+    - reproducir la isostasia de litosfera completa de Lamb et al. (2020) con sus datos (Zenodo 4031646);
+    - evaluar las reglas R0–R4 con la Tierra real, con validación cruzada entre mitades de continentes;
+    - dar la tabla del §4 y si se cumplen los criterios del §5, con su informe.
+  - Mientras tanto, implementar la nota de demografía v2 (rama D y D6, sin A1) y la de rifts v2 (reloj), calibrar `λ_A` y `τ_ais` con las placas grandes (~13), medir placas y fosas, y no hacer la tabla de cierre del relieve. Presupuesto, 275 s.
+- **El estudio** (`herramientas/analisis/estudio_isostasia.py`, `config/referencias/tierra_isostasia.toml`, informe `docs/informes/2026-11-08_estudio_isostasia_continental.md`, diseño §70).
+  - **Datos:** el PDF del artículo solo tenía imágenes, pero sus constantes salen de sus rejillas (α 7,8 y β 93). La litosfera que usaron es CAM2016Litho (EarthScope). TC1 solo es libre a 5°.
+  - **Reproducción:** correlación 0,92 en la tierra continental (en el océano usan otra regla para el agua).
+  - **R4** (litosfera de la edad tectonotérmica con recuperación, manto arcaico más ligero, corteza densa abajo y sedimento de relleno): error medio 451 m en las mitades de prueba, frente a 677 de R2 con la litosfera observada; altura media 648 m.
+  - **Ninguna regla cumple el §5:** la tierra baja (15 % frente a 28 %) y los casos con nombre (llanura rusa, Kenia, Tíbet) son topografía dinámica de más de unos cientos de metros. Los parámetros acaban en los bordes de sus rangos.
+  - **Reparto del error de R0:** densidad de la corteza ~45 %, sedimento ~1/3, manto litosférico ~1/4.
+- **La ronda de placas** (informe `docs/informes/2026-11-08_demografia_placas_v2.md`, diseño §69, commit cf1b87d).
+  - A1 fuera.
+  - **Rama D:** una dorsal con la fosa delante (`θ_dc` 45°) a menos de `d_dc`, bajo una tercera placa, pasa su franja a la placa del otro lado y apaga la fosa.
+    - **Decisión contra la letra:** a la letra actuaba en los puntos triples, comiéndose 300 km de fosa por paso (538 veces por 100 Myr). Se midieron las dos.
+  - **Rifts v2:** reloj por bloque (`reinicio_myr`), reiniciado en los rifts y en las suturas entre continentes. Los cratones de partida empiezan con un reloj al azar en [0, `τ_ais`].
+  - **Resultado:** placas de ≥ 1 % 13,8 (antes 18,3); fosa 71 800 km (×1,40; antes ×1,75); 3,55 km²/año; el fondo envejece (110 Myr al final, antes 86).
+  - **Calibración:** `λ_A` 4·10⁻⁴ y `τ_ais` 100 se quedan. No se forma ningún supercontinente: el bloque mayor es como mucho del 46 %.
+  - **Tiempo:** 256 s, también en la batería (presupuesto 275). 35 márgenes del planeta fuera: no se mueven hasta la isostasia; `main` sin tocar.
+  - India–Asia apaga la rama D en las esquinas artificiales de su escenario.
+- **Decisiones que esperan:**
+  - la regla de isostasia (R4 como base o estudiar la topografía dinámica);
+  - la rama D, de frente o con la letra;
+  - la edad del fondo;
+  - después, la tabla de cierre y los márgenes de la batería.

@@ -4,7 +4,7 @@
 > Leyenda: `[x]` existe y funciona · `[~]` existe parcialmente · `[ ]` planificado, aún no creado.
 > Regenerar tras cualquier cambio estructural (ver CLAUDE.md §8).
 
-Última actualización: 2026-11-08 (segunda ronda) — relieve tectónico (incremento 4 del terreno): la corteza real (CRUST1.0) en la regla del modelo no da el relieve real; la ronda se para y decide el responsable (la nota de demografía de placas v2 y la de rifts v2 esperan)
+Última actualización: 2026-11-08 (tercera ronda) — relieve tectónico (incremento 4 del terreno): nota de demografía de placas v2 (rama D) y nota de rifts v2 (reloj del bloque) implementadas en la rama terreno-demografia-placas; estudio de isostasia continental hecho con la Tierra real (decide el responsable)
 
 ---
 
@@ -33,6 +33,7 @@ abm/
 │   │   ├── [x] tierra_bordes.toml  # Bordes de placa de Bird (2003) medidos en la malla tectónica como los del modelo (+ convergencia de las fosas)
 │   │   ├── [x] tierra_nivel_mar.toml # La Tierra real con la regla del modelo: nivel del mar, zócalo por edad y curvas de placa ajustadas; escalones de edad (zonas de fractura)
 │   │   ├── [x] tierra_corteza.toml # La corteza real (CRUST1.0) con la isostasia del modelo: relieve, por grosor y por tipo de corteza, residuo frente a LITHO1.0
+│   │   ├── [x] tierra_isostasia.toml # Estudio de isostasia continental: reproducción de Lamb et al. (2020) y reglas R0–R4 con validación cruzada
 │   │   └── [x] tierra_lluvia.toml  # Lluvia observada (WorldClim, CHELSA) a 26 km con las definiciones del planeta
 │   └── experiments/
 │       └── [x] terreno_relieve_ruido.toml # Relieve de ruido: referencia de la no regresión mientras se mide (se borra con el interruptor)
@@ -133,6 +134,7 @@ abm/
 │       ├── [x] bordes_bird.py     # Bordes de Bird (2003) en la malla tectónica, medidos y clasificados como el modelo; convergencia de SUB, OCB y CCB
 │       ├── [x] tierra_regla_modelo.py # La Tierra real (Seton, GlobSed) con la curva de profundidad y la isostasia del modelo: nivel del mar y zonas de fractura
 │       ├── [x] tierra_corteza_regla.py # La corteza real (CRUST1.0, LITHO1.0) con la isostasia continental del modelo: relieve frente a ETOPO y corteza del planeta
+│       ├── [x] estudio_isostasia.py # Estudio de isostasia continental: reproduce a Lamb et al. (2020) y evalúa las reglas R0–R4 con la Tierra real (validación cruzada)
 │       ├── [x] lluvia_observada.py # Lluvia observada de la Tierra a 26 km, frente a la del planeta
 │       └── [x] tiffmini.py        # Lector mínimo de GeoTIFF (tiras, Deflate) también por peticiones parciales
 │
@@ -150,7 +152,9 @@ abm/
 ├── docs/
 │   ├── informes/                  # Un informe por ronda de medida, con sus tablas
 │   │   ├── [x] 2026-11-08_demografia_placas.md # Diagnóstico de la demografía de placas (D1–D5), rama A y tabla de cierre con el relieve
-│   │   └── [x] 2026-11-08_corteza_real_en_la_regla.md # La corteza real en la isostasia del modelo: no da el relieve real (la ronda se para)
+│   │   ├── [x] 2026-11-08_corteza_real_en_la_regla.md # La corteza real en la isostasia del modelo: no da el relieve real (la ronda se para)
+│   │   ├── [x] 2026-11-08_estudio_isostasia_continental.md # Estudio de isostasia: reproducción de Lamb et al. (2020), reglas R0–R4 con validación cruzada, tabla del §4 y criterios del §5
+│   │   └── [x] 2026-11-08_demografia_placas_v2.md # Rama D (subducción de dorsales), D6, rifts con reloj, calibración de λ_A y τ_ais, placas y fosas, tiempo
 │   └── design/                    # Modelos matemáticos y ecuaciones (precede al código)
 │       ├── inicial/               # Una carpeta por fase (ver CLAUDE §8.1)
 │       │   ├── [x] README.md          # Explicación llana de la fase + consideraciones
@@ -172,8 +176,9 @@ abm/
 │       │   ├── [x] adenda_balance_corteza.md              # Adenda del responsable (v9): balance de la corteza, flujo lateral, erosión con la altura, η según el grosor, rifts que estiran, origen de arco por fracción (IMPLEMENTADA; incremento-4-diseno.md §9, §13, §23, §28, §47, §51 y §60)
 │       │   ├── [x] nota_bordes_placa.md                   # Nota del responsable: borde suavizado, dientes, 20°, islas (IMPLEMENTADA; incremento-4-diseno.md §12)
 │       │   ├── [x] nota_ciclo_fosas.md                    # Nota del responsable (v6): nacimiento, vida y muerte de las fosas (IMPLEMENTADA; incremento-4-diseno.md §24–§27, §31, §40 y §51)
-│       │   ├── [x] nota_rifts.md                          # Nota del responsable: rifts por área y por suturas, ciclo de Wilson (IMPLEMENTADA; incremento-4-diseno.md §59–§65)
-│       │   └── [x] nota_demografia_placas.md              # Nota del responsable: demografía de placas y exceso de fosas (DIAGNÓSTICO y rama A en la rama terreno-demografia-placas; ninguna rama encaja: decide el responsable; §66)
+│       │   ├── [x] nota_rifts.md                          # Nota del responsable, v2: rifts por área y por suturas, con el reloj del bloque (τ_ais; IMPLEMENTADA, rama terreno-demografia-placas; incremento-4-diseno.md §59–§65, §69)
+│       │   ├── [x] nota_demografia_placas.md              # Nota del responsable, v2: demografía de placas; A2, retirada de las fantasma y rama D (subducción de dorsales) con D6 (IMPLEMENTADA, rama terreno-demografia-placas; §66, §69)
+│       │   └── [x] estudio_isostasia_continental.md       # Protocolo del responsable: estudio de isostasia continental previo al diseño (HECHO con datos reales; §70; informe en docs/informes/)
 │       ├── paquetes/              # Fase: código dividido en el workspace de paquetes
 │       │   └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)
@@ -268,10 +273,11 @@ metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
 **Pendiente (fases siguientes):**
 - **Pendientes obligatorios de realismo** (CLAUDE §2.8; responsable, 2026-11-05), en orden:
   - **relieve tectónico, lo que falta para que sea el de la Tierra** (hallazgos de `incremento-4-diseno.md` §6–§7):
-    0. **la isostasia continental** (decide el responsable; `incremento-4-diseno.md` §67–§68, `tierra_corteza_regla.py`).
+    0. **la isostasia continental** (decide el responsable; `incremento-4-diseno.md` §67–§68 y §70–§71; `tierra_corteza_regla.py` y `estudio_isostasia.py`).
        - Con la corteza real de CRUST1.0, la regla del modelo pone la tierra al doble de altura: 1 389 m, frente a 671. Tiene el 19,7 % por encima de 2 km (5,3 %) y el 4,7 % por debajo de 200 m (28,3 %).
-       - Falta el manto litosférico: la isostasia térmica según la edad termotectónica, y la subsidencia de las cuencas y de los márgenes.
-       - Mientras no se arregle, el relieve, la erosión y el sedimento al mar del planeta se calibran sobre una base irreal;
+       - El estudio (Lamb et al. 2020 reproducido) propone una litosfera completa con la edad tectonotérmica, la corteza más densa abajo y el sedimento de relleno (R4): altura media real y un tercio menos de error, pero un 15 % de tierra baja (28 %) y sin los casos de topografía dinámica (Kenia, llanura rusa).
+       - Mientras no se decida, el relieve, la erosión y el sedimento al mar del planeta se calibran sobre una base irreal;
+    0b. **la edad del fondo oceánico:** con el reloj de los rifts hay menos océano nuevo y el fondo llega a 110 Myr al final (objetivo ≤ 88; Tierra 64);
     1. ~~adenda de balance~~ y ~~nota de bordes~~ hechas. **Siguen:** las fuerzas de las placas (las fosas miden 2 veces las de la Tierra con cualquier `L_borde` de 100–300 km; nota de bordes §11.2); la exportación al mar (3,1 AU, ≈1,8): no depende de `τ_ero`; falta la delaminación (0,05 AU, ≈1,1): ¿raíces de los arcos o erosión no lineal? (decide el responsable); rifts que estiren conservando (`F_rift` provisional); los 3 pasos de 500 que pasan la alarma de 80 km; después, calibrar `τ_del` y revisar `f_acr`;
     2. inicio de subducción en márgenes pasivos viejos (hoy sobrevive un 15 % de fondo de más de 200 Myr);
     3. **mecanismo pendiente: mesetas oceánicas, montes submarinos y puntos calientes**, unos 150 m de nivel del mar en la Tierra real.

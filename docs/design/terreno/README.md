@@ -612,3 +612,51 @@ Iba a ser la última ronda del relieve tectónico. Antes de congelar la capa, el
 - Y un tercio de la corteza continental que queda bajo el mar, en las plataformas y los márgenes.
 
 **Lo que queda por decidir.** La ronda se paró aquí, como pidió el responsable, y él decide cómo arreglar la base. La opción más realista es añadir a la regla el enfriamiento de la litosfera continental con la edad, como ya tiene el fondo oceánico. Según los datos, eso arreglaría más o menos la mitad: la tierra por encima de 2 km bajaría del 20 % al 7 %. Esperan la muerte de las placas oceánicas al llegar su dorsal a una fosa (nota de demografía v2) y los rifts con reloj (nota de rifts v2), que no dependen de esto.
+
+### Placas que mueren cuando su dorsal llega a la fosa, y continentes con reloj (08-11-2026, tercera parte)
+
+**Qué se pidió.** Que las placas oceánicas grandes puedan morir como murió la de Farallón frente a América, y que los continentes no se partan siempre al mismo ritmo.
+
+**La muerte de una placa oceánica (rama D).**
+- Una **dorsal** es la grieta del fondo del mar donde nace corteza nueva y dos placas se separan.
+- Una **fosa** es donde una placa se hunde bajo otra.
+- Si una placa queda encajada entre su dorsal y una fosa, y la franja entre las dos se estrecha a menos de 300 km, la dorsal muere. La franja pasa a la placa del otro lado de la dorsal y la fosa se apaga. Así desapareció Farallón: sus restos pasaron a la placa del Pacífico y la fosa de California se convirtió en la falla de San Andrés.
+- **Un matiz importante.** Si se aplica la regla a la letra, también actúa donde una dorsal toca una fosa de lado: en los «puntos triples», donde se juntan tres placas. Allí la regla se comía cada millón de años una franja de 300 km a lo largo de la fosa, mucho más deprisa de lo que se mueven esos puntos en la Tierra. La franja que de verdad está «entre» la dorsal y la fosa es la de delante. Se hizo así, y se midieron las dos versiones.
+
+**El reloj de los continentes.**
+- Un continente grande funciona como una tapa: el calor del manto se acumula debajo y, con el tiempo, lo parte.
+- Ahora cada bloque de continente lleva un reloj. Empieza a cero cuando se parte o cuando se suelda a otro, y sus probabilidades de partirse crecen durante ~100 millones de años.
+
+**Lo que salió.**
+- **Las placas grandes ya están en número terrestre:** unas 14 de al menos el 1 % del planeta, frente a 13 en la Tierra (antes, 18).
+- **Las fosas miden 1,4 veces las de la Tierra** (antes 1,75), y el fondo que se hunde cada año está casi en el valor real.
+- **El fondo oceánico envejece:** con menos continentes que se parten, nace menos océano nuevo. Queda pendiente, porque hay fondo viejo que ninguna fosa consume.
+- **No se forma ningún supercontinente.** El mayor bloque de continente nunca reúne más de la mitad de toda la tierra (Pangea reunía casi toda), así que no se puede medir cuánto dura uno.
+- **El planeta tarda 256 segundos**, dentro de los 275 del presupuesto.
+
+### El estudio de la altura de los continentes (08-11-2026, tercera parte)
+
+**La pregunta.** La regla con la que el modelo hace flotar los continentes falla incluso con la corteza real (segunda parte). Antes de cambiarla, el responsable pidió un estudio con el método científico:
+- reproducir primero un resultado publicado;
+- comparar varias reglas, de la más sencilla a la más completa;
+- comprobarlas con datos que no se usaron para ajustarlas.
+
+**La idea de fondo: la isostasia de toda la litosfera.**
+- La **litosfera** es la capa rígida que forma las placas: la corteza y, debajo, el **manto litosférico**, un manto frío pegado a ella.
+- Ese manto es un poco más denso que el manto blando de debajo (la astenosfera). Cuanto más gruesa es la litosfera, más se hunde el continente.
+- Lamb y sus colegas (2020) mostraron que, con la corteza y el grosor de la litosfera, se explica buena parte de la altura de los continentes.
+
+**Lo que salió.**
+- **Su resultado se reproduce:** con sus datos, nuestras cuentas y las suyas coinciden en los continentes (una correlación de 0,92).
+- **Se probaron diez reglas.** Se ajustaron con Eurasia, África y Australia y se comprobaron con América y la Antártida, y al revés. Así se ve si una regla explica los datos o solo se ha adaptado a ellos.
+- **La mejor**, que el motor podría llevar:
+  - el grosor de la litosfera sale de la edad de cada zona, de su último rift u orogenia;
+  - el manto bajo los escudos más viejos es algo más ligero;
+  - la corteza es más densa en su parte de abajo;
+  - el sedimento rellena el hueco de las cuencas en vez de levantar la tierra.
+- **Lo que consigue:** la altura media de la tierra sale como la real (648 m, frente a 671), con un error un tercio menor que la regla con la litosfera observada.
+- **Lo que no consigue:** la tierra muy baja (el 15 % por debajo de 200 m, frente al 28 %) ni lugares concretos como la llanura rusa (sale a 800 m; está a 130), Kenia (sale a 550 m; está a 1 750) o el Tíbet.
+  - Ahí actúa la **topografía dinámica**: el manto profundo, que sube bajo África oriental y baja bajo las grandes cuencas, y empuja la superficie arriba o abajo.
+  - Ni la regla publicada de Lamb explica esos lugares.
+
+**Lo que queda por decidir.** Ninguna regla cumple todos los objetivos del estudio. El responsable decide si se adopta la mejor como base, dejando la topografía dinámica para más adelante, o si antes se estudia también esa topografía. Después habrá que recalibrar la erosión y el nivel del mar, y empezar los continentes con edades terrestres, con cratones viejos.
