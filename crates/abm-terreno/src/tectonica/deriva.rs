@@ -578,6 +578,8 @@ pub struct Borde {
     pub largo_km: f64,
     /// Convergencia (km/Myr): `> 0` si `p` y `q` se acercan.
     pub v_n: f64,
+    /// Módulo de la velocidad relativa de `p` respecto a `q` en la celda (km/Myr).
+    pub v_rel: f64,
     pub tipo: TipoBorde,
     /// En una subducción: `p` es la placa que se hunde.
     pub p_subduce: bool,
@@ -1034,6 +1036,9 @@ pub struct Deriva {
     /// Dónde se consumió fondo oceánico en el último paso (celda del frente y km²) y dónde nació
     /// (celdas con corteza nueva): para las pruebas de los bordes.
     pub consumo_paso: Vec<(u32, f64)>,
+    /// La placa que se hunde en cada tramo del último paso (índice) y el fondo consumido (km²;
+    /// diagnóstico de la nota de demografía de placas, D5).
+    pub hundido_paso: Vec<(u32, f64)>,
     pub creacion_paso: Vec<u32>,
     // Trabajo (se reserva una vez).
     cov: Vec<[(u32, u32); MAXC]>,
@@ -1250,6 +1255,7 @@ impl Deriva {
             consumo_en_borde_paso: Vec::new(),
             solape_en_borde_paso: Vec::new(),
             consumo_paso: Vec::new(),
+            hundido_paso: Vec::new(),
             creacion_paso: Vec::new(),
             ruido_def,
             vecindad,
@@ -2708,6 +2714,7 @@ impl Deriva {
             p.actualizar_cap(&self.malla);
         }
         self.consumo_paso = por_celda.iter().map(|t| (t.k, t.a_sub)).collect();
+        self.hundido_paso = por_celda.iter().map(|t| (t.placa, t.a_sub)).collect();
         (choques, por_celda, difusas)
     }
 
@@ -3000,6 +3007,7 @@ impl Deriva {
                 normal,
                 largo_km: largo,
                 v_n,
+                v_rel: vmod,
                 tipo,
                 p_subduce,
                 losa: 0.0,

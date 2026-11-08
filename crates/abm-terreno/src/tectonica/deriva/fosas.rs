@@ -137,6 +137,21 @@ impl Deriva {
         pq.id == otra || pq.ancestros.contains(&otra)
     }
 
+    /// Fosas activas de los bordes del paso (diagnóstico de la nota de demografía de placas, D2 y
+    /// D5): por cada celda de borde de la placa que se hunde, su índice, la longitud (km), la edad de
+    /// la fosa (Myr) y la convergencia (km/Myr).
+    pub fn fosas_activas(&self) -> Vec<(u32, f64, f64, f64)> {
+        self.bordes
+            .iter()
+            .filter(|b| b.tipo == TipoBorde::Subduccion && b.p_subduce)
+            .filter_map(|b| {
+                self.estado_fosa(b.p, self.rep[b.k as usize], b.q)
+                    .filter(|e| e.activa)
+                    .map(|e| (b.p, b.largo_km, e.edad_myr, b.v_n))
+            })
+            .collect()
+    }
+
     /// Estado del tramo frente a la placa `q` en la celda local `l` de la placa `p`, o en sus
     /// vecinas a uno y dos anillos (orden fijo): el margen se mueve hasta un par de celdas por paso.
     pub(super) fn estado_fosa(&self, p: u32, l: u32, q: u32) -> Option<EstadoFosa> {
@@ -459,10 +474,11 @@ impl Deriva {
                 if x >= cfg.x_ini_km {
                     let (arriba, hunde, edad_fondo) = self.polaridad_al_nacer(regs, pa, pb);
                     self.fosas_paso.nacen[0] += 1;
+                    // `largo` suma las celdas de los dos lados del borde: la fosa mide la mitad.
                     eventos.push((
                         "nacimiento_fosa",
                         ids(hunde, arriba),
-                        largo,
+                        0.5 * largo,
                         punto,
                         Detalle {
                             clase: Some("inducido".into()),

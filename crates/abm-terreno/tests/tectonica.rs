@@ -3555,3 +3555,509 @@ fn diagnostico_procedencia_del_fondo() {
         println!("{i}");
     }
 }
+
+// --- Demografía de placas (nota_demografia_placas.md §0) -----------------------------------------
+
+/// Foto del diagnóstico de la demografía de placas (§0), cada 50 Myr y al final.
+#[derive(Default, Clone)]
+struct FotoDemografia {
+    myr: f64,
+    /// D1: placas vivas con área, placas vivas sin área (consumidas y que siguen «vivas») y áreas
+    /// (fracción de la esfera, de mayor a menor).
+    placas: f64,
+    fantasmas: f64,
+    areas: Vec<f64>,
+    /// D3: longitud de fosa activa, de convergencia difusa y de choque (km).
+    fosas_km: f64,
+    difusas_km: f64,
+    choques_km: f64,
+    /// D4: borde entre pares de placas con la velocidad relativa máxima de todo su borde común por
+    /// debajo de 0,2 cm/año (km), por cuánto tiempo llevan así: <10, 10–20, 20–50, 50–100, ≥100 Myr.
+    inactivo_km: [f64; 5],
+    /// D4 con otros umbrales: borde de pares con la velocidad relativa máxima por debajo de 0,5 y de
+    /// 1 cm/año (km).
+    inactivo_otros_km: [f64; 2],
+    /// Placas sin área: sus muestras (ocultas) y su volumen de tipo continental (km³).
+    fantasmas_muestras: f64,
+    fantasmas_v_cont_km3: f64,
+    /// D2: longitud de fosa activa por su edad (<10, 10–25, 25–50, 50–100, 100–200, ≥200 Myr) y por
+    /// su convergencia (<1, 1–2, 2–4, 4–6, 6–10, ≥10 cm/año).
+    fosa_por_edad_km: [f64; 6],
+    fosa_por_conv_km: [f64; 6],
+    /// D5: por el origen de la placa (inicial, rift, invasión, salto de dorsal): placas, área
+    /// (fracción de la esfera), fosa activa propia (km) y fondo que hunde (km²/año, media de los
+    /// últimos 50 Myr).
+    por_origen: [[f64; 4]; 4],
+}
+
+#[derive(Default)]
+struct InformeDemografia {
+    semilla: u64,
+    fotos: Vec<FotoDemografia>,
+    /// D1, tras el rodaje, por 100 Myr: nacimientos (rift, invasión, salto de dorsal, espontáneo) y
+    /// muertes (consumida entera, soldada en un choque, absorbida).
+    nacen: [f64; 4],
+    mueren: [f64; 3],
+    /// D2, tras el rodaje, por 100 Myr (km): fosa creada por nacimiento inducido, nacimiento
+    /// espontáneo, invasión de transformantes y separación de márgenes invadidos; perdida por muerte
+    /// sin convergencia y por choque; y el resto del cambio (geometría del borde, divisiones y
+    /// fusiones de placas).
+    fosa_creada: [f64; 4],
+    fosa_perdida: [f64; 2],
+    fosa_resto: f64,
+    /// D3 y D4, medias tras el rodaje: fosa, difusa y choque (km), y borde inactivo (km).
+    conv_media_km: [f64; 3],
+    inactivo_medio_km: f64,
+    /// Placas: media tras el rodaje, y potencia de las fuerzas al final (tirón, empuje, choques,
+    /// arrastre; fracción de la motriz o de la resistente).
+    placas_media: f64,
+    potencia: [f64; 4],
+}
+
+/// Origen de una placa para D5.
+const ORIGENES: [&str; 4] = ["inicial", "rift", "invasión", "salto de dorsal"];
+
+fn diagnosticar_demografia(semilla: u64, variante: &str) -> InformeDemografia {
+    use std::collections::HashMap;
+    let ajustes: Vec<String> = variante
+        .split(',')
+        .map(|x| x.trim().to_string())
+        .filter(|x| !x.is_empty())
+        .collect();
+    let cfg = abm_terreno::config::TerrenoConfig::load_con("../../config/terreno.toml", &ajustes)
+        .expect("config");
+    let tc = cfg.tectonica.clone();
+    let malla = Malla::new(cfg.planet.n0, tc.nivel_malla, cfg.planet.r_km);
+    let mut d = Deriva::nueva(&tc, semilla, malla);
+    let pasos = (tc.t_deriva_myr / tc.dt_myr).round() as u64;
+    let rodaje = (tc.t_rodaje_myr / tc.dt_myr).round() as u64;
+    let a_tot = d.malla.area_total();
+    let v_fus = 0.2 * 10.0; // 0,2 cm/año en km/Myr
+    let mut inf = InformeDemografia {
+        semilla,
+        ..Default::default()
+    };
+    let mut origen: HashMap<u64, usize> = d.placas.iter().map(|p| (p.id, 0)).collect();
+    let mut vistos = 0usize;
+    let mut con_area: HashMap<u64, bool> = HashMap::new();
+    let mut inactivo_desde: HashMap<(u64, u64), f64> = HashMap::new();
+    let mut hundido_ventana: HashMap<u64, f64> = HashMap::new();
+    let mut l_fosa_ini = None;
+    let (mut n_val, mut placas_suma) = (0.0, 0.0);
+    for paso in 1..=pasos {
+        d.dar_paso();
+        let tras_rodaje = paso > rodaje;
+        // Eventos nuevos: nacimientos y muertes de placas, fosa creada y perdida.
+        for e in &d.eventos[vistos..] {
+            let cuenta = |x: &mut f64| {
+                if tras_rodaje {
+                    *x += 1.0
+                }
+            };
+            match e.tipo.as_str() {
+                "rift" | "salto_dorsal" => {
+                    let o = if e.tipo == "rift" { 1 } else { 3 };
+                    for &id in &e.placas[1..] {
+                        origen.insert(id, o);
+                    }
+                    cuenta(&mut inf.nacen[if o == 1 { 0 } else { 2 }]);
+                }
+                "placa_nueva" => {
+                    // Separación del océano de delante de un margen invadido: la del continente
+                    // sigue a su madre y la del océano es nueva.
+                    let madre = e.placas.first().and_then(|id| origen.get(id)).copied();
+                    if let Some(&id_c) = e.placas.first() {
+                        origen.entry(id_c).or_insert(madre.unwrap_or(0));
+                    }
+                    if let Some(&id_o) = e.placas.get(1) {
+                        origen.insert(id_o, 2);
+                    }
+                    cuenta(&mut inf.nacen[1]);
+                }
+                "sutura" => cuenta(&mut inf.mueren[1]),
+                "absorcion" => cuenta(&mut inf.mueren[2]),
+                "nacimiento_fosa" if tras_rodaje => match e.clase.as_deref() {
+                    Some("inducido") => inf.fosa_creada[0] += e.longitud_km,
+                    Some("espontaneo_transformante") => inf.fosa_creada[1] += e.longitud_km,
+                    _ => {}
+                },
+                "invasion_margen" if tras_rodaje => inf.fosa_creada[3] += e.longitud_km,
+                "muerte_fosa" if tras_rodaje => match e.clase.as_deref() {
+                    Some("choque") => inf.fosa_perdida[1] += e.longitud_km,
+                    _ => inf.fosa_perdida[0] += e.longitud_km,
+                },
+                _ => {}
+            }
+        }
+        vistos = d.eventos.len();
+        // Placas consumidas enteras: vivas que se quedan sin área.
+        let mut area = vec![0.0; d.placas.len()];
+        for k in 0..d.malla.num {
+            if d.dueno[k] != NADA {
+                area[d.dueno[k] as usize] += d.malla.area[k];
+            }
+        }
+        for (pi, p) in d.placas.iter().enumerate().filter(|(_, p)| p.viva) {
+            let tiene = area[pi] > 0.0;
+            if con_area.insert(p.id, tiene) == Some(true) && !tiene && tras_rodaje {
+                inf.mueren[0] += 1.0;
+            }
+        }
+        let m = d.metricas.last().expect("métrica").clone();
+        if tras_rodaje {
+            inf.fosa_creada[2] += m.invadido_km[0];
+            if l_fosa_ini.is_none() {
+                l_fosa_ini = Some(m.fosas_km);
+            }
+            n_val += 1.0;
+            inf.conv_media_km[0] += m.fosas_km;
+            inf.conv_media_km[1] += m.difusas_km;
+            inf.conv_media_km[2] += m.colisiones_km;
+            placas_suma += area.iter().filter(|&&a| a > 0.0).count() as f64;
+        }
+        for &(pi, a_sub) in &d.hundido_paso {
+            *hundido_ventana
+                .entry(d.placas[pi as usize].id)
+                .or_insert(0.0) += a_sub;
+        }
+        // D4: velocidad relativa máxima de cada par a lo largo de su borde común.
+        let mut pares: HashMap<(u64, u64), (f64, f64)> = HashMap::new();
+        for b in &d.bordes {
+            let (ip, iq) = (d.placas[b.p as usize].id, d.placas[b.q as usize].id);
+            let clave = if ip < iq { (ip, iq) } else { (iq, ip) };
+            let e = pares.entry(clave).or_insert((0.0, 0.0));
+            e.0 = e.0.max(b.v_rel);
+            e.1 += 0.5 * b.largo_km;
+        }
+        let t = m.myr;
+        let mut inactivo_otros = [0.0; 2];
+        for &(v_max, largo) in pares.values() {
+            if v_max < 5.0 {
+                inactivo_otros[0] += largo;
+            }
+            if v_max < 10.0 {
+                inactivo_otros[1] += largo;
+            }
+        }
+        inactivo_desde.retain(|par, _| pares.get(par).is_some_and(|x| x.0 < v_fus));
+        let mut inactivo = [0.0; 5];
+        for (par, &(v_max, largo)) in &pares {
+            if v_max >= v_fus {
+                continue;
+            }
+            let desde = *inactivo_desde.entry(*par).or_insert(t);
+            let dur = t - desde;
+            let i = [10.0, 20.0, 50.0, 100.0]
+                .iter()
+                .position(|&x| dur < x)
+                .unwrap_or(4);
+            inactivo[i] += largo;
+        }
+        if tras_rodaje {
+            inf.inactivo_medio_km += inactivo.iter().sum::<f64>();
+        }
+        if paso % 50 == 0 || paso == pasos {
+            let mut foto = FotoDemografia {
+                myr: t,
+                fosas_km: m.fosas_km,
+                difusas_km: m.difusas_km,
+                choques_km: m.colisiones_km,
+                inactivo_km: inactivo,
+                inactivo_otros_km: inactivo_otros,
+                ..Default::default()
+            };
+            for (pi, p) in d.placas.iter().enumerate().filter(|(_, p)| p.viva) {
+                if area[pi] > 0.0 {
+                    foto.placas += 1.0;
+                    foto.areas.push(area[pi] / a_tot);
+                } else {
+                    foto.fantasmas += 1.0;
+                    foto.fantasmas_muestras += p.cort.len() as f64;
+                    for (s, c) in p.cort.iter().enumerate() {
+                        foto.fantasmas_v_cont_km3 +=
+                            c.v_cont(tc.rho_s, tc.rho_c) * d.malla.area[p.celda[s] as usize];
+                    }
+                }
+            }
+            foto.areas.sort_by(|a, b| b.total_cmp(a));
+            let mut fosa_placa: HashMap<u32, f64> = HashMap::new();
+            for (pi, largo, edad, v_n) in d.fosas_activas() {
+                *fosa_placa.entry(pi).or_insert(0.0) += largo;
+                let ie = [10.0, 25.0, 50.0, 100.0, 200.0]
+                    .iter()
+                    .position(|&x| edad < x)
+                    .unwrap_or(5);
+                foto.fosa_por_edad_km[ie] += largo;
+                let v = v_n / 10.0;
+                let iv = [1.0, 2.0, 4.0, 6.0, 10.0]
+                    .iter()
+                    .position(|&x| v < x)
+                    .unwrap_or(5);
+                foto.fosa_por_conv_km[iv] += largo;
+            }
+            let ventana = if paso % 50 == 0 {
+                50.0
+            } else {
+                (paso % 50) as f64
+            } * tc.dt_myr
+                * 1e6;
+            for (pi, p) in d.placas.iter().enumerate().filter(|(_, p)| p.viva) {
+                if area[pi] <= 0.0 {
+                    continue;
+                }
+                let o = origen.get(&p.id).copied().unwrap_or(0);
+                let fila = &mut foto.por_origen[o];
+                fila[0] += 1.0;
+                fila[1] += area[pi] / a_tot;
+                fila[2] += fosa_placa.get(&(pi as u32)).copied().unwrap_or(0.0);
+                fila[3] += hundido_ventana.get(&p.id).copied().unwrap_or(0.0) / ventana;
+            }
+            hundido_ventana.clear();
+            inf.fotos.push(foto);
+        }
+    }
+    let n100 = n_val / 100.0;
+    for x in inf.nacen.iter_mut().chain(inf.mueren.iter_mut()) {
+        *x /= n100;
+    }
+    for x in inf
+        .fosa_creada
+        .iter_mut()
+        .chain(inf.fosa_perdida.iter_mut())
+    {
+        *x /= n100;
+    }
+    let l_fin = d.metricas.last().map_or(0.0, |m| m.fosas_km);
+    inf.fosa_resto = (l_fin - l_fosa_ini.unwrap_or(l_fin)) / n100
+        - (inf.fosa_creada.iter().sum::<f64>() - inf.fosa_perdida.iter().sum::<f64>());
+    for x in &mut inf.conv_media_km {
+        *x /= n_val;
+    }
+    inf.inactivo_medio_km /= n_val;
+    inf.placas_media = placas_suma / n_val;
+    // Potencia de las fuerzas al final (nota de fosas §10, medida 3).
+    let mut pot = [0.0; 4];
+    for (_, _, x) in &d.potencias {
+        for i in 0..4 {
+            pot[i] += x[i];
+        }
+    }
+    let motriz = pot[0] + pot[1];
+    if motriz > 0.0 {
+        inf.potencia = [
+            pot[0] / motriz,
+            pot[1] / motriz,
+            -pot[2] / motriz,
+            -pot[3] / motriz,
+        ];
+    }
+    inf
+}
+
+#[test]
+#[ignore = "diagnóstico: demografía de placas y exceso de fosas (nota_demografia_placas.md §0; SEMILLAS, VARIANTES; ~5 min)"]
+fn diagnostico_demografia_placas() {
+    let semillas: Vec<u64> = std::env::var("SEMILLAS")
+        .unwrap_or_else(|_| "42,1,2,3,4".into())
+        .split(',')
+        .map(|x| x.trim().parse().expect("semilla"))
+        .collect();
+    let variantes: Vec<String> = std::env::var("VARIANTES")
+        .unwrap_or_default()
+        .split(';')
+        .map(|x| x.trim().to_string())
+        .collect();
+    let trabajos: Vec<(u64, &str)> = semillas
+        .iter()
+        .flat_map(|&s| variantes.iter().map(move |v| (s, v.as_str())))
+        .collect();
+    let informes: Vec<(String, InformeDemografia)> = std::thread::scope(|sc| {
+        let hilos: Vec<_> = trabajos
+            .iter()
+            .map(|&(s, v)| sc.spawn(move || (v.to_string(), diagnosticar_demografia(s, v))))
+            .collect();
+        hilos.into_iter().map(|h| h.join().expect("hilo")).collect()
+    });
+    // Bird (2003) proyectado en la malla (config/referencias/tierra_bordes.toml).
+    let bird: Vec<f64> = {
+        let t: toml::Value = toml::from_str(
+            &std::fs::read_to_string("../../config/referencias/tierra_bordes.toml").expect("Bird"),
+        )
+        .expect("toml");
+        t["bordes"]["todas"]["areas_placas_frac"]["mayor_a_menor"]
+            .as_array()
+            .expect("áreas")
+            .iter()
+            .map(|x| x.as_float().expect("número"))
+            .collect()
+    };
+    let mayores = |a: &[f64], n: usize| a.iter().take(n).sum::<f64>();
+    let cuantas = |a: &[f64], x: f64| a.iter().filter(|&&v| v >= x).count() as f64;
+    println!(
+        "Bird en la malla: {} placas; las 15 mayores, {:.3} del planeta; de ≥1 %: {}, ≥0,5 %: {}, ≥0,1 %: {}",
+        bird.len(),
+        mayores(&bird, 15),
+        cuantas(&bird, 0.01),
+        cuantas(&bird, 0.005),
+        cuantas(&bird, 0.001)
+    );
+    for var in &variantes {
+        let g: Vec<&InformeDemografia> = informes
+            .iter()
+            .filter(|x| &x.0 == var)
+            .map(|x| &x.1)
+            .collect();
+        let ms = |f: &dyn Fn(&InformeDemografia) -> f64| {
+            let v: Vec<f64> = g.iter().map(|i| f(i)).collect();
+            let n = v.len() as f64;
+            let m = v.iter().sum::<f64>() / n;
+            let sd = (v.iter().map(|x| (x - m) * (x - m)).sum::<f64>() / (n - 1.0).max(1.0)).sqrt();
+            format!("{m:.2} ± {sd:.2}")
+        };
+        println!("\n### [{var}], {} semillas", g.len());
+        for i in &g {
+            println!(
+                "  semilla {}: placas con área (media) {:.1}, fosa media {:.0} km",
+                i.semilla, i.placas_media, i.conv_media_km[0]
+            );
+        }
+        println!("D1/D3/D4/D5 cada 50 Myr (media de las semillas):");
+        println!(
+            "  Myr | placas (sin área) | 15 mayores | ≥1 % / ≥0,5 % / ≥0,1 % | fosa / difusa / choque (km) | inactivo <10/10–20/20–50/50–100/≥100 Myr (km)"
+        );
+        let nf = g[0].fotos.len();
+        for j in 0..nf {
+            let f = |x: &dyn Fn(&FotoDemografia) -> f64| {
+                g.iter().map(|i| x(&i.fotos[j])).sum::<f64>() / g.len() as f64
+            };
+            println!(
+                "  {:4.0} | {:5.1} ({:3.1}) | {:.3} | {:4.1} / {:4.1} / {:4.1} | {:6.0} / {:6.0} / {:6.0} | {:?}",
+                g[0].fotos[j].myr,
+                f(&|x| x.placas),
+                f(&|x| x.fantasmas),
+                f(&|x| mayores(&x.areas, 15)),
+                f(&|x| cuantas(&x.areas, 0.01)),
+                f(&|x| cuantas(&x.areas, 0.005)),
+                f(&|x| cuantas(&x.areas, 0.001)),
+                f(&|x| x.fosas_km),
+                f(&|x| x.difusas_km),
+                f(&|x| x.choques_km),
+                (0..5)
+                    .map(|i| f(&|x| x.inactivo_km[i]).round())
+                    .collect::<Vec<_>>()
+            );
+        }
+        println!(
+            "D1 y D4: placas sin área (muestras ocultas que guardan, km³ de tipo continental) y borde inactivo con 0,5 y 1 cm/año (km):"
+        );
+        for j in 0..nf {
+            let f = |x: &dyn Fn(&FotoDemografia) -> f64| {
+                g.iter().map(|i| x(&i.fotos[j])).sum::<f64>() / g.len() as f64
+            };
+            println!(
+                "  {:4.0} | {:4.1} placas sin área con {:6.0} muestras y {:9.0} km³ | inactivo <0,5: {:6.0}, <1: {:6.0}",
+                g[0].fotos[j].myr,
+                f(&|x| x.fantasmas),
+                f(&|x| x.fantasmas_muestras),
+                f(&|x| x.fantasmas_v_cont_km3),
+                f(&|x| x.inactivo_otros_km[0]),
+                f(&|x| x.inactivo_otros_km[1])
+            );
+        }
+        println!(
+            "D2, fosa activa por edad (<10, 10–25, 25–50, 50–100, 100–200, ≥200 Myr) y por convergencia (<1, 1–2, 2–4, 4–6, 6–10, ≥10 cm/año), fracción de la longitud:"
+        );
+        for j in 0..nf {
+            let tot_e: f64 = g
+                .iter()
+                .map(|i| i.fotos[j].fosa_por_edad_km.iter().sum::<f64>())
+                .sum();
+            let tot_v: f64 = g
+                .iter()
+                .map(|i| i.fotos[j].fosa_por_conv_km.iter().sum::<f64>())
+                .sum();
+            let fe: Vec<f64> = (0..6)
+                .map(|i| {
+                    (1000.0
+                        * g.iter()
+                            .map(|x| x.fotos[j].fosa_por_edad_km[i])
+                            .sum::<f64>()
+                        / tot_e.max(1e-9))
+                    .round()
+                        / 1000.0
+                })
+                .collect();
+            let fv: Vec<f64> = (0..6)
+                .map(|i| {
+                    (1000.0
+                        * g.iter()
+                            .map(|x| x.fotos[j].fosa_por_conv_km[i])
+                            .sum::<f64>()
+                        / tot_v.max(1e-9))
+                    .round()
+                        / 1000.0
+                })
+                .collect();
+            println!(
+                "  {:4.0} | edad {fe:?} | convergencia {fv:?}",
+                g[0].fotos[j].myr
+            );
+        }
+        println!(
+            "D5, por el origen de la placa (placas, área, fosa propia km, fondo que hunde km²/año), media de las semillas:"
+        );
+        for j in 0..nf {
+            let celdas: Vec<String> = (0..4)
+                .map(|o| {
+                    let f = |c: usize| {
+                        g.iter().map(|x| x.fotos[j].por_origen[o][c]).sum::<f64>() / g.len() as f64
+                    };
+                    format!(
+                        "{} {:.1} / {:.3} / {:.0} / {:.2}",
+                        ORIGENES[o],
+                        f(0),
+                        f(1),
+                        f(2),
+                        f(3)
+                    )
+                })
+                .collect();
+            println!("  {:4.0} | {}", g[0].fotos[j].myr, celdas.join(" | "));
+        }
+        println!(
+            "D1, por 100 Myr tras el rodaje: nacen por rift {}, invasión {}, salto de dorsal {}, espontáneo {}; mueren consumidas enteras {}, soldadas {}, absorbidas {}; placas con área (media) {}",
+            ms(&|i| i.nacen[0]),
+            ms(&|i| i.nacen[1]),
+            ms(&|i| i.nacen[2]),
+            ms(&|i| i.nacen[3]),
+            ms(&|i| i.mueren[0]),
+            ms(&|i| i.mueren[1]),
+            ms(&|i| i.mueren[2]),
+            ms(&|i| i.placas_media)
+        );
+        println!(
+            "D2, km de fosa por 100 Myr tras el rodaje: creada por nacimiento inducido {}, espontáneo {}, invasión de transformantes {}, separación de márgenes invadidos {}; perdida sin convergencia {}, por choque {}; resto (geometría, divisiones y fusiones) {}",
+            ms(&|i| i.fosa_creada[0]),
+            ms(&|i| i.fosa_creada[1]),
+            ms(&|i| i.fosa_creada[2]),
+            ms(&|i| i.fosa_creada[3]),
+            ms(&|i| i.fosa_perdida[0]),
+            ms(&|i| i.fosa_perdida[1]),
+            ms(&|i| i.fosa_resto)
+        );
+        println!(
+            "D3, medias tras el rodaje (km): fosa {} (Bird SUB 51 309), difusa {} (OCB 17 447), choque {} (CCB 23 003); D4, borde inactivo {} km",
+            ms(&|i| i.conv_media_km[0]),
+            ms(&|i| i.conv_media_km[1]),
+            ms(&|i| i.conv_media_km[2]),
+            ms(&|i| i.inactivo_medio_km)
+        );
+        println!(
+            "Potencia al final: tirón {} y empuje {} de la motriz; choques {} y arrastre {} de la resistente",
+            ms(&|i| i.potencia[0]),
+            ms(&|i| i.potencia[1]),
+            ms(&|i| i.potencia[2]),
+            ms(&|i| i.potencia[3])
+        );
+    }
+}
