@@ -1,0 +1,1506 @@
+# Estudio de isostasia continental (docs/design/terreno/estudio_isostasia_continental.md).
+# Generado por herramientas/analisis/estudio_isostasia.py: CRUST1.0, LITHO1.0, CAM2016 (Priestley y
+# McKenzie), TC1 (Artemieva 2006, 5°), Lamb et al. (2020, Zenodo 4031646), ETOPO 2022 sin hielo,
+# Seton et al. (2020) y GlobSed. Errores en m (predicha − real) en la tierra continental a 1°.
+
+[reproduccion_lamb]
+alfa = 7.8
+alfa_frac_celdas = 0.692223
+beta = 93
+beta_frac_celdas = 0.691886
+tierra_celdas = 14729
+tierra_correlacion = 0.924362
+tierra_anomalia_nuestra_media_m = 15.6208
+tierra_anomalia_lamb_media_m = -157.507
+tierra_anomalia_nuestra_desv_m = 625.484
+tierra_anomalia_lamb_desv_m = 491.929
+tierra_diferencia_rms_m = 307.176
+todo_celdas = 50062
+todo_correlacion = 0.263791
+todo_anomalia_nuestra_media_m = -845.517
+todo_anomalia_lamb_media_m = 107.275
+todo_anomalia_nuestra_desv_m = 981.794
+todo_anomalia_lamb_desv_m = 445.266
+todo_diferencia_rms_m = 1356.23
+
+[reproduccion_lamb.continentes."North America"]
+area = 1020.82
+altura_m = 290.006
+reducida_m = 1252.96
+l_km = 189.555
+c_km = 39.7981
+reducida_nuestra_m = 1252.96
+calculada_m = 36.7994
+
+[reproduccion_lamb.continentes."Africa"]
+area = 643.994
+altura_m = 593.892
+reducida_m = 1437.4
+l_km = 178.446
+c_km = 40.2902
+reducida_nuestra_m = 1437.4
+calculada_m = 219.341
+
+[reproduccion_lamb.continentes."southern Africa"]
+area = 97.528
+altura_m = 1098.65
+reducida_m = 1859.1
+l_km = 170.722
+c_km = 42.0443
+reducida_nuestra_m = 1859.1
+calculada_m = 527.279
+
+[reproduccion_lamb.continentes."Eurasia"]
+area = 934.726
+altura_m = 187.552
+reducida_m = 1136.4
+l_km = 188.243
+c_km = 41.979
+reducida_nuestra_m = 1136.4
+calculada_m = 330.51
+
+[reproduccion_lamb.continentes."India"]
+area = 38.0808
+altura_m = 366.985
+reducida_m = 1169.69
+l_km = 174.652
+c_km = 40.503
+reducida_nuestra_m = 1169.69
+calculada_m = 287.419
+
+[reproduccion_lamb.continentes."South America"]
+area = 516.227
+altura_m = 347.006
+reducida_m = 1169.95
+l_km = 176.534
+c_km = 38.8731
+reducida_nuestra_m = 1169.95
+calculada_m = 58.2204
+
+[reproduccion_lamb.continentes."Australia"]
+area = 454.453
+altura_m = 250.828
+reducida_m = 1234.91
+l_km = 191.52
+c_km = 39.0789
+reducida_nuestra_m = 1234.91
+calculada_m = -76.5347
+
+[reproduccion_lamb.continentes."Zealandia"]
+area = 67.7267
+altura_m = -286.855
+reducida_m = -499.153
+l_km = 80.2563
+c_km = 26.0664
+reducida_nuestra_m = -499.153
+calculada_m = -548.42
+
+[reproduccion_lamb.continentes."Europe"]
+area = 150.382
+altura_m = 161.055
+reducida_m = 75.5012
+l_km = 92.0435
+c_km = 31.1087
+reducida_nuestra_m = 75.5012
+calculada_m = -28.7155
+
+[reproduccion_lamb.continentes."East Antarctica"]
+area = 152019
+altura_m = 1003.84
+reducida_m = 1852.55
+l_km = 178.93
+c_km = 46.2008
+reducida_nuestra_m = 1852.55
+calculada_m = 971.906
+
+[reproduccion_lamb.continentes."West Antarctica"]
+area = 82530
+altura_m = -198.796
+reducida_m = -369.079
+l_km = 84.1637
+c_km = 28.8503
+reducida_nuestra_m = -369.079
+calculada_m = -233.525
+
+[reglas.R0.ajuste_A]
+sesgo_m = -0.536954
+error_medio_m = 722.713
+rms_m = 924.711
+area = 7447.29
+
+[reglas.R0.prueba_B]
+sesgo_m = -250.533
+error_medio_m = 806.632
+rms_m = 1011.33
+area = 4189.08
+
+[reglas.R0.parametros_A]
+rho_a = 3300
+rho_c = 2800
+rho_s = 2400
+h0 = 5458.44
+
+[reglas.R0.ajuste_B]
+sesgo_m = -0.280376
+error_medio_m = 769.007
+rms_m = 953.536
+area = 4189.08
+
+[reglas.R0.prueba_A]
+sesgo_m = 243.241
+error_medio_m = 738.439
+rms_m = 933.55
+area = 7447.29
+
+[reglas.R0.parametros_B]
+rho_a = 3300
+rho_c = 2800
+rho_s = 2400
+h0 = 5233.08
+
+[reglas.R0.todo]
+sesgo_m = -0.462811
+error_medio_m = 745.874
+rms_m = 942.797
+area = 11636.4
+
+[reglas.R2_lamb.ajuste_A]
+sesgo_m = 31.6723
+error_medio_m = 532.456
+rms_m = 687.421
+area = 7447.29
+
+[reglas.R2_lamb.prueba_B]
+sesgo_m = -402.672
+error_medio_m = 701.007
+rms_m = 900.066
+area = 4189.08
+
+[reglas.R2_lamb.parametros_A]
+rho_a = 3255
+rho_c = 2872.69
+rho_s = 2872.69
+drho = 35
+l = "cam"
+h0 = 3027.3
+
+[reglas.R2_lamb.ajuste_B]
+sesgo_m = -402.672
+error_medio_m = 701.007
+rms_m = 900.066
+area = 4189.08
+
+[reglas.R2_lamb.prueba_A]
+sesgo_m = 31.6723
+error_medio_m = 532.456
+rms_m = 687.421
+area = 7447.29
+
+[reglas.R2_lamb.parametros_B]
+rho_a = 3255
+rho_c = 2872.69
+rho_s = 2872.69
+drho = 35
+l = "cam"
+h0 = 3027.3
+
+[reglas.R2_lamb.todo]
+sesgo_m = -124.691
+error_medio_m = 593.134
+rms_m = 770.761
+area = 11636.4
+
+[reglas.R1.ajuste_A]
+sesgo_m = -0.0525823
+error_medio_m = 634.51
+rms_m = 817.273
+area = 7447.29
+
+[reglas.R1.prueba_B]
+sesgo_m = -186.321
+error_medio_m = 634.256
+rms_m = 801.999
+area = 4189.08
+
+[reglas.R1.parametros_A]
+rho_a = 3300
+rho_s = 2400
+rho_u = 2750
+rho_l = 3000
+z_t = 15
+h0 = 4306.19
+
+[reglas.R1.ajuste_B]
+sesgo_m = -0.0128293
+error_medio_m = 619.54
+rms_m = 770.587
+area = 4189.08
+
+[reglas.R1.prueba_A]
+sesgo_m = 184.176
+error_medio_m = 645.709
+rms_m = 830.036
+area = 7447.29
+
+[reglas.R1.parametros_B]
+rho_a = 3300
+rho_s = 2400
+rho_u = 2750
+rho_l = 3000
+z_t = 15
+h0 = 4129.69
+
+[reglas.R1.todo]
+sesgo_m = -0.0375203
+error_medio_m = 630.833
+rms_m = 805.475
+area = 11636.4
+
+[reglas.R2_cam2016.ajuste_A]
+sesgo_m = -0.0596439
+error_medio_m = 550.476
+rms_m = 727.448
+area = 7447.29
+
+[reglas.R2_cam2016.prueba_B]
+sesgo_m = -380.127
+error_medio_m = 717.637
+rms_m = 897.291
+area = 4189.08
+
+[reglas.R2_cam2016.parametros_A]
+rho_a = 3255
+rho_s = 2400
+l = "cam"
+rho_c = 2890
+drho = 20
+h0 = 3448.91
+
+[reglas.R2_cam2016.ajuste_B]
+sesgo_m = -0.0770151
+error_medio_m = 623.736
+rms_m = 774.051
+area = 4189.08
+
+[reglas.R2_cam2016.prueba_A]
+sesgo_m = 348.537
+error_medio_m = 634.516
+rms_m = 793.757
+area = 7447.29
+
+[reglas.R2_cam2016.parametros_B]
+rho_a = 3255
+rho_s = 2400
+l = "cam"
+rho_c = 2890
+drho = 20
+h0 = 3111.56
+
+[reglas.R2_cam2016.todo]
+sesgo_m = -0.122334
+error_medio_m = 600.564
+rms_m = 768.856
+area = 11636.4
+
+[reglas.R2_tc1.ajuste_A]
+sesgo_m = -0.155893
+error_medio_m = 625.242
+rms_m = 803.402
+area = 7447.29
+
+[reglas.R2_tc1.prueba_B]
+sesgo_m = -279.802
+error_medio_m = 708.88
+rms_m = 878.445
+area = 4189.08
+
+[reglas.R2_tc1.parametros_A]
+rho_a = 3255
+rho_s = 2400
+l = "tc1"
+rho_c = 2890
+drho = 20
+h0 = 3345.31
+
+[reglas.R2_tc1.ajuste_B]
+sesgo_m = -0.0922852
+error_medio_m = 651.242
+rms_m = 807.714
+area = 4189.08
+
+[reglas.R2_tc1.prueba_A]
+sesgo_m = 266.572
+error_medio_m = 650.472
+rms_m = 830.738
+area = 7447.29
+
+[reglas.R2_tc1.parametros_B]
+rho_a = 3255
+rho_s = 2400
+l = "tc1"
+rho_c = 2890
+drho = 20
+h0 = 3092.53
+
+[reglas.R2_tc1.todo]
+sesgo_m = -0.16601
+error_medio_m = 644.569
+rms_m = 816.403
+area = 11636.4
+
+[reglas.R2_litho1.ajuste_A]
+sesgo_m = -0.271515
+error_medio_m = 607.482
+rms_m = 786.273
+area = 7447.29
+
+[reglas.R2_litho1.prueba_B]
+sesgo_m = -553.222
+error_medio_m = 898.672
+rms_m = 1123.24
+area = 4189.08
+
+[reglas.R2_litho1.parametros_A]
+rho_a = 3255
+rho_s = 2400
+l = "litho"
+rho_c = 2890
+drho = 20
+h0 = 3379.96
+
+[reglas.R2_litho1.ajuste_B]
+sesgo_m = -0.534001
+error_medio_m = 741.702
+rms_m = 904.106
+area = 4189.08
+
+[reglas.R2_litho1.prueba_A]
+sesgo_m = 499.213
+error_medio_m = 732.274
+rms_m = 902.376
+area = 7447.29
+
+[reglas.R2_litho1.parametros_B]
+rho_a = 3255
+rho_s = 2400
+l = "litho"
+rho_c = 2890
+drho = 20
+h0 = 2905.34
+
+[reglas.R2_litho1.todo]
+sesgo_m = -0.456324
+error_medio_m = 691.66
+rms_m = 876.305
+area = 11636.4
+
+[reglas.R3a.ajuste_A]
+sesgo_m = -0.258818
+error_medio_m = 639.581
+rms_m = 819.599
+area = 7447.29
+
+[reglas.R3a.prueba_B]
+sesgo_m = -271.909
+error_medio_m = 699.432
+rms_m = 874.998
+area = 4189.08
+
+[reglas.R3a.parametros_A]
+rho_a = 3255
+rho_s = 2400
+l = "edad"
+rho_c = 2890
+drho = 20
+h0 = 3377.41
+
+[reglas.R3a.ajuste_B]
+sesgo_m = -0.102021
+error_medio_m = 643.918
+rms_m = 806.579
+area = 4189.08
+
+[reglas.R3a.prueba_A]
+sesgo_m = 261.738
+error_medio_m = 660.713
+rms_m = 841.417
+area = 7447.29
+
+[reglas.R3a.parametros_B]
+rho_a = 3255
+rho_s = 2400
+l = "edad"
+rho_c = 2890
+drho = 20
+h0 = 3131.48
+
+[reglas.R3a.todo]
+sesgo_m = -0.213705
+error_medio_m = 650.319
+rms_m = 824.957
+area = 11636.4
+
+[reglas.R3b.ajuste_A]
+sesgo_m = -0.260152
+error_medio_m = 625.786
+rms_m = 807.684
+area = 7447.29
+
+[reglas.R3b.prueba_B]
+sesgo_m = -277.692
+error_medio_m = 697.724
+rms_m = 872.133
+area = 4189.08
+
+[reglas.R3b.parametros_A]
+rho_a = 3255
+rho_s = 2400
+l = "edad"
+rho_c = 2890
+drho = 20
+l_min = 40
+tau_l = 50
+h0 = 3422.45
+
+[reglas.R3b.ajuste_B]
+sesgo_m = -0.113769
+error_medio_m = 640.533
+rms_m = 800.174
+area = 4189.08
+
+[reglas.R3b.prueba_A]
+sesgo_m = 265.249
+error_medio_m = 651.187
+rms_m = 830.532
+area = 7447.29
+
+[reglas.R3b.parametros_B]
+rho_a = 3255
+rho_s = 2400
+l = "edad"
+rho_c = 2890
+drho = 20
+l_min = 40
+tau_l = 50
+h0 = 3172.83
+
+[reglas.R3b.todo]
+sesgo_m = -0.212539
+error_medio_m = 641.096
+rms_m = 815.51
+area = 11636.4
+
+[reglas.R3b_relleno.ajuste_A]
+sesgo_m = -0.156308
+error_medio_m = 506.909
+rms_m = 664.567
+area = 7447.29
+
+[reglas.R3b_relleno.prueba_B]
+sesgo_m = -141.348
+error_medio_m = 555.377
+rms_m = 713.424
+area = 4189.08
+
+[reglas.R3b_relleno.parametros_A]
+rho_a = 3255
+rho_s = 2400
+l = "edad"
+k_sed = 0
+rho_c = 2890
+drho = 20
+l_min = 40
+tau_l = 50
+h0 = 3062.97
+
+[reglas.R3b_relleno.ajuste_B]
+sesgo_m = -0.0523412
+error_medio_m = 546.368
+rms_m = 688.052
+area = 4189.08
+
+[reglas.R3b_relleno.prueba_A]
+sesgo_m = 140.559
+error_medio_m = 522.392
+rms_m = 671.872
+area = 7447.29
+
+[reglas.R3b_relleno.parametros_B]
+rho_a = 3255
+rho_s = 2400
+l = "edad"
+k_sed = 0
+rho_c = 2890
+drho = 20
+l_min = 40
+tau_l = 100
+h0 = 2951.75
+
+[reglas.R3b_relleno.todo]
+sesgo_m = -0.110534
+error_medio_m = 523.127
+rms_m = 676.501
+area = 11636.4
+
+[reglas.R3c.ajuste_A]
+sesgo_m = -0.131422
+error_medio_m = 480.551
+rms_m = 642.684
+area = 7447.29
+
+[reglas.R3c.prueba_B]
+sesgo_m = -134.154
+error_medio_m = 557.636
+rms_m = 714.423
+area = 4189.08
+
+[reglas.R3c.parametros_A]
+rho_a = 3255
+rho_s = 2400
+l = "edad"
+k_sed = 0
+rho_c = 2890
+drho = 20
+drho_arcaico = 10
+l_min = 40
+tau_l = 50
+h0 = 3145.72
+
+[reglas.R3c.ajuste_B]
+sesgo_m = -0.0402832
+error_medio_m = 540.388
+rms_m = 679.145
+area = 4189.08
+
+[reglas.R3c.prueba_A]
+sesgo_m = 136.868
+error_medio_m = 499.558
+rms_m = 650.629
+area = 7447.29
+
+[reglas.R3c.parametros_B]
+rho_a = 3255
+rho_s = 2400
+l = "edad"
+k_sed = 0
+rho_c = 2890
+drho = 20
+drho_arcaico = 15
+l_min = 40
+tau_l = 100
+h0 = 2997.22
+
+[reglas.R3c.todo]
+sesgo_m = -0.0820948
+error_medio_m = 507.13
+rms_m = 660.955
+area = 11636.4
+
+[reglas.R4.ajuste_A]
+sesgo_m = -0.0126275
+error_medio_m = 409.317
+rms_m = 550.643
+area = 7447.29
+
+[reglas.R4.prueba_B]
+sesgo_m = -103.031
+error_medio_m = 464.29
+rms_m = 594.678
+area = 4189.08
+
+[reglas.R4.parametros_A]
+rho_a = 3255
+rho_s = 2400
+l = "edad"
+k_sed = 0
+rho_u = 2750
+rho_l = 3000
+z_t = 15
+drho = 20
+drho_arcaico = 10
+l_min = 40
+tau_l = 100
+h0 = 3041.17
+
+[reglas.R4.ajuste_B]
+sesgo_m = -0.00298522
+error_medio_m = 462.776
+rms_m = 576.554
+area = 4189.08
+
+[reglas.R4.prueba_A]
+sesgo_m = 106.137
+error_medio_m = 436.873
+rms_m = 563.485
+area = 7447.29
+
+[reglas.R4.parametros_B]
+rho_a = 3255
+rho_s = 2400
+l = "edad"
+k_sed = 0
+rho_u = 2750
+rho_l = 3000
+z_t = 15
+drho = 20
+drho_arcaico = 15
+l_min = 40
+tau_l = 100
+h0 = 2897.13
+
+[reglas.R4.todo]
+sesgo_m = -0.00810058
+error_medio_m = 431.675
+rms_m = 564.314
+area = 11636.4
+
+[relieve.tierra]
+nivel_mar_m = 0
+tierra_frac = 0.28366
+altura_media_tierra_m = 670.604
+altura_mediana_tierra_m = 403.899
+tierra_bajo_200_frac = 0.282638
+tierra_sobre_2000_frac = 0.0531289
+hipsometria_frac = [0.282638, 0.296174, 0.208413, 0.159646, 0.0255136, 0.0231407, 0.00447456]
+pendiente_media_tierra = 0.00522728
+plataforma_km = 42.772
+profundidad_media_oceano_m = 3667.29
+
+[relieve.tierra_1grado]
+nivel_mar_m = 0
+tierra_frac = 0.281562
+altura_media_tierra_m = 657.734
+altura_mediana_tierra_m = 408.683
+tierra_bajo_200_frac = 0.26835
+tierra_sobre_2000_frac = 0.0461583
+hipsometria_frac = [0.26835, 0.30922, 0.21522, 0.161052, 0.0210586, 0.0215204, 0.00357937]
+pendiente_media_tierra = 0.00287389
+plataforma_km = 53.4822
+profundidad_media_oceano_m = 3650.3
+
+[relieve.R0_tal_cual]
+nivel_mar_m = -84.0265
+tierra_frac = 0.313187
+altura_media_tierra_m = 1292.86
+altura_mediana_tierra_m = 1159.82
+tierra_bajo_200_frac = 0.0645442
+tierra_sobre_2000_frac = 0.167347
+hipsometria_frac = [0.0645442, 0.116211, 0.243731, 0.408166, 0.131076, 0.0252778, 0.0109939]
+pendiente_media_tierra = 0.0045508
+plataforma_km = 19.5708
+profundidad_media_oceano_m = 3810.35
+
+[relieve.R0]
+nivel_mar_m = -233.002
+tierra_frac = 0.264154
+altura_media_tierra_m = 1108.13
+altura_mediana_tierra_m = 946.582
+tierra_bajo_200_frac = 0.0748492
+tierra_sobre_2000_frac = 0.105838
+hipsometria_frac = [0.0748492, 0.179051, 0.271484, 0.368777, 0.074668, 0.0213568, 0.00981348]
+pendiente_media_tierra = 0.00448873
+plataforma_km = 20.7179
+profundidad_media_oceano_m = 3556.45
+
+[relieve.R2_lamb]
+nivel_mar_m = -94.2237
+tierra_frac = 0.258099
+altura_media_tierra_m = 830.546
+altura_mediana_tierra_m = 677.197
+tierra_bajo_200_frac = 0.128102
+tierra_sobre_2000_frac = 0.0574159
+hipsometria_frac = [0.128102, 0.242938, 0.317525, 0.254019, 0.0393943, 0.0180216, 0]
+pendiente_media_tierra = 0.00397508
+plataforma_km = 24.32
+profundidad_media_oceano_m = 3527.43
+
+[relieve.R1]
+nivel_mar_m = 7.41233
+tierra_frac = 0.296446
+altura_media_tierra_m = 743.712
+altura_mediana_tierra_m = 626.437
+tierra_bajo_200_frac = 0.151015
+tierra_sobre_2000_frac = 0.0365941
+hipsometria_frac = [0.151015, 0.261858, 0.326145, 0.224388, 0.026601, 0.00999313, 0]
+pendiente_media_tierra = 0.00361557
+plataforma_km = 27.5426
+profundidad_media_oceano_m = 3719.68
+
+[relieve.R2_cam2016]
+nivel_mar_m = -20.7805
+tierra_frac = 0.283047
+altura_media_tierra_m = 800.099
+altura_mediana_tierra_m = 687.141
+tierra_bajo_200_frac = 0.143721
+tierra_sobre_2000_frac = 0.0427009
+hipsometria_frac = [0.143721, 0.221588, 0.342192, 0.249798, 0.02803, 0.0146709, 0]
+pendiente_media_tierra = 0.0039952
+plataforma_km = 27.1836
+profundidad_media_oceano_m = 3650.17
+
+[relieve.R2_tc1]
+nivel_mar_m = -46.1031
+tierra_frac = 0.277805
+altura_media_tierra_m = 851.956
+altura_mediana_tierra_m = 715.339
+tierra_bajo_200_frac = 0.142469
+tierra_sobre_2000_frac = 0.056472
+hipsometria_frac = [0.142469, 0.220782, 0.305227, 0.27505, 0.0383738, 0.0180572, 4.10428e-05]
+pendiente_media_tierra = 0.00403635
+plataforma_km = 26.6822
+profundidad_media_oceano_m = 3623.68
+
+[relieve.R2_litho1]
+nivel_mar_m = -48.8817
+tierra_frac = 0.275164
+altura_media_tierra_m = 925.38
+altura_mediana_tierra_m = 776.885
+tierra_bajo_200_frac = 0.115006
+tierra_sobre_2000_frac = 0.0695215
+hipsometria_frac = [0.115006, 0.195925, 0.322549, 0.296998, 0.0473114, 0.0220567, 0.000153437]
+pendiente_media_tierra = 0.00489724
+plataforma_km = 18.4662
+profundidad_media_oceano_m = 3610.47
+
+[relieve.R3a]
+nivel_mar_m = -37.7715
+tierra_frac = 0.277853
+altura_media_tierra_m = 864.285
+altura_mediana_tierra_m = 699.758
+tierra_bajo_200_frac = 0.155993
+tierra_sobre_2000_frac = 0.0630284
+hipsometria_frac = [0.155993, 0.206967, 0.308136, 0.265876, 0.0410426, 0.0215096, 0.000476302]
+pendiente_media_tierra = 0.0045253
+plataforma_km = 22.8981
+profundidad_media_oceano_m = 3623.91
+
+[relieve.R3b]
+nivel_mar_m = -33.889
+tierra_frac = 0.27811
+altura_media_tierra_m = 862.263
+altura_mediana_tierra_m = 689.946
+tierra_bajo_200_frac = 0.155484
+tierra_sobre_2000_frac = 0.0656437
+hipsometria_frac = [0.155484, 0.212681, 0.311278, 0.254913, 0.0420722, 0.0225969, 0.000974604]
+pendiente_media_tierra = 0.00467074
+plataforma_km = 21.5824
+profundidad_media_oceano_m = 3625.21
+
+[relieve.R3b_relleno]
+nivel_mar_m = -84.9398
+tierra_frac = 0.276038
+altura_media_tierra_m = 846.656
+altura_mediana_tierra_m = 670.042
+tierra_bajo_200_frac = 0.128397
+tierra_sobre_2000_frac = 0.0631189
+hipsometria_frac = [0.128397, 0.242135, 0.343408, 0.222942, 0.0375923, 0.0219875, 0.00353913]
+pendiente_media_tierra = 0.00451055
+plataforma_km = 17.8319
+profundidad_media_oceano_m = 3614.83
+
+[relieve.R3c]
+nivel_mar_m = -94.0741
+tierra_frac = 0.277069
+altura_media_tierra_m = 847.309
+altura_mediana_tierra_m = 665.231
+tierra_bajo_200_frac = 0.107026
+tierra_sobre_2000_frac = 0.0605539
+hipsometria_frac = [0.107026, 0.25095, 0.362133, 0.219338, 0.0355635, 0.0218218, 0.00316864]
+pendiente_media_tierra = 0.00424877
+plataforma_km = 18.1252
+profundidad_media_oceano_m = 3619.98
+
+[relieve.R4]
+nivel_mar_m = 31.2965
+tierra_frac = 0.299795
+altura_media_tierra_m = 648.227
+altura_mediana_tierra_m = 519.816
+tierra_bajo_200_frac = 0.153004
+tierra_sobre_2000_frac = 0.0317676
+hipsometria_frac = [0.153004, 0.323106, 0.362535, 0.129587, 0.0189106, 0.012857, 0]
+pendiente_media_tierra = 0.00330133
+plataforma_km = 25.0253
+profundidad_media_oceano_m = 3737.48
+
+[provincias.R0."escudo arcaico"]
+area_frac = 0.156381
+altura_real_m = 543.067
+sesgo_m = 134.061
+error_medio_m = 602.317
+rms_m = 771.467
+area = 1819.7
+
+[provincias.R0."plataforma proterozoica"]
+area_frac = 0.464769
+altura_real_m = 416.592
+sesgo_m = 255.239
+error_medio_m = 741.82
+rms_m = 908.519
+area = 5408.22
+
+[provincias.R0."cinturón fanerozoico"]
+area_frac = 0.188358
+altura_real_m = 849.083
+sesgo_m = -125.025
+error_medio_m = 684.741
+rms_m = 858.922
+area = 2191.8
+
+[provincias.R0."rift o zona joven"]
+area_frac = 0.0645183
+altura_real_m = 697.639
+sesgo_m = -1121.53
+error_medio_m = 1162.51
+rms_m = 1428.53
+area = 750.758
+
+[provincias.R0."orógeno activo y arco"]
+area_frac = 0.107226
+altura_real_m = 1640.99
+sesgo_m = -348.185
+error_medio_m = 821.699
+rms_m = 1070.07
+area = 1247.72
+
+[provincias.R0."margen pasivo"]
+area_frac = 0.0187484
+altura_real_m = 197.945
+sesgo_m = -363.301
+error_medio_m = 790.543
+rms_m = 1000.59
+area = 218.163
+
+[provincias.R2_lamb."escudo arcaico"]
+area_frac = 0.156381
+altura_real_m = 543.067
+sesgo_m = -278.243
+error_medio_m = 603.251
+rms_m = 759.428
+area = 1819.7
+
+[provincias.R2_lamb."plataforma proterozoica"]
+area_frac = 0.464769
+altura_real_m = 416.592
+sesgo_m = -52.3778
+error_medio_m = 562.723
+rms_m = 731.022
+area = 5408.22
+
+[provincias.R2_lamb."cinturón fanerozoico"]
+area_frac = 0.188358
+altura_real_m = 849.083
+sesgo_m = -3.09855
+error_medio_m = 590.653
+rms_m = 749.521
+area = 2191.8
+
+[provincias.R2_lamb."rift o zona joven"]
+area_frac = 0.0645183
+altura_real_m = 697.639
+sesgo_m = -381.836
+error_medio_m = 582.952
+rms_m = 778.056
+area = 750.758
+
+[provincias.R2_lamb."orógeno activo y arco"]
+area_frac = 0.107226
+altura_real_m = 1640.99
+sesgo_m = -281.69
+error_medio_m = 742.569
+rms_m = 981.29
+area = 1247.72
+
+[provincias.R2_lamb."margen pasivo"]
+area_frac = 0.0187484
+altura_real_m = 197.945
+sesgo_m = -75.3269
+error_medio_m = 467.958
+rms_m = 627.79
+area = 218.163
+
+[provincias.R1."escudo arcaico"]
+area_frac = 0.156381
+altura_real_m = 543.067
+sesgo_m = 65.0556
+error_medio_m = 471.682
+rms_m = 609.935
+area = 1819.7
+
+[provincias.R1."plataforma proterozoica"]
+area_frac = 0.464769
+altura_real_m = 416.592
+sesgo_m = 281.889
+error_medio_m = 626.306
+rms_m = 774.579
+area = 5408.22
+
+[provincias.R1."cinturón fanerozoico"]
+area_frac = 0.188358
+altura_real_m = 849.083
+sesgo_m = -169.627
+error_medio_m = 592.019
+rms_m = 740.578
+area = 2191.8
+
+[provincias.R1."rift o zona joven"]
+area_frac = 0.0645183
+altura_real_m = 697.639
+sesgo_m = -689.536
+error_medio_m = 793.807
+rms_m = 1004.15
+area = 750.758
+
+[provincias.R1."orógeno activo y arco"]
+area_frac = 0.107226
+altura_real_m = 1640.99
+sesgo_m = -619.85
+error_medio_m = 867.223
+rms_m = 1095.84
+area = 1247.72
+
+[provincias.R1."margen pasivo"]
+area_frac = 0.0187484
+altura_real_m = 197.945
+sesgo_m = 89.5214
+error_medio_m = 547.669
+rms_m = 883.626
+area = 218.163
+
+[provincias.R2_cam2016."escudo arcaico"]
+area_frac = 0.156381
+altura_real_m = 543.067
+sesgo_m = -94.5543
+error_medio_m = 526.063
+rms_m = 667.871
+area = 1819.7
+
+[provincias.R2_cam2016."plataforma proterozoica"]
+area_frac = 0.464769
+altura_real_m = 416.592
+sesgo_m = 185.194
+error_medio_m = 600.218
+rms_m = 749.638
+area = 5408.22
+
+[provincias.R2_cam2016."cinturón fanerozoico"]
+area_frac = 0.188358
+altura_real_m = 849.083
+sesgo_m = -17.8428
+error_medio_m = 569.875
+rms_m = 721.462
+area = 2191.8
+
+[provincias.R2_cam2016."rift o zona joven"]
+area_frac = 0.0645183
+altura_real_m = 697.639
+sesgo_m = -501.509
+error_medio_m = 653.822
+rms_m = 853.983
+area = 750.758
+
+[provincias.R2_cam2016."orógeno activo y arco"]
+area_frac = 0.107226
+altura_real_m = 1640.99
+sesgo_m = -350.927
+error_medio_m = 749.206
+rms_m = 988.346
+area = 1247.72
+
+[provincias.R2_cam2016."margen pasivo"]
+area_frac = 0.0187484
+altura_real_m = 197.945
+sesgo_m = 103.352
+error_medio_m = 505.455
+rms_m = 743.696
+area = 218.163
+
+[provincias.R2_tc1."escudo arcaico"]
+area_frac = 0.156381
+altura_real_m = 543.067
+sesgo_m = -188.378
+error_medio_m = 595.023
+rms_m = 752.253
+area = 1819.7
+
+[provincias.R2_tc1."plataforma proterozoica"]
+area_frac = 0.464769
+altura_real_m = 416.592
+sesgo_m = 235.392
+error_medio_m = 659.661
+rms_m = 811.108
+area = 5408.22
+
+[provincias.R2_tc1."cinturón fanerozoico"]
+area_frac = 0.188358
+altura_real_m = 849.083
+sesgo_m = -17.2127
+error_medio_m = 581.643
+rms_m = 738.555
+area = 2191.8
+
+[provincias.R2_tc1."rift o zona joven"]
+area_frac = 0.0645183
+altura_real_m = 697.639
+sesgo_m = -646.682
+error_medio_m = 748.334
+rms_m = 976.276
+area = 750.758
+
+[provincias.R2_tc1."orógeno activo y arco"]
+area_frac = 0.107226
+altura_real_m = 1640.99
+sesgo_m = -330.227
+error_medio_m = 709.789
+rms_m = 931.541
+area = 1247.72
+
+[provincias.R2_tc1."margen pasivo"]
+area_frac = 0.0187484
+altura_real_m = 197.945
+sesgo_m = 14.0672
+error_medio_m = 585.806
+rms_m = 893.494
+area = 218.163
+
+[provincias.R2_litho1."escudo arcaico"]
+area_frac = 0.156381
+altura_real_m = 543.067
+sesgo_m = -225.472
+error_medio_m = 678.606
+rms_m = 851.181
+area = 1819.7
+
+[provincias.R2_litho1."plataforma proterozoica"]
+area_frac = 0.464769
+altura_real_m = 416.592
+sesgo_m = 149.496
+error_medio_m = 715.697
+rms_m = 888.095
+area = 5408.22
+
+[provincias.R2_litho1."cinturón fanerozoico"]
+area_frac = 0.188358
+altura_real_m = 849.083
+sesgo_m = 56.4321
+error_medio_m = 663.129
+rms_m = 851.256
+area = 2191.8
+
+[provincias.R2_litho1."rift o zona joven"]
+area_frac = 0.0645183
+altura_real_m = 697.639
+sesgo_m = -485.905
+error_medio_m = 699.372
+rms_m = 902.907
+area = 750.758
+
+[provincias.R2_litho1."orógeno activo y arco"]
+area_frac = 0.107226
+altura_real_m = 1640.99
+sesgo_m = -156.453
+error_medio_m = 665.746
+rms_m = 895.02
+area = 1247.72
+
+[provincias.R2_litho1."margen pasivo"]
+area_frac = 0.0187484
+altura_real_m = 197.945
+sesgo_m = 150.315
+error_medio_m = 612.96
+rms_m = 834.594
+area = 218.163
+
+[provincias.R3a."escudo arcaico"]
+area_frac = 0.156381
+altura_real_m = 543.067
+sesgo_m = -445.107
+error_medio_m = 675.933
+rms_m = 848.75
+area = 1819.7
+
+[provincias.R3a."plataforma proterozoica"]
+area_frac = 0.464769
+altura_real_m = 416.592
+sesgo_m = 235.882
+error_medio_m = 666.022
+rms_m = 822.125
+area = 5408.22
+
+[provincias.R3a."cinturón fanerozoico"]
+area_frac = 0.188358
+altura_real_m = 849.083
+sesgo_m = 87.106
+error_medio_m = 581.242
+rms_m = 740.745
+area = 2191.8
+
+[provincias.R3a."rift o zona joven"]
+area_frac = 0.0645183
+altura_real_m = 697.639
+sesgo_m = -567.578
+error_medio_m = 711.56
+rms_m = 943.321
+area = 750.758
+
+[provincias.R3a."orógeno activo y arco"]
+area_frac = 0.107226
+altura_real_m = 1640.99
+sesgo_m = -214.997
+error_medio_m = 645.312
+rms_m = 859.429
+area = 1247.72
+
+[provincias.R3a."margen pasivo"]
+area_frac = 0.0187484
+altura_real_m = 197.945
+sesgo_m = 161.452
+error_medio_m = 559.301
+rms_m = 858.105
+area = 218.163
+
+[provincias.R3b."escudo arcaico"]
+area_frac = 0.156381
+altura_real_m = 543.067
+sesgo_m = -497.591
+error_medio_m = 705.896
+rms_m = 883.097
+area = 1819.7
+
+[provincias.R3b."plataforma proterozoica"]
+area_frac = 0.464769
+altura_real_m = 416.592
+sesgo_m = 189.607
+error_medio_m = 656.298
+rms_m = 813.889
+area = 5408.22
+
+[provincias.R3b."cinturón fanerozoico"]
+area_frac = 0.188358
+altura_real_m = 849.083
+sesgo_m = 92.3919
+error_medio_m = 581.036
+rms_m = 740.234
+area = 2191.8
+
+[provincias.R3b."rift o zona joven"]
+area_frac = 0.0645183
+altura_real_m = 697.639
+sesgo_m = -396.524
+error_medio_m = 620.123
+rms_m = 834.233
+area = 750.758
+
+[provincias.R3b."orógeno activo y arco"]
+area_frac = 0.107226
+altura_real_m = 1640.99
+sesgo_m = -45.858
+error_medio_m = 612.325
+rms_m = 826.271
+area = 1247.72
+
+[provincias.R3b."margen pasivo"]
+area_frac = 0.0187484
+altura_real_m = 197.945
+sesgo_m = 137.348
+error_medio_m = 563.849
+rms_m = 861.495
+area = 218.163
+
+[provincias.R3b_relleno."escudo arcaico"]
+area_frac = 0.156381
+altura_real_m = 543.067
+sesgo_m = -331.324
+error_medio_m = 550.59
+rms_m = 710.189
+area = 1819.7
+
+[provincias.R3b_relleno."plataforma proterozoica"]
+area_frac = 0.464769
+altura_real_m = 416.592
+sesgo_m = 100.645
+error_medio_m = 530.16
+rms_m = 671.27
+area = 5408.22
+
+[provincias.R3b_relleno."cinturón fanerozoico"]
+area_frac = 0.188358
+altura_real_m = 849.083
+sesgo_m = 134.41
+error_medio_m = 497.098
+rms_m = 631.729
+area = 2191.8
+
+[provincias.R3b_relleno."rift o zona joven"]
+area_frac = 0.0645183
+altura_real_m = 697.639
+sesgo_m = -308.321
+error_medio_m = 507.71
+rms_m = 709.21
+area = 750.758
+
+[provincias.R3b_relleno."orógeno activo y arco"]
+area_frac = 0.107226
+altura_real_m = 1640.99
+sesgo_m = 14.8425
+error_medio_m = 520.812
+rms_m = 704.64
+area = 1247.72
+
+[provincias.R3b_relleno."margen pasivo"]
+area_frac = 0.0187484
+altura_real_m = 197.945
+sesgo_m = -111.521
+error_medio_m = 447.507
+rms_m = 673.04
+area = 218.163
+
+[provincias.R3c."escudo arcaico"]
+area_frac = 0.156381
+altura_real_m = 543.067
+sesgo_m = -82.8232
+error_medio_m = 467.621
+rms_m = 605.752
+area = 1819.7
+
+[provincias.R3c."plataforma proterozoica"]
+area_frac = 0.464769
+altura_real_m = 416.592
+sesgo_m = 54.1925
+error_medio_m = 524.119
+rms_m = 669.77
+area = 5408.22
+
+[provincias.R3c."cinturón fanerozoico"]
+area_frac = 0.188358
+altura_real_m = 849.083
+sesgo_m = 89.8307
+error_medio_m = 490.19
+rms_m = 625.395
+area = 2191.8
+
+[provincias.R3c."rift o zona joven"]
+area_frac = 0.0645183
+altura_real_m = 697.639
+sesgo_m = -355.61
+error_medio_m = 523.638
+rms_m = 734.235
+area = 750.758
+
+[provincias.R3c."orógeno activo y arco"]
+area_frac = 0.107226
+altura_real_m = 1640.99
+sesgo_m = -30.1854
+error_medio_m = 519.121
+rms_m = 707.126
+area = 1247.72
+
+[provincias.R3c."margen pasivo"]
+area_frac = 0.0187484
+altura_real_m = 197.945
+sesgo_m = -163.079
+error_medio_m = 460.33
+rms_m = 689.754
+area = 218.163
+
+[provincias.R4."escudo arcaico"]
+area_frac = 0.156381
+altura_real_m = 543.067
+sesgo_m = 95.8741
+error_medio_m = 397.566
+rms_m = 502.502
+area = 1819.7
+
+[provincias.R4."plataforma proterozoica"]
+area_frac = 0.464769
+altura_real_m = 416.592
+sesgo_m = 12.1089
+error_medio_m = 413.255
+rms_m = 535.183
+area = 5408.22
+
+[provincias.R4."cinturón fanerozoico"]
+area_frac = 0.188358
+altura_real_m = 849.083
+sesgo_m = 55.4892
+error_medio_m = 410.729
+rms_m = 520.559
+area = 2191.8
+
+[provincias.R4."rift o zona joven"]
+area_frac = 0.0645183
+altura_real_m = 697.639
+sesgo_m = -153.675
+error_medio_m = 443.149
+rms_m = 581.904
+area = 750.758
+
+[provincias.R4."orógeno activo y arco"]
+area_frac = 0.107226
+altura_real_m = 1640.99
+sesgo_m = -213.21
+error_medio_m = 607.888
+rms_m = 800.25
+area = 1247.72
+
+[provincias.R4."margen pasivo"]
+area_frac = 0.0187484
+altura_real_m = 197.945
+sesgo_m = 90.454
+error_medio_m = 335.956
+rms_m = 478.213
+area = 218.163
+
+[casos."llanura rusa"]
+real_m = 126.813
+tipo = "H1"
+h_km = 43.36
+s_km = 1.3
+l_cam_km = 214.625
+l_tc1_km = 168.92
+edad_myr = 1750
+R0_tal_cual = 2075.76
+R0 = 1547.39
+R2_lamb = 390.55
+R1 = 1189.91
+R2_cam2016 = 836.163
+R2_tc1 = 1187.19
+R2_litho1 = 631.326
+R3a = 1184.66
+R3b = 1141.14
+R3b_relleno = 1115.8
+R3c = 1072.31
+R4 = 812.802
+
+[casos."Kenia"]
+real_m = 1744.95
+tipo = "X-"
+h_km = 32.04
+s_km = 0.3
+l_cam_km = 55.6875
+l_tc1_km = 149.84
+edad_myr = 20
+R0_tal_cual = 87.8788
+R0 = -640.357
+R2_lamb = 520.068
+R1 = -162.679
+R2_cam2016 = 204.996
+R2_tc1 = -443.729
+R2_litho1 = 333.593
+R3a = 2.10802
+R3b = 182.65
+R3b_relleno = 419.978
+R3c = 376.488
+R4 = 549.139
+
+[casos."Tíbet"]
+real_m = 5152.84
+tipo = "R2"
+h_km = 70.49
+s_km = 0.01
+l_cam_km = 233.812
+l_tc1_km = 195.01
+edad_myr = 30
+R0_tal_cual = 5834.55
+R0 = 5306.18
+R2_lamb = 3497.05
+R1 = 3304.46
+R2_cam2016 = 3580.42
+R2_tc1 = 3889.03
+R2_litho1 = 4370.5
+R3a = 4469.54
+R3b = 4575.34
+R3b_relleno = 4888.84
+R3c = 4845.35
+R4 = 3669.01
+
+[casos."meseta del Colorado"]
+real_m = 1883.33
+tipo = "P-"
+h_km = 39.09
+s_km = 2.2
+l_cam_km = 58.1875
+l_tc1_km = 137.92
+edad_myr = 70
+R0_tal_cual = 1674.24
+R0 = 1145.88
+R2_lamb = 1640.62
+R1 = 1047.19
+R2_cam2016 = 1534.26
+R2_tc1 = 1114.55
+R2_litho1 = 1552.45
+R3a = 1334.44
+R3b = 1376.38
+R3b_relleno = 1114.63
+R3c = 1071.14
+R4 = 1042.57
+
+[casos."Grandes Llanuras"]
+real_m = 482.566
+tipo = "H1"
+h_km = 37.59
+s_km = 1.5
+l_cam_km = 195.25
+l_tc1_km = 141.8
+edad_myr = 1750
+R0_tal_cual = 1256.06
+R0 = 727.694
+R2_lamb = -168.557
+R1 = 719.915
+R2_cam2016 = 326.501
+R2_tc1 = 725.116
+R2_litho1 = 88.0292
+R3a = 555.948
+R3b = 512.432
+R3b_relleno = 434.553
+R3c = 391.063
+R4 = 326.55
+
+[reparto_error_R0.rms_m]
+R0 = 942.797
+con_todo = 614.25
+reduccion_total = 328.548
+por_lit = 74.2406
+por_dens = 148.676
+por_sed = 105.631
+
+[reparto_error_R0.error_medio_m]
+R0 = 745.874
+con_todo = 458.73
+reduccion_total = 287.144
+por_lit = 69.043
+por_dens = 123.11
+por_sed = 94.9903
+
+[edad_por_tipo]
+G1 = 3300
+G2 = 2750
+F- = 3000
+H1 = 1750
+H2 = 1750
+I1 = 800
+I2 = 800
+D- = 400
+E- = 400
+Z1 = 300
+Z2 = 300
+O- = 100
+P- = 70
+Q- = 70
+R1 = 20
+R2 = 30
+J- = 15
+K- = 15
+L1 = 30
+L2 = 20
+M- = 30
+N- = 30
+X- = 20
+V2 = 15
+B- = 10
+C- = 120
+S- = 120
+T- = 150
+U- = 150
+W- = 100
+Y1 = 100
+Y2 = 100

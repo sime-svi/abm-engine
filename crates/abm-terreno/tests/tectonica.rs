@@ -323,8 +323,12 @@ fn cfg_india_asia() -> TectonicaCfg {
         a_min_frac: 0.0,
         lambda_a_rift: 0.0,
         // Escenario del choque: sin invasión por los bordes artificiales (meridianos) de los
-        // extremos del Tetis, que cambiaría cómo se mueve la placa de la India.
+        // extremos del Tetis, que cambiaría cómo se mueve la placa de la India. Por lo mismo, sin la
+        // rama D de la nota de demografía de placas v2: en las esquinas de esos meridianos el
+        // océano exterior tiene a la vez una dorsal con Asia y una fosa bajo la placa de la India, y
+        // la regla se las comería paso a paso.
         v_inv_km_myr: 0.0,
+        subduccion_dorsales: false,
         n_min: 2,
         recalibrar_myr: 1e9, // c_b se calibra una vez, al principio
         ..TectonicaCfg::default()
@@ -903,6 +907,83 @@ fn un_bloque_pequeno_no_se_rompe_nunca() {
     };
     assert_eq!(rompe(3.5), 0, "un bloque de menos de 1 Mkm² no se rompe");
     assert!(rompe(6.0) > 0, "uno de 1,4 Mkm² sí se rompe");
+}
+
+/// Continente de 35 km en un casquete de 30° (nota de rifts v2): sus muestras llevan el reloj de los
+/// rifts reiniciado en `reinicio` (Myr).
+fn continente_con_reloj(cfg: &TectonicaCfg, reinicio: f64) -> Deriva {
+    let malla = Malla::new(48, 1, 6371.0);
+    let dirs = malla.dir.clone();
+    let mut d = Deriva::desde(cfg, 3, malla, 0.0, &[10, 20], |k| {
+        let x = dirs[k];
+        if x[0] > 0.0 {
+            let cont = x[0] > 30f64.to_radians().cos();
+            let mut c = corteza(cont, if cont { 35.0 } else { 7.0 }, 60.0);
+            if cont {
+                c.reinicio_myr = reinicio;
+            }
+            (0, c)
+        } else {
+            (1, corteza(false, 7.0, 60.0))
+        }
+    });
+    d.arrancar_con(&[[0.0; 3], [0.0; 3]]);
+    d
+}
+
+#[test]
+fn un_bloque_recien_unido_no_se_rompe_y_uno_viejo_si() {
+    // Nota de rifts v2 §6.1: la probabilidad crece con el tiempo que el bloque lleva unido,
+    // min(1, t_k/τ_ais). Con λ_A alto, un bloque cuyo reloj acaba de reiniciarse y τ_ais enorme no se
+    // rompe en 10 Myr; el mismo bloque con un reloj de más de τ_ais se rompe en el primer paso, y sus
+    // dos trozos empiezan el reloj en el Myr de la ruptura.
+    let cfg = TectonicaCfg {
+        lambda_a_rift: 1.0,
+        tau_ais_myr: 1e9,
+        ..cfg_rifts()
+    };
+    let mut d = continente_con_reloj(&cfg, 0.0);
+    for _ in 0..10 {
+        d.dar_paso();
+    }
+    assert_eq!(
+        d.eventos.iter().filter(|e| e.tipo == "rift").count(),
+        0,
+        "recién unido, no se rompe"
+    );
+    let cfg = TectonicaCfg {
+        lambda_a_rift: 1e3,
+        tau_ais_myr: 100.0,
+        ..cfg_rifts()
+    };
+    let mut d = continente_con_reloj(&cfg, -500.0);
+    d.dar_paso();
+    let rift = d
+        .eventos
+        .iter()
+        .find(|e| e.tipo == "rift")
+        .cloned()
+        .expect("unido hace 500 Myr, se rompe en el primer paso");
+    for id in &rift.placas[1..] {
+        let p = d
+            .placas
+            .iter()
+            .find(|p| p.viva && p.id == *id)
+            .expect("hija viva");
+        let reinicios: Vec<f64> = p
+            .cort
+            .iter()
+            .filter(|c| c.continente())
+            .map(|c| c.reinicio_myr)
+            .collect();
+        assert!(!reinicios.is_empty());
+        let al_romperse = reinicios.iter().filter(|&&t| t == rift.myr).count();
+        assert!(
+            al_romperse * 10 >= reinicios.len() * 9,
+            "los trozos empiezan su reloj al romperse: {al_romperse} de {}",
+            reinicios.len()
+        );
+    }
 }
 
 #[test]
@@ -3595,10 +3676,31 @@ struct InformeDemografia {
     semilla: u64,
     fotos: Vec<FotoDemografia>,
     /// D1, tras el rodaje, por 100 Myr: nacimientos (rift, invasión, salto de dorsal, espontáneo) y
-    /// muertes (consumida entera, soldada en un choque, absorbida; y con la rama A, soldada por borde
-    /// inactivo y microplaca capturada).
+    /// muertes (consumida entera, soldada en un choque, absorbida, retirada al llegar su dorsal a la
+    /// fosa (rama D) y microplaca capturada (A2)).
     nacen: [f64; 4],
     mueren: [f64; 5],
+    /// D6, tras el rodaje: encuentros entre dorsales y fosas que empiezan por 100 Myr (un par
+    /// dorsal–placa que entra en encuentro), su duración media (Myr), y cómo acaban los que acaban:
+    /// por la rama D, con la placa de la franja muerta, o con la placa viva (la dorsal se aleja o la
+    /// fosa muere), en fracción; subducciones de dorsal por 100 Myr, fosa que apagan (km por
+    /// 100 Myr) y longitud media de dorsal en encuentro (km).
+    d6_empiezan: f64,
+    d6_duracion: f64,
+    d6_final: [f64; 3],
+    d6_subducciones: f64,
+    d6_fosa_apagada: f64,
+    d6_dorsal_km: f64,
+    /// Nota de rifts v2 §10, tras el rodaje: rupturas por 100 Myr, placas de al menos el 1 % (media de
+    /// los pasos), supercontinentes que se forman y se rompen y su duración media (Myr), y ciclos.
+    rifts: f64,
+    placas_1pc_media: f64,
+    super_terminados: f64,
+    super_duracion: f64,
+    ciclos: f64,
+    /// Bloque continental mayor (fracción del continente; media y máximo tras el rodaje): un
+    /// supercontinente es un bloque que reúne casi todo el continente (Pangea, ~0,9).
+    bloque_mayor: [f64; 2],
     /// §10, medias tras el rodaje: fondo que se hunde (km²/año), velocidad de las placas (cm/año),
     /// edad media del fondo (Myr; media de los pasos y al final) y correlación de Forsyth y Uyeda.
     a_sub: f64,
@@ -3651,9 +3753,13 @@ fn diagnosticar_demografia(semilla: u64, variante: &str) -> InformeDemografia {
     let mut hundido_ventana: HashMap<u64, f64> = HashMap::new();
     let mut l_fosa_ini = None;
     let (mut n_val, mut placas_suma) = (0.0, 0.0);
+    // D6: pares (placa de la franja, placa del otro lado de la dorsal) en encuentro y desde cuándo.
+    let mut en_encuentro: HashMap<(u64, u64), f64> = HashMap::new();
+    let (mut d6_n_fin, mut d6_dur) = (0.0, 0.0);
     for paso in 1..=pasos {
         d.dar_paso();
         let tras_rodaje = paso > rodaje;
+        let mut por_regla_d: Vec<(u64, u64)> = Vec::new();
         // Eventos nuevos: nacimientos y muertes de placas, fosa creada y perdida.
         for e in &d.eventos[vistos..] {
             let cuenta = |x: &mut f64| {
@@ -3664,6 +3770,9 @@ fn diagnosticar_demografia(semilla: u64, variante: &str) -> InformeDemografia {
             match e.tipo.as_str() {
                 "rift" | "salto_dorsal" => {
                     let o = if e.tipo == "rift" { 1 } else { 3 };
+                    if o == 1 && tras_rodaje {
+                        inf.rifts += 1.0;
+                    }
                     for &id in &e.placas[1..] {
                         origen.insert(id, o);
                     }
@@ -3683,7 +3792,18 @@ fn diagnosticar_demografia(semilla: u64, variante: &str) -> InformeDemografia {
                 }
                 "sutura" => cuenta(&mut inf.mueren[1]),
                 "absorcion" => cuenta(&mut inf.mueren[2]),
-                "soldadura" => cuenta(&mut inf.mueren[3]),
+                "subduccion_dorsal" => {
+                    if e.clase.as_deref() == Some("retirada") {
+                        cuenta(&mut inf.mueren[3]);
+                    }
+                    if tras_rodaje {
+                        inf.d6_subducciones += 1.0;
+                        inf.d6_fosa_apagada += e.fosa_km.unwrap_or(0.0);
+                        if let (Some(&a), Some(&b)) = (e.placas.first(), e.placas.get(1)) {
+                            por_regla_d.push((a, b));
+                        }
+                    }
+                }
                 // Una placa sin área ya contó como consumida entera al quedarse sin ella.
                 "captura_microplaca" if e.area_km2 > 0.0 => cuenta(&mut inf.mueren[4]),
                 "nacimiento_fosa" if tras_rodaje => match e.clase.as_deref() {
@@ -3707,6 +3827,59 @@ fn diagnosticar_demografia(semilla: u64, variante: &str) -> InformeDemografia {
                 area[d.dueno[k] as usize] += d.malla.area[k];
             }
         }
+        // D6: encuentros que empiezan y que acaban en el paso.
+        {
+            let t = d.metricas.last().map_or(0.0, |m| m.myr);
+            let ahora: std::collections::BTreeSet<(u64, u64)> =
+                d.dorsal_fosa_paso.iter().map(|e| (e.p, e.r)).collect();
+            let viva_con_area = |id: u64| {
+                d.placas
+                    .iter()
+                    .enumerate()
+                    .any(|(i, p)| p.viva && p.id == id && area[i] > 0.0)
+            };
+            let mut acaban: Vec<(u64, u64)> = en_encuentro
+                .keys()
+                .filter(|k| !ahora.contains(k))
+                .copied()
+                .collect();
+            acaban.sort_unstable();
+            for par in acaban {
+                let desde = en_encuentro.remove(&par).unwrap_or(t);
+                if tras_rodaje {
+                    d6_n_fin += 1.0;
+                    d6_dur += t - desde;
+                    let i = if por_regla_d.contains(&par) {
+                        0
+                    } else if !viva_con_area(par.0) {
+                        1
+                    } else {
+                        2
+                    };
+                    inf.d6_final[i] += 1.0;
+                }
+            }
+            for &par in &ahora {
+                if let std::collections::hash_map::Entry::Vacant(e) = en_encuentro.entry(par) {
+                    e.insert(t);
+                    if tras_rodaje {
+                        inf.d6_empiezan += 1.0;
+                    }
+                }
+            }
+            // Con la rama D, el encuentro acaba en el mismo paso en que se aplica.
+            for par in &por_regla_d {
+                if let Some(desde) = en_encuentro.remove(par) {
+                    d6_n_fin += 1.0;
+                    d6_dur += t - desde;
+                    inf.d6_final[0] += 1.0;
+                }
+            }
+            if tras_rodaje {
+                inf.d6_dorsal_km += d.dorsal_fosa_paso.iter().map(|e| e.dorsal_km).sum::<f64>();
+                inf.placas_1pc_media += area.iter().filter(|&&a| a >= 0.01 * a_tot).count() as f64;
+            }
+        }
         for (pi, p) in d.placas.iter().enumerate().filter(|(_, p)| p.viva) {
             let tiene = area[pi] > 0.0;
             if con_area.insert(p.id, tiene) == Some(true) && !tiene && tras_rodaje {
@@ -3715,6 +3888,8 @@ fn diagnosticar_demografia(semilla: u64, variante: &str) -> InformeDemografia {
         }
         let m = d.metricas.last().expect("métrica").clone();
         if tras_rodaje {
+            inf.bloque_mayor[0] += m.bloque_mayor_frac;
+            inf.bloque_mayor[1] = inf.bloque_mayor[1].max(m.bloque_mayor_frac);
             inf.fosa_creada[2] += m.invadido_km[0];
             if l_fosa_ini.is_none() {
                 l_fosa_ini = Some(m.fosas_km);
@@ -3833,6 +4008,28 @@ fn diagnosticar_demografia(semilla: u64, variante: &str) -> InformeDemografia {
     for x in inf.nacen.iter_mut().chain(inf.mueren.iter_mut()) {
         *x /= n100;
     }
+    inf.d6_empiezan /= n100;
+    inf.d6_subducciones /= n100;
+    inf.d6_fosa_apagada /= n100;
+    inf.rifts /= n100;
+    inf.d6_dorsal_km /= n_val;
+    inf.placas_1pc_media /= n_val;
+    inf.bloque_mayor[0] /= n_val;
+    inf.d6_duracion = if d6_n_fin > 0.0 {
+        d6_dur / d6_n_fin
+    } else {
+        0.0
+    };
+    let fin_tot: f64 = inf.d6_final.iter().sum();
+    if fin_tot > 0.0 {
+        for x in &mut inf.d6_final {
+            *x /= fin_tot;
+        }
+    }
+    let balance = abm_terreno::tectonica::estado_final(&d).1.balance;
+    inf.super_terminados = balance.supercontinentes_terminados as f64;
+    inf.super_duracion = balance.duracion_media_supercontinente_myr;
+    inf.ciclos = balance.ciclos_supercontinente as f64;
     for x in inf
         .fosa_creada
         .iter_mut()
@@ -4043,7 +4240,7 @@ fn diagnostico_demografia_placas() {
             println!("  {:4.0} | {}", g[0].fotos[j].myr, celdas.join(" | "));
         }
         println!(
-            "D1, por 100 Myr tras el rodaje: nacen por rift {}, invasión {}, salto de dorsal {}, espontáneo {}; mueren consumidas enteras {}, soldadas en un choque {}, absorbidas {}, soldadas por borde inactivo {}, microplacas capturadas {}; placas con área (media) {}",
+            "D1, por 100 Myr tras el rodaje: nacen por rift {}, invasión {}, salto de dorsal {}, espontáneo {}; mueren consumidas enteras {}, soldadas en un choque {}, absorbidas {}, retiradas al llegar su dorsal a la fosa {}, microplacas capturadas {}; placas con área (media) {}",
             ms(&|i| i.nacen[0]),
             ms(&|i| i.nacen[1]),
             ms(&|i| i.nacen[2]),
@@ -4087,13 +4284,34 @@ fn diagnostico_demografia_placas() {
             ms(&|i| i.potencia[2]),
             ms(&|i| i.potencia[3])
         );
+        println!(
+            "D6, tras el rodaje: encuentros entre dorsales y fosas que empiezan {} por 100 Myr, duran {} Myr; acaban por la rama D {}, con la placa de la franja muerta {}, con ella viva {} (fracción); subducciones de dorsal {} por 100 Myr, que apagan {} km de fosa por 100 Myr; dorsal en encuentro {} km de media",
+            ms(&|i| i.d6_empiezan),
+            ms(&|i| i.d6_duracion),
+            ms(&|i| i.d6_final[0]),
+            ms(&|i| i.d6_final[1]),
+            ms(&|i| i.d6_final[2]),
+            ms(&|i| i.d6_subducciones),
+            ms(&|i| i.d6_fosa_apagada),
+            ms(&|i| i.d6_dorsal_km)
+        );
+        println!(
+            "Rifts v2, tras el rodaje: rupturas {} por 100 Myr; placas de al menos el 1 % {} de media (Bird 13); supercontinentes que se forman y se rompen {} con duración media {} Myr (~100–300); ciclos {}; bloque continental mayor {} de media y {} de máximo (fracción del continente)",
+            ms(&|i| i.rifts),
+            ms(&|i| i.placas_1pc_media),
+            ms(&|i| i.super_terminados),
+            ms(&|i| i.super_duracion),
+            ms(&|i| i.ciclos),
+            ms(&|i| i.bloque_mayor[0]),
+            ms(&|i| i.bloque_mayor[1])
+        );
     }
 }
 
-// --- Muerte de placas (nota_demografia_placas.md §10, rama A) ------------------------------------
+// --- Muerte de placas (nota_demografia_placas.md v2: A2 y rama D) --------------------------------
 
-/// Configuración de las pruebas de la rama A: sin rifts ni saltos de dorsal, sin erosión ni
-/// nacimientos espontáneos.
+/// Configuración de las pruebas de la muerte de placas: sin rifts ni saltos de dorsal, sin erosión
+/// ni nacimientos espontáneos.
 fn cfg_muerte() -> TectonicaCfg {
     TectonicaCfg {
         lambda_a_rift: 0.0,
@@ -4102,85 +4320,6 @@ fn cfg_muerte() -> TectonicaCfg {
         e1_km_myr: 1e-12,
         ..TectonicaCfg::default()
     }
-}
-
-#[test]
-fn dos_placas_que_se_mueven_igual_se_sueldan_conservando_la_corteza() {
-    // Nota de demografía §10, prueba 1: dos placas quietas (velocidad relativa nula) se sueldan al
-    // cumplir τ_fus, y la corteza y el sedimento se conservan.
-    let cfg = cfg_muerte();
-    let malla = Malla::new(48, 1, 6371.0);
-    let dirs = malla.dir.clone();
-    let mut d = Deriva::desde(&cfg, 3, malla, 0.0, &[10, 20], |k| {
-        let x = dirs[k];
-        let cont = x[0] > 30f64.to_radians().cos();
-        let mut c = corteza(cont, if cont { 35.0 } else { 7.0 }, 60.0);
-        c.sed = 0.5;
-        (usize::from(x[2] < 0.0), c)
-    });
-    d.arrancar_con(&[[0.0; 3], [0.0; 3]]);
-    let v0 = d.inventario_continental();
-    let t_fus = cfg.tau_fus_myr.round() as usize;
-    for _ in 0..t_fus - 2 {
-        d.dar_paso();
-    }
-    assert!(
-        !d.eventos.iter().any(|e| e.tipo == "soldadura"),
-        "antes de τ_fus no se sueldan"
-    );
-    for _ in 0..4 {
-        d.dar_paso();
-    }
-    let sold: Vec<_> = d.eventos.iter().filter(|e| e.tipo == "soldadura").collect();
-    assert_eq!(sold.len(), 1, "se sueldan una vez al cumplir τ_fus");
-    assert_eq!(
-        d.placas.iter().filter(|p| p.viva).count(),
-        1,
-        "queda una sola placa"
-    );
-    let dv = (d.inventario_continental() - v0).abs() / v0;
-    assert!(
-        dv < 1e-9,
-        "la corteza y el sedimento se conservan: {dv:.2e}"
-    );
-}
-
-#[test]
-fn dos_placas_con_una_fosa_activa_no_se_sueldan() {
-    // Nota de demografía §10, prueba 2: con `v_fus` enorme todo borde cuenta como inactivo; aun así,
-    // dos placas con una fosa activa entre ellas no se sueldan.
-    let cfg = TectonicaCfg {
-        v_fus_cm_anio: 1e3,
-        tau_fus_myr: 3.0,
-        ..cfg_muerte()
-    };
-    let malla = Malla::new(48, 1, 6371.0);
-    let dirs = malla.dir.clone();
-    let mut d = Deriva::desde(&cfg, 5, malla, 0.0, &[1, 2], |k| {
-        let (la, lo) = lat_lon(dirs[k]);
-        let (la, lo) = (la.to_degrees(), lo.to_degrees());
-        if la.abs() < 10.0 && lo > -60.0 && lo < 0.0 {
-            (0, corteza(false, 7.0, 120.0))
-        } else {
-            (1, corteza(false, 7.0, 40.0))
-        }
-    });
-    d.arrancar_con(&[[0.0, 0.0, 5.0 * 10.0 / 6371.0], [0.0; 3]]);
-    let l = d.cfg.l_losa_km;
-    d.activar_fosas(l);
-    for _ in 0..8 {
-        d.dar_paso();
-    }
-    assert!(
-        d.bordes
-            .iter()
-            .any(|b| b.tipo == TipoBorde::Subduccion && b.p_subduce),
-        "la fosa sigue activa"
-    );
-    assert!(
-        !d.eventos.iter().any(|e| e.tipo == "soldadura"),
-        "con una fosa activa entre ellas no se sueldan"
-    );
 }
 
 #[test]
@@ -4226,4 +4365,111 @@ fn una_microplaca_sin_fosa_la_captura_la_vecina_con_mas_borde() {
         "la captura la vecina con más borde"
     );
     assert!(!d.placas.iter().any(|p| p.viva && p.id == 300));
+}
+
+/// Escenario de la rama D (nota de demografía de placas v2): una placa oceánica estrecha `P` (id 20,
+/// 2° de anchura junto al ecuador, ~220 km) entre una dorsal con la placa `R` (id 10, al oeste) y una
+/// fosa activa donde se hunde bajo el continente de `U` (id 30, al este). Lleva sedimento para que
+/// la cuenta de la corteza vea la franja. La velocidad media del planeta a la que se calibra el
+/// rozamiento basal es baja (`v_obj`): solo se mueve `P`, que se llevaría toda la de la Tierra.
+fn cfg_dorsal() -> TectonicaCfg {
+    TectonicaCfg {
+        v_obj_cm_anio: 0.3,
+        ..cfg_muerte()
+    }
+}
+
+fn dorsal_junto_a_la_fosa(cfg: &TectonicaCfg) -> Deriva {
+    let malla = Malla::new(48, 1, 6371.0);
+    let dirs = malla.dir.clone();
+    let mut d = Deriva::desde(cfg, 7, malla, 0.0, &[10, 20, 30], |k| {
+        let (la, lo) = lat_lon(dirs[k]);
+        let (la, lo) = (la.to_degrees(), lo.to_degrees());
+        if (-22.0..-20.0).contains(&lo) && la.abs() < 40.0 {
+            let mut c = corteza(false, 7.0, 5.0);
+            c.sed = 0.2;
+            (1, c)
+        } else if (-20.0..160.0).contains(&lo) {
+            let cont = lo < -5.0 && la.abs() < 45.0;
+            (2, corteza(cont, if cont { 35.0 } else { 7.0 }, 60.0))
+        } else {
+            (0, corteza(false, 7.0, 30.0))
+        }
+    });
+    // P se aleja de R hacia U (giro alrededor del eje de la Tierra: hacia el este en el ecuador).
+    // La losa de P es corta: con el tirón pleno, una placa tan estrecha correría a decenas de cm/año
+    // y se hundiría entera en un paso.
+    let w = 5.0 * 10.0 / 6371.0;
+    d.arrancar_con(&[[0.0, 0.0, -w], [0.0, 0.0, w], [0.0; 3]]);
+    d.activar_fosas(10.0);
+    d
+}
+
+#[test]
+fn una_dorsal_que_llega_a_la_fosa_muere_y_su_franja_pasa_a_la_placa_del_otro_lado() {
+    // Rama D: la franja de P entre la dorsal y la fosa mide menos de d_dc (300 km), así que la
+    // dorsal muere, la franja pasa a R con la corteza conservada y P, sin muestras, se retira.
+    let cfg = cfg_dorsal();
+    let mut d = dorsal_junto_a_la_fosa(&cfg);
+    let mut evento = None;
+    for _ in 0..5 {
+        d.dar_paso();
+        let err = d.metricas.last().map_or(0.0, |m| m.error_balance_rel);
+        assert!(err < 1e-9, "el balance de la corteza cierra: {err:.2e}");
+        if let Some(e) = d.eventos.iter().find(|e| e.tipo == "subduccion_dorsal") {
+            evento = Some(e.clone());
+            break;
+        }
+    }
+    let e = evento.expect("la dorsal llega a la fosa y muere");
+    assert_eq!(&e.placas[..2], &[20, 10], "la franja de P pasa a R");
+    assert!(
+        e.placas[2..].contains(&30),
+        "la fosa que se apaga es la de U"
+    );
+    assert!(e.area_km2 > 0.0 && e.longitud_km > 0.0);
+    assert!(
+        e.fosa_km.is_some_and(|x| x > 0.0),
+        "se apaga fosa: {:?}",
+        e.fosa_km
+    );
+    assert_eq!(
+        e.clase.as_deref(),
+        Some("retirada"),
+        "P se queda sin muestras"
+    );
+    assert!(
+        !d.placas.iter().any(|p| p.viva && p.id == 20),
+        "P se retira como placa"
+    );
+    // Ya no hay fosa activa donde se hunda P, y el balance sigue cerrando en el paso siguiente.
+    assert!(
+        d.fosas_activas()
+            .iter()
+            .all(|f| d.placas[f.0 as usize].id != 20)
+    );
+    d.dar_paso();
+    let err = d.metricas.last().map_or(0.0, |m| m.error_balance_rel);
+    assert!(err < 1e-9, "el balance de la corteza cierra: {err:.2e}");
+}
+
+#[test]
+fn con_la_rama_d_apagada_solo_se_miden_los_encuentros() {
+    // D6 se mide también sin la regla: el encuentro se apunta y no pasa nada más.
+    let cfg = TectonicaCfg {
+        subduccion_dorsales: false,
+        ..cfg_dorsal()
+    };
+    let mut d = dorsal_junto_a_la_fosa(&cfg);
+    let mut visto = false;
+    for _ in 0..5 {
+        d.dar_paso();
+        visto |= d
+            .dorsal_fosa_paso
+            .iter()
+            .any(|e| e.p == 20 && e.r == 10 && e.dist_min_km < cfg.d_dc_km);
+    }
+    assert!(visto, "se mide el encuentro entre la dorsal y la fosa");
+    assert!(!d.eventos.iter().any(|e| e.tipo == "subduccion_dorsal"));
+    assert!(d.placas.iter().any(|p| p.viva && p.id == 20));
 }

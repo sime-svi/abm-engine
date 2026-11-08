@@ -263,25 +263,36 @@ pub struct TectonicaCfg {
     pub n_cratones: u32,
     pub n_min: u32,
     pub a_min_frac: f64,
-    /// Rifts por bloques (nota de rifts §6): cada bloque continental se rompe en el paso con
-    /// probabilidad `1 − exp(−λ_A·A_k·Δt)` y el trazado sigue su sutura más larga. `λ_A` es la
-    /// probabilidad de ruptura por Mkm² de continente y por Myr (1/(Mkm²·Myr)), calibrada con el
-    /// ritmo de la ruptura de Pangea, ~4–7 rupturas por 100 Myr.
+    /// Rifts por bloques (nota de rifts v2 §6): cada bloque continental se rompe en el paso con
+    /// probabilidad `1 − exp(−λ_A·A_k·min(1, t_k/τ_ais)·Δt)` y el trazado sigue su sutura más larga.
+    /// `λ_A` es la probabilidad de ruptura por Mkm² de continente y por Myr (1/(Mkm²·Myr)) de un
+    /// bloque que lleva unido más de `τ_ais`; `t_k`, el tiempo que lleva el bloque sin romperse ni
+    /// soldarse a otro continente. Se calibran con el número de placas grandes (~13, Bird 2003) y
+    /// la duración de los supercontinentes.
     pub lambda_a_rift: f64,
+    /// Tiempo que un bloque tiene que llevar unido para alcanzar su probabilidad plena de ruptura
+    /// (`τ_ais`, Myr; nota de rifts v2 §6.1): el calor del manto se acumula bajo él.
+    pub tau_ais_myr: f64,
     /// Área mínima de continente de cada trozo tras la ruptura (Mkm²; Madagascar, ~0,6, es de los
     /// trozos más pequeños separados por un rift).
     pub a_trozo_min_mkm2: f64,
     /// Longitud mínima de una sutura para guiar la ruptura (km; 3·`L_borde`).
     pub l_sut_min_km: f64,
-    /// Muerte de placas (nota de demografía de placas, rama A). A1: dos placas cuyo borde común lleva
-    /// `τ_fus` Myr seguidos con la velocidad relativa máxima por debajo de `v_fus` (cm/año) se sueldan,
-    /// si entre ellas no hay una fosa activa ni un rift que se estira. A2: una microplaca (de menos de
+    /// Muerte de placas (nota de demografía de placas v2). A2: una microplaca (de menos de
     /// `A_micro`, Mkm²) que lleva `τ_micro` Myr sin fosa activa propia pasa a la vecina con la que
     /// comparte más borde.
-    pub v_fus_cm_anio: f64,
-    pub tau_fus_myr: f64,
     pub a_micro_mkm2: f64,
     pub tau_micro_myr: f64,
+    /// Rama D (subducción de dorsales): cuando la franja de una placa entre una de sus dorsales y una
+    /// fosa activa donde se hunde es más estrecha que `d_dc` (km), la dorsal muere, la franja pasa a
+    /// la placa del otro lado de la dorsal y la fosa de enfrente se apaga. Interruptor mientras se
+    /// mide (CLAUDE §5): con `false`, solo se miden los encuentros (D6).
+    pub d_dc_km: f64,
+    pub subduccion_dorsales: bool,
+    /// La fosa está delante de la dorsal si su tramo más cercano cae a menos de `θ_dc` (grados) de la
+    /// dirección de apertura hacia dentro de la placa: la franja entre las dos de la nota, no el
+    /// costado de un punto triple. Con 180, cualquier fosa a menos de `d_dc` (la letra de la nota).
+    pub theta_dc_grados: f64,
     pub v_rift_cm_anio: f64,
     pub v_sutura_cm_anio: f64,
     pub t_sutura_myr: f64,
@@ -380,12 +391,14 @@ impl Default for TectonicaCfg {
             n_min: 8,
             a_min_frac: 0.005,
             lambda_a_rift: 4.0e-4,
+            tau_ais_myr: 100.0,
             a_trozo_min_mkm2: 0.5,
             l_sut_min_km: 450.0,
-            v_fus_cm_anio: 0.2,
-            tau_fus_myr: 20.0,
             a_micro_mkm2: 0.5,
             tau_micro_myr: 10.0,
+            d_dc_km: 300.0,
+            subduccion_dorsales: true,
+            theta_dc_grados: 45.0,
             v_rift_cm_anio: 2.0,
             v_sutura_cm_anio: 0.5,
             t_sutura_myr: 10.0,
@@ -904,18 +917,18 @@ impl TectonicaCfg {
         if !(self.w_margen_km >= 0.0 && self.h_rot_km > 0.0) {
             return Err(invalid("se requiere w_margen_km >= 0 y h_rot_km > 0"));
         }
-        if !(self.v_fus_cm_anio >= 0.0
-            && self.tau_fus_myr > 0.0
-            && self.a_micro_mkm2 >= 0.0
-            && self.tau_micro_myr >= 0.0)
-        {
+        if !(self.a_micro_mkm2 >= 0.0 && self.tau_micro_myr >= 0.0 && self.d_dc_km >= 0.0) {
             return Err(invalid(
-                "se requiere v_fus_cm_anio, a_micro_mkm2, tau_micro_myr >= 0 y tau_fus_myr > 0",
+                "se requiere a_micro_mkm2, tau_micro_myr y d_dc_km >= 0",
             ));
         }
-        if !(self.lambda_a_rift >= 0.0 && self.a_trozo_min_mkm2 > 0.0 && self.l_sut_min_km >= 0.0) {
+        if !(self.lambda_a_rift >= 0.0
+            && self.tau_ais_myr >= 0.0
+            && self.a_trozo_min_mkm2 > 0.0
+            && self.l_sut_min_km >= 0.0)
+        {
             return Err(invalid(
-                "se requiere lambda_a_rift >= 0, a_trozo_min_mkm2 > 0 y l_sut_min_km >= 0",
+                "se requiere lambda_a_rift, tau_ais_myr >= 0, a_trozo_min_mkm2 > 0 y l_sut_min_km >= 0",
             ));
         }
         Ok(())

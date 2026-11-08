@@ -635,5 +635,49 @@ fn balance_medio(
             }
             ciclos
         },
+        supercontinentes_terminados: supercontinentes(&val).len() as u32,
+        duracion_media_supercontinente_myr: {
+            let d = supercontinentes(&val);
+            if d.is_empty() {
+                0.0
+            } else {
+                d.iter().sum::<f64>() / d.len() as f64
+            }
+        },
+        subducciones_dorsal_100myr: tras_rodaje("subduccion_dorsal").count() as f64 * 100.0 / n,
+        placas_retiradas_dorsal_100myr: tras_rodaje("subduccion_dorsal")
+            .filter(|e| e.clase.as_deref() == Some("retirada"))
+            .count() as f64
+            * 100.0
+            / n,
+        fosa_apagada_dorsal_km_100myr: tras_rodaje("subduccion_dorsal")
+            .map(|e| e.fosa_km.unwrap_or(0.0))
+            .sum::<f64>()
+            * 100.0
+            / n,
+        dorsal_fosa_km: media(|m| m.dorsal_fosa_km),
     }
+}
+
+/// Duraciones (Myr) de los supercontinentes que se forman y se rompen en los pasos `val`: el índice
+/// de supercontinente sube a 0,7 o más (se forma) y después baja de 0,5 (se rompe), con la misma
+/// histéresis que los ciclos. Uno que ya existe al empezar `val` no cuenta: no se sabe cuándo se
+/// formó.
+fn supercontinentes(val: &[&MetricaMyr]) -> Vec<f64> {
+    let mut out = Vec::new();
+    let mut desde: Option<f64> = None;
+    let mut abajo = val.first().is_some_and(|m| m.supercontinente < 0.7);
+    for m in val {
+        match desde {
+            None if abajo && m.supercontinente >= 0.7 => desde = Some(m.myr),
+            Some(t) if m.supercontinente < 0.5 => {
+                out.push(m.myr - t);
+                desde = None;
+                abajo = true;
+            }
+            None if m.supercontinente < 0.5 => abajo = true,
+            _ => {}
+        }
+    }
+    out
 }

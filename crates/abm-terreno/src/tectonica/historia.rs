@@ -10,8 +10,9 @@ pub struct EventoTectonico {
     pub myr: f64,
     /// `rift`, `rotura_rift`, `inicio_subduccion`, `inicio_colision`, `sutura`, `absorcion`,
     /// `salto_dorsal`, `acrecion_arco`, `supercontinente_formado`, `supercontinente_roto`,
-    /// `inicio_choque`, `fin_choque`, `cambio_regimen` o `retroceso_margen` (adenda de balance §7;
-    /// nota de rifts §7).
+    /// `inicio_choque`, `fin_choque`, `cambio_regimen`, `retroceso_margen` (adenda de balance §7;
+    /// nota de rifts §7), `captura_microplaca` o `subduccion_dorsal` (nota de demografía de placas
+    /// v2).
     pub tipo: String,
     /// Placas implicadas (madre e hijas, las dos del borde, absorbida y receptora…).
     pub placas: Vec<u64>,
@@ -56,6 +57,10 @@ pub struct EventoTectonico {
     /// acumulada de ese lado (km).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extension_km: Option<f64>,
+    /// Nota de demografía de placas v2, rama D: longitud de la fosa que se apaga cuando una dorsal
+    /// llega a ella (km).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fosa_km: Option<f64>,
 }
 
 /// Métricas agregadas de un paso de la deriva (§8, «cada Myr»).
@@ -187,6 +192,13 @@ pub struct MetricaMyr {
     pub costa_margen_km: f64,
     #[serde(default)]
     pub franja_estirada_km: f64,
+    /// Nota de demografía de placas v2, D6: encuentros entre dorsales y fosas del paso (tramos de
+    /// dorsal a menos de `d_dc` de una fosa donde se hunde una de sus dos placas) y longitud de esa
+    /// dorsal (km).
+    #[serde(default)]
+    pub dorsal_fosa_n: u32,
+    #[serde(default)]
+    pub dorsal_fosa_km: f64,
 }
 
 /// Cuentas del material continental (km³) a lo largo de la deriva (adenda de balance §6 y §8).
@@ -439,4 +451,22 @@ pub struct BalanceMedio {
     pub franja_estirada_final_km: f64,
     #[serde(default)]
     pub ciclos_supercontinente: u32,
+    /// Nota de rifts v2 §10: supercontinentes que se forman y se rompen tras el rodaje (el índice de
+    /// supercontinente sube a 0,7 o más y después baja de 0,5) y su duración media (Myr; 0 si
+    /// ninguno termina).
+    #[serde(default)]
+    pub supercontinentes_terminados: u32,
+    #[serde(default)]
+    pub duracion_media_supercontinente_myr: f64,
+    /// Nota de demografía de placas v2, rama D y D6 (tras el rodaje): dorsales que llegan a una fosa
+    /// y mueren por 100 Myr, placas retiradas así por 100 Myr, fosa que se apaga (km por 100 Myr) y
+    /// longitud media de dorsal en encuentro con una fosa (km).
+    #[serde(default)]
+    pub subducciones_dorsal_100myr: f64,
+    #[serde(default)]
+    pub placas_retiradas_dorsal_100myr: f64,
+    #[serde(default)]
+    pub fosa_apagada_dorsal_km_100myr: f64,
+    #[serde(default)]
+    pub dorsal_fosa_km: f64,
 }

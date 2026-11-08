@@ -152,6 +152,26 @@ Responde a la misma pregunta para los continentes: con el grosor real de la cort
 
 Descarga la primera vez a `output/referencias/crust1/` los ficheros de CRUST1.0 que usa (`crust1.bnds`, `crust1.rho`, `CNtype1-1.txt` y `CNtype1_key.txt`, sacados por su nombre de los tar de igppweb.ucsd.edu) y a `output/referencias/litho1/` el tar de LITHO1.0 (12 MB), que se lee sin extraerlo. Guarda en `output/cache/` las celdas de nivel 3 de Seton y de GlobSed, y la litosfera en la malla de 1°. Escribe `config/referencias/tierra_corteza.toml`, solo con la Tierra.
 
+## Estudio de isostasia continental (Lamb et al. 2020 y las reglas R0–R4)
+
+```bash
+python3 -I herramientas/analisis/estudio_isostasia.py   # ~5 min con las cachés; la primera vez descarga CAM2016, TC1 y Lamb
+```
+
+Sigue el protocolo de `docs/design/terreno/estudio_isostasia_continental.md` con la Tierra real, sin el planeta simulado:
+1. **Reproduce la isostasia de litosfera completa de Lamb et al. (2020)** con sus datos (Zenodo 4031646).
+   - Sus constantes salen de sus rejillas: la perturbación de grosor que anula cada anomalía, dividida por la anomalía, da α (corteza) y β (litosfera).
+   - La referencia es la de su texto: 32 km de corteza a nivel del mar con 100 km de litosfera.
+   - La corteza es la de CRUST1.0 (cristalina más sedimento) y la litosfera, CAM2016 (Priestley y McKenzie), la que usaron.
+   - Compara nuestra anomalía con la suya nodo a nodo, en la tierra continental (sus anomalías del océano usan otra regla) y en todo, y su reducción a 100 km con su tabla por continentes.
+2. **Evalúa las reglas R0–R4**, ajustando solo lo que no tiene valor medido (H_0 y, en sus rangos publicados, las densidades, Δρ_ma y las constantes de L(t)).
+   - Hay validación cruzada entre las dos mitades de los continentes: Eurasia, África y Australia frente a América y la Antártida.
+   - El error por celda se mide en la tierra continental a 1°. Se dan también el error por provincia y los casos con nombre.
+   - La tabla de relieve va a 26 km, con el océano real y el agua del modelo.
+3. **Reparte el error de R0** entre el manto litosférico, la densidad de la corteza y el sedimento, con el reparto de Shapley sobre las 8 combinaciones.
+
+La edad tectonotérmica de cada celda sale de su tipo de corteza de CRUST1.0 (tabla `EDAD_TIPO`, un supuesto del estudio). TC1 solo se publica libre a 5° (www.lithosphere.info): se rellenan sus nodos de costa con la media de los vecinos. Descarga a `output/referencias/` CAM2016Litho (EarthScope), TC1 y los conjuntos de Lamb. Escribe `config/referencias/tierra_isostasia.toml`.
+
 ## La deriva en varias semillas
 
 ```bash

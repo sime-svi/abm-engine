@@ -261,6 +261,18 @@ pub(super) struct Bloque {
     centro: V3,
 }
 
+impl Bloque {
+    /// Placa del bloque (índice).
+    pub(super) fn placa_indice(&self) -> usize {
+        self.placa
+    }
+
+    /// Celdas del mundo del bloque, ordenadas.
+    pub(super) fn celdas_del_mundo(&self) -> &[u32] {
+        &self.celdas
+    }
+}
+
 /// Un trazado de ruptura (nota de rifts §6.2).
 enum Trazado {
     /// Por la sutura `id`: celdas del mundo de su lado 0 y de su lado 1 dentro del bloque, y su
@@ -404,8 +416,40 @@ impl Deriva {
         madre.mundo.iter().map(|&k| lado[k as usize] == 1).collect()
     }
 
-    /// Rifts (nota de rifts §6): cada bloque continental que no esté ya en fase de rift se rompe en
-    /// el paso con probabilidad `1 − exp(−λ_A·A_k·Δt)`, una tirada por bloque en orden fijo. El
+    /// Reloj de un bloque (nota de rifts v2 §6.1, Myr): el tiempo desde el reinicio más reciente de
+    /// sus muestras (una ruptura o un choque que le añadió un continente). Sin ningún reinicio, ∞.
+    pub(super) fn reloj_bloque(&self, b: &Bloque) -> f64 {
+        let ultimo = b
+            .celdas
+            .iter()
+            .filter_map(|&k| self.corteza(k as usize))
+            .map(|c| c.reinicio_myr)
+            .fold(f64::NEG_INFINITY, f64::max);
+        if ultimo.is_finite() {
+            (self.t_myr - ultimo).max(0.0)
+        } else {
+            f64::INFINITY
+        }
+    }
+
+    /// Reinicia el reloj de las muestras que ven las celdas del mundo `celdas` (nota de rifts v2
+    /// §6.1): un trozo recién separado y un bloque recién soldado a otro empiezan de cero.
+    pub(super) fn reiniciar_reloj(&mut self, celdas: &[u32]) {
+        let t = self.t_myr;
+        for &k in celdas {
+            let (p, l) = (self.dueno[k as usize], self.rep[k as usize]);
+            if p == NADA || l == NADA {
+                continue;
+            }
+            if let Some(c) = self.placas[p as usize].get_mut(l) {
+                c.reinicio_myr = t;
+            }
+        }
+    }
+
+    /// Rifts (nota de rifts v2 §6): cada bloque continental que no esté ya en fase de rift se rompe
+    /// en el paso con probabilidad `1 − exp(−λ_A·A_k·min(1, t_k/τ_ais)·Δt)`, con `t_k` el reloj del
+    /// bloque ([`Deriva::reloj_bloque`]), una tirada por bloque en orden fijo. El
     /// trazado sigue la sutura más larga del bloque (de al menos `L_sut,min`) o, si no la tiene, un
     /// círculo máximo por su centro con orientación sorteada. Si algún trozo queda con menos de
     /// `A_trozo,min` de continente (o una mitad de la placa por debajo de `A_min`, que la absorbería
@@ -437,7 +481,13 @@ impl Deriva {
             {
                 continue;
             }
-            let prob = 1.0 - (-lambda * b.area_km2 / 1e6 * dt).exp();
+            // El calor se acumula bajo el bloque con el tiempo que lleva unido (nota de rifts v2).
+            let calor = if self.cfg.tau_ais_myr > 0.0 {
+                (self.reloj_bloque(b) / self.cfg.tau_ais_myr).min(1.0)
+            } else {
+                1.0
+            };
+            let prob = 1.0 - (-lambda * b.area_km2 / 1e6 * calor * dt).exp();
             let k0 = b.celdas[0] as u64;
             if azar(self.seed, self.paso, id, P_RIFT, k0) >= prob {
                 continue;
@@ -499,6 +549,8 @@ impl Deriva {
                 let Some((h1, h2)) = self.partir_por_lados(pi, &lados, polo, centro) else {
                     continue;
                 };
+                // Los dos trozos empiezan su reloj (nota de rifts v2 §6.1).
+                self.reiniciar_reloj(&b.celdas);
                 self.estampar(h1, lote::RIFT);
                 self.estampar(h2, lote::RIFT);
                 // Una sutura que se reabre deja de serlo.

@@ -111,6 +111,11 @@ pub struct Corteza {
     /// pone al fundirse dos placas en las muestras de los dos lados del frente de choque y viaja con
     /// la muestra: las suturas son líneas dentro de las placas que un rift puede seguir.
     pub sutura: u32,
+    /// Reloj del bloque continental (nota de rifts v2 §6.1): Myr en que el bloque de la muestra se
+    /// rompió en un rift o se soldó a otro continente por última vez; `−∞` si ninguno (la corteza
+    /// nueva no cambia el reloj de su bloque). Viaja con la muestra: el reloj de un bloque es el
+    /// tiempo desde el reinicio más reciente de sus muestras (al juntarse dos bloques, el menor).
+    pub reinicio_myr: f64,
     /// De dónde viene la muestra (diagnóstico; el modelo nunca la lee).
     pub proc: Procedencia,
 }
@@ -144,10 +149,10 @@ pub mod lote {
     pub const SUAVIZADO: u8 = 7;
     /// Separación de un océano por la invasión de un margen pasivo (v4 §6.4).
     pub const INVASION: u8 = 8;
-    /// Soldadura de dos placas con el borde inactivo y captura de una microplaca (nota de demografía
-    /// de placas, rama A).
-    pub const SOLDADURA: u8 = 9;
-    pub const CAPTURA: u8 = 10;
+    /// Captura de una microplaca (nota de demografía de placas, A2) y franja de una placa que pasa a
+    /// la del otro lado de su dorsal cuando la dorsal llega a la fosa (rama D).
+    pub const CAPTURA: u8 = 9;
+    pub const DORSAL_FOSA: u8 = 10;
     pub const NOMBRES: [&str; 11] = [
         "ninguno",
         "sutura",
@@ -158,8 +163,8 @@ pub mod lote {
         "isla absorbida",
         "suavizado de la pertenencia",
         "invasión",
-        "soldadura",
         "captura de microplaca",
+        "subducción de dorsal",
     ];
 }
 
@@ -231,6 +236,7 @@ impl Corteza {
             edad_orog: 0.0,
             dh_dt: 0.0,
             sutura: 0,
+            reinicio_myr: f64::NEG_INFINITY,
             proc: Procedencia::default(),
         }
     }
@@ -249,6 +255,7 @@ impl Corteza {
             edad_orog: 1000.0,
             dh_dt: 0.0,
             sutura: 0,
+            reinicio_myr: f64::NEG_INFINITY,
             proc,
         }
     }
@@ -627,8 +634,6 @@ struct Par {
     choque_inicio_myr: f64,
     /// Régimen del margen en el último paso con subducción: (id de la placa de arriba, ¿erosivo?).
     regimen: Option<(u64, bool)>,
-    /// Tiempo seguido con el borde común inactivo (`T_in`, nota de demografía de placas A1, Myr).
-    inactivo_myr: f64,
 }
 
 /// Un tramo de fosa del paso (adenda de balance §3): la celda del mundo donde la placa de abajo
@@ -674,6 +679,7 @@ struct Detalle {
     trozos_km2: Option<[f64; 2]>,
     sutura_km: Option<f64>,
     extension_km: Option<f64>,
+    fosa_km: Option<f64>,
 }
 
 /// Fracción suavizada por debajo de la cual una muestra que reclama una celda es una muestra suelta
@@ -940,6 +946,18 @@ impl Campo {
     }
 }
 
+/// Un encuentro entre una dorsal y una fosa (nota de demografía de placas v2, D6): un tramo de
+/// dorsal activa entre las placas `p` y `r` (ids) a menos de `d_dc` de una fosa activa donde se
+/// hunde `p`, medido por dentro de `p`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EncuentroDorsalFosa {
+    pub p: u64,
+    pub r: u64,
+    /// Longitud de la dorsal a menos de `d_dc` de la fosa (km) y su distancia mínima a ella (km).
+    pub dorsal_km: f64,
+    pub dist_min_km: f64,
+}
+
 /// Estado de la deriva de placas.
 pub struct Deriva {
     pub cfg: TectonicaCfg,
@@ -1051,6 +1069,9 @@ pub struct Deriva {
     /// La placa que se hunde en cada tramo del último paso (índice) y el fondo consumido (km²;
     /// diagnóstico de la nota de demografía de placas, D5).
     pub hundido_paso: Vec<(u32, f64)>,
+    /// Encuentros entre dorsales y fosas del último paso (nota de demografía de placas v2, D6),
+    /// también con la rama D apagada.
+    pub dorsal_fosa_paso: Vec<EncuentroDorsalFosa>,
     pub creacion_paso: Vec<u32>,
     // Trabajo (se reserva una vez).
     cov: Vec<[(u32, u32); MAXC]>,
@@ -1149,11 +1170,30 @@ impl Deriva {
         // Ruido suave del espesor continental (σ_H0) y de la edad inicial del fondo.
         let rh = Perlin3::new(seed ^ 0x4E0);
         let std_h = 0.25;
+        let t0 = -cfg.t_deriva_myr;
+        // Reloj de los rifts (nota de rifts v2 §6.1): la nota no fija el de los cratones de partida;
+        // cada uno empieza con un tiempo unido al azar en [0, τ_ais] (sin sincronizar sus rupturas).
+        let reloj_craton: Vec<f64> = orden[..nc]
+            .iter()
+            .map(|&i| t0 - cfg.tau_ais_myr * azar(seed, 0, i as u64, P_CRATON, 2))
+            .collect();
         let corteza = |k: usize| -> Corteza {
             let d = malla.dir[k];
             if es_cont[k] {
                 let x = rh.fbm(d[0] * 6.0, d[1] * 6.0, d[2] * 6.0, 3, 0.5, 2.0) / std_h;
-                Corteza::continental(cfg.h0_km + cfg.sigma_h0_km * x.clamp(-3.0, 3.0))
+                // El cratón de la celda: el de más puntos (el mismo criterio que la reparte).
+                let dd = deformar(d, 4.0 * cfg.deformacion, 3.0);
+                let j = (0..nc)
+                    .max_by(|&a, &b| {
+                        let pa = -crate::geometry::angle_between(dd, cratones[a].0) / cratones[a].1;
+                        let pb = -crate::geometry::angle_between(dd, cratones[b].0) / cratones[b].1;
+                        pa.total_cmp(&pb).then(b.cmp(&a))
+                    })
+                    .unwrap_or(0);
+                Corteza {
+                    reinicio_myr: reloj_craton.get(j).copied().unwrap_or(f64::NEG_INFINITY),
+                    ..Corteza::continental(cfg.h0_km + cfg.sigma_h0_km * x.clamp(-3.0, 3.0))
+                }
             } else {
                 let u = 0.5 + 0.5 * rf.fbm(d[0] * 4.0, d[1] * 4.0, d[2] * 4.0, 2, 0.5, 2.0) / 0.35;
                 Corteza {
@@ -1163,7 +1203,6 @@ impl Deriva {
             }
         };
         let cortezas: Vec<Corteza> = (0..malla.num).map(corteza).collect();
-        let t0 = -cfg.t_deriva_myr;
         let ids: Vec<u64> = (0..n as u64)
             .map(|i| splitmix64(seed ^ splitmix64(i + 1)))
             .collect();
@@ -1268,6 +1307,7 @@ impl Deriva {
             solape_en_borde_paso: Vec::new(),
             consumo_paso: Vec::new(),
             hundido_paso: Vec::new(),
+            dorsal_fosa_paso: Vec::new(),
             creacion_paso: Vec::new(),
             ruido_def,
             vecindad,
@@ -1361,8 +1401,9 @@ impl Deriva {
         self.trazar("erosion_y_sedimento");
         let mut cambio = self.suturas();
         cambio |= self.rifts();
-        // Muerte de placas (nota de demografía de placas, rama A), después de los rifts.
-        cambio |= self.soldaduras();
+        // Muerte de placas (nota de demografía de placas v2), después de los rifts: subducción de
+        // dorsales (rama D) y captura de microplacas (A2).
+        cambio |= self.subduccion_de_dorsales();
         cambio |= self.capturas();
         cambio |= self.saltos_de_dorsal();
         if cambio {
@@ -1639,7 +1680,6 @@ impl Deriva {
                         choque_avisado: false,
                         choque_inicio_myr: 0.0,
                         regimen: None,
-                        inactivo_myr: 0.0,
                     },
                 );
                 i
@@ -4339,6 +4379,7 @@ impl Deriva {
             trozos_km2: det.trozos_km2,
             sutura_km: det.sutura_km,
             extension_km: det.extension_km,
+            fosa_km: det.fosa_km,
         });
     }
 
@@ -4352,11 +4393,109 @@ impl Deriva {
         a
     }
 
-    /// Funde la placa `b` en la `a`: cada muestra de `b` pasa (no se copia) a la celda local libre de
-    /// `a` más cercana a su posición; si no hay ninguna libre a dos anillos, su volumen se suma a la
-    /// muestra que ya ocupa su sitio. Así la corteza se conserva exactamente (adenda §0).
-    fn fundir(&mut self, a: usize, b: usize) {
+    /// Pasa la muestra `c` de la celda local `lb` de una placa con rotación `rot_b` a la placa `a`
+    /// (no se copia): a la celda local libre de `a` más cercana a su posición, la propia o sus
+    /// vecinas a uno y dos anillos (orden fijo), con el espesor ajustado al área de la celda; si no
+    /// hay ninguna libre, su material se suma a la muestra más delgada de las que ocupan su posición
+    /// y sus dos anillos. Con `estado`, el de su tramo convergente pasa con ella. La corteza se
+    /// conserva exactamente (adenda §0).
+    fn mover_muestra(
+        &mut self,
+        a: usize,
+        rot_b: &Mat3,
+        lb: u32,
+        c: Corteza,
+        estado: Option<EstadoFosa>,
+    ) {
         let (rs, rc) = (self.cfg.rho_s, self.cfg.rho_c);
+        let x = aplicar(rot_b, self.malla.dir[lb as usize]);
+        let ar_b = self.malla.area[lb as usize];
+        let pa = &self.placas[a];
+        let l0 = self.malla.localizar(aplicar_t(&pa.rot, x)) as u32;
+        // Celda libre más cercana: la propia, o sus vecinas a uno y dos anillos (orden fijo).
+        let mut libre = (pa.mapa[l0 as usize] == NADA).then_some(l0);
+        if libre.is_none() {
+            'buscar: for &v1 in &self.malla.vec[l0 as usize] {
+                if v1 == NADA {
+                    continue;
+                }
+                if pa.mapa[v1 as usize] == NADA {
+                    libre = Some(v1);
+                    break 'buscar;
+                }
+            }
+        }
+        if libre.is_none() {
+            'buscar2: for &v1 in &self.malla.vec[l0 as usize] {
+                if v1 == NADA {
+                    continue;
+                }
+                for &v2 in &self.malla.vec[v1 as usize] {
+                    if v2 != NADA && pa.mapa[v2 as usize] == NADA {
+                        libre = Some(v2);
+                        break 'buscar2;
+                    }
+                }
+            }
+        }
+        let mundo = self.malla.localizar(x) as u32;
+        match libre {
+            Some(l) => {
+                // Mismo volumen en una celda de otra área: se ajusta el espesor (la base basáltica
+                // no es material continental y no cambia).
+                let f = ar_b / self.malla.area[l as usize];
+                let c2 = Corteza {
+                    h: if c.cont {
+                        c.h * f
+                    } else {
+                        c.h - c.hc + c.hc * f
+                    },
+                    hc: c.hc * f,
+                    sed: c.sed * f,
+                    proc: c.proc.escalada(f),
+                    ..c
+                };
+                self.placas[a].insertar(l, c2, mundo);
+                if let Some(e) = estado {
+                    self.placas[a].fosas.insert(l, e);
+                }
+            }
+            None => {
+                // Sin sitio cerca: su material continental se suma a la muestra más delgada de las
+                // que ocupan su posición y sus dos anillos (desempate por celda); la oceánica que lo
+                // recibe pasa a continental si supera H_cont_min.
+                let pa = &self.placas[a];
+                let mut cand: Vec<u32> = vec![l0];
+                for &v1 in &self.malla.vec[l0 as usize] {
+                    if v1 == NADA {
+                        continue;
+                    }
+                    cand.push(v1);
+                    cand.extend(self.malla.vec[v1 as usize].iter().filter(|&&v| v != NADA));
+                }
+                cand.sort_unstable();
+                cand.dedup();
+                let destino = cand
+                    .iter()
+                    .copied()
+                    .filter_map(|l| pa.get(l).map(|d| (d.h_eq(rs, rc), l)))
+                    .min_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)))
+                    .map_or(l0, |x| x.1);
+                let ar_a = self.malla.area[destino as usize];
+                let h_cont_min = self.cfg.h_cont_min_km;
+                if let Some(d) = self.placas[a].get_mut(destino) {
+                    let r = ar_b / ar_a;
+                    d.sumar_hc(c.hc * r, c.arco, rs, rc, h_cont_min, via::FUSION);
+                    d.sed += c.sed * r;
+                }
+            }
+        }
+    }
+
+    /// Funde la placa `b` en la `a`: cada muestra de `b` pasa a `a` ([`Deriva::mover_muestra`]), con
+    /// el estado de su tramo convergente salvo el del borde entre las dos, que ya no existe. Así la
+    /// corteza se conserva exactamente (adenda §0).
+    fn fundir(&mut self, a: usize, b: usize) {
         let muestras: Vec<(u32, Corteza)> = {
             let pb = &self.placas[b];
             pb.celda
@@ -4367,92 +4506,12 @@ impl Deriva {
         };
         let rot_b = self.placas[b].rot;
         for (lb, c) in muestras {
-            let x = aplicar(&rot_b, self.malla.dir[lb as usize]);
-            let ar_b = self.malla.area[lb as usize];
-            let pa = &self.placas[a];
-            let l0 = self.malla.localizar(aplicar_t(&pa.rot, x)) as u32;
-            // Celda libre más cercana: la propia, o sus vecinas a uno y dos anillos (orden fijo).
-            let mut libre = (pa.mapa[l0 as usize] == NADA).then_some(l0);
-            if libre.is_none() {
-                'buscar: for &v1 in &self.malla.vec[l0 as usize] {
-                    if v1 == NADA {
-                        continue;
-                    }
-                    if pa.mapa[v1 as usize] == NADA {
-                        libre = Some(v1);
-                        break 'buscar;
-                    }
-                }
-            }
-            if libre.is_none() {
-                'buscar2: for &v1 in &self.malla.vec[l0 as usize] {
-                    if v1 == NADA {
-                        continue;
-                    }
-                    for &v2 in &self.malla.vec[v1 as usize] {
-                        if v2 != NADA && pa.mapa[v2 as usize] == NADA {
-                            libre = Some(v2);
-                            break 'buscar2;
-                        }
-                    }
-                }
-            }
-            let mundo = self.malla.localizar(x) as u32;
-            match libre {
-                Some(l) => {
-                    // Mismo volumen en una celda de otra área: se ajusta el espesor (la base
-                    // basáltica no es material continental y no cambia).
-                    let f = ar_b / self.malla.area[l as usize];
-                    let c2 = Corteza {
-                        h: if c.cont {
-                            c.h * f
-                        } else {
-                            c.h - c.hc + c.hc * f
-                        },
-                        hc: c.hc * f,
-                        sed: c.sed * f,
-                        proc: c.proc.escalada(f),
-                        ..c
-                    };
-                    self.placas[a].insertar(l, c2, mundo);
-                    // El estado de su tramo convergente pasa con ella (nota de fosas), salvo el del
-                    // borde entre las dos, que ya no existe.
-                    if let Some(e) = self.placas[b].fosas.get(&lb).copied()
-                        && !self.es_placa(e.otra, a as u32)
-                    {
-                        self.placas[a].fosas.insert(l, e);
-                    }
-                }
-                None => {
-                    // Sin sitio cerca: su material continental se suma a la muestra más delgada de
-                    // las que ocupan su posición y sus dos anillos (desempate por celda); la
-                    // oceánica que lo recibe pasa a continental si supera H_cont_min.
-                    let pa = &self.placas[a];
-                    let mut cand: Vec<u32> = vec![l0];
-                    for &v1 in &self.malla.vec[l0 as usize] {
-                        if v1 == NADA {
-                            continue;
-                        }
-                        cand.push(v1);
-                        cand.extend(self.malla.vec[v1 as usize].iter().filter(|&&v| v != NADA));
-                    }
-                    cand.sort_unstable();
-                    cand.dedup();
-                    let destino = cand
-                        .iter()
-                        .copied()
-                        .filter_map(|l| pa.get(l).map(|d| (d.h_eq(rs, rc), l)))
-                        .min_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)))
-                        .map_or(l0, |x| x.1);
-                    let ar_a = self.malla.area[destino as usize];
-                    let h_cont_min = self.cfg.h_cont_min_km;
-                    if let Some(d) = self.placas[a].get_mut(destino) {
-                        let r = ar_b / ar_a;
-                        d.sumar_hc(c.hc * r, c.arco, rs, rc, h_cont_min, via::FUSION);
-                        d.sed += c.sed * r;
-                    }
-                }
-            }
+            let estado = self.placas[b]
+                .fosas
+                .get(&lb)
+                .copied()
+                .filter(|e| !self.es_placa(e.otra, a as u32));
+            self.mover_muestra(a, &rot_b, lb, c, estado);
         }
         for k in 0..self.malla.num {
             if self.dueno[k] == b as u32 {
@@ -4471,6 +4530,47 @@ impl Deriva {
         self.placas[a].recortar_ancestros();
         self.placas[b].morir();
         self.placas[a].actualizar_cap(&self.malla);
+    }
+
+    /// Pasa a la placa `r` las muestras de la placa `p` que caen en las celdas del mundo `franja`
+    /// (rama D de la nota de demografía de placas v2), con la conservación de `fundir`. No pasan con
+    /// ellas ni el estado de sus tramos convergentes (la fosa de enfrente se apaga) ni el de su
+    /// invasión, y `r` no hereda a `p` como antepasada: los tramos de otras placas que miraban a `p`
+    /// no miran a `r`. Devuelve el área que pasa (km²).
+    fn trasladar_franja(&mut self, r: usize, p: usize, franja: &[u32]) -> f64 {
+        let en: std::collections::HashSet<u32> = franja.iter().copied().collect();
+        let mut sel: Vec<u32> = self.placas[p]
+            .celda
+            .iter()
+            .zip(&self.placas[p].mundo)
+            .filter(|(_, m)| en.contains(m))
+            .map(|(&l, _)| l)
+            .collect();
+        sel.sort_unstable();
+        let rot_p = self.placas[p].rot;
+        let mut area = 0.0;
+        for lb in sel {
+            let Some(c) = self.placas[p].quitar(lb) else {
+                continue;
+            };
+            self.placas[p].fosas.remove(&lb);
+            self.placas[p].invadidas.remove(&lb);
+            area += self.malla.area[lb as usize];
+            self.mover_muestra(r, &rot_p, lb, c, None);
+        }
+        for &k in franja {
+            let ku = k as usize;
+            if self.dueno[ku] == p as u32 {
+                self.dueno[ku] = r as u32;
+                self.rep[ku] = self
+                    .malla
+                    .localizar(aplicar_t(&self.placas[r].rot, self.malla.dir[ku]))
+                    as u32;
+            }
+        }
+        self.placas[p].actualizar_cap(&self.malla);
+        self.placas[r].actualizar_cap(&self.malla);
+        area
     }
 
     /// Suturas (§6.4): dos placas en colisión que convergen a menos de `v_sutura` durante más de
@@ -4523,6 +4623,9 @@ impl Deriva {
             }
             let (a, b) = if areas[x] >= areas[y] { (x, y) } else { (y, x) };
             let ids = vec![self.placas[a].id, self.placas[b].id];
+            // Un choque que añade un continente reinicia el reloj del bloque que resulta (nota de
+            // rifts v2 §6.1): los bloques de las dos placas que tocan el frente, si hay de los dos.
+            self.reiniciar_reloj_de_sutura(a, b);
             self.estampar(b, lote::SUTURA);
             self.marcar_sutura(a, b);
             self.fundir(a, b);
@@ -4530,6 +4633,47 @@ impl Deriva {
             cambio = true;
         }
         cambio
+    }
+
+    /// Reloj de los rifts en una sutura entre las placas `a` y `b` (nota de rifts v2 §6.1): si las dos
+    /// tienen un bloque continental que toca su frente de choque, todos esos bloques empiezan de
+    /// cero, porque juntos forman un bloque nuevo. Se llama antes de fundirlas.
+    fn reiniciar_reloj_de_sutura(&mut self, a: usize, b: usize) {
+        let frente: std::collections::HashSet<u32> = self
+            .bordes
+            .iter()
+            .filter(|bo| {
+                bo.tipo == TipoBorde::Colision
+                    && ((bo.p as usize == a && bo.q as usize == b)
+                        || (bo.p as usize == b && bo.q as usize == a))
+            })
+            .map(|bo| bo.k)
+            .collect();
+        if frente.is_empty() {
+            return;
+        }
+        let bloques = self.bloques_continentales();
+        let tocan = |pl: usize| -> Vec<usize> {
+            bloques
+                .iter()
+                .enumerate()
+                .filter(|(_, bl)| {
+                    bl.placa_indice() == pl
+                        && bl.celdas_del_mundo().iter().any(|k| frente.contains(k))
+                })
+                .map(|(i, _)| i)
+                .collect()
+        };
+        let (ba, bb) = (tocan(a), tocan(b));
+        if ba.is_empty() || bb.is_empty() {
+            return;
+        }
+        let celdas: Vec<u32> = ba
+            .iter()
+            .chain(&bb)
+            .flat_map(|&i| bloques[i].celdas_del_mundo().iter().copied())
+            .collect();
+        self.reiniciar_reloj(&celdas);
     }
 
     /// Lado de cada muestra de la placa `pi` respecto al círculo máximo de polo `polo` deformado
@@ -4665,85 +4809,218 @@ impl Deriva {
             .collect()
     }
 
-    /// A1. Soldadura por borde inactivo (nota de demografía de placas §6): dos placas vecinas cuya
-    /// velocidad relativa máxima a lo largo de todo su borde común lleva `τ_fus` Myr seguidos por
-    /// debajo de `v_fus` se funden; la mayor absorbe a la menor y la corteza se conserva (`fundir`).
-    /// No se funden si su borde común incluye una fosa activa o un rift que aún se estira.
-    fn soldaduras(&mut self) -> bool {
-        let v_fus = self.cfg.v_fus_cm_anio * CM_ANIO;
-        let dt = self.cfg.dt_myr;
-        let con_fosa = self.bordes_con_fosa();
-        // Por par de placas (índices): velocidad relativa máxima, longitud y si hay fosa activa.
-        let mut pares: std::collections::BTreeMap<(u32, u32), (f64, f64, bool)> =
-            Default::default();
-        for (b, &fosa) in self.bordes.iter().zip(&con_fosa) {
-            let clave = (b.p.min(b.q), b.p.max(b.q));
-            let e = pares.entry(clave).or_insert((0.0, 0.0, false));
-            e.0 = e.0.max(b.v_rel);
-            e.1 += 0.5 * b.largo_km;
-            e.2 |= fosa;
-        }
-        let en_rift: Vec<(u64, u64)> = self
-            .rifts_activos
+    /// Distancias (km) por dentro de la placa `p` a las celdas del mundo `fuentes` (a media celda),
+    /// hasta `max_d`: solo las celdas alcanzadas.
+    fn distancias_en_placa(&mut self, p: u32, fuentes: &[u32], max_d: f64) -> HashMap<u32, f64> {
+        self.distancias_y_fuente_en_placa(p, fuentes, max_d)
+            .into_iter()
+            .map(|(k, (d, _))| (k, d))
+            .collect()
+    }
+
+    /// Como [`Deriva::distancias_en_placa`], con la fuente más cercana de cada celda (su posición en
+    /// `fuentes`).
+    fn distancias_y_fuente_en_placa(
+        &mut self,
+        p: u32,
+        fuentes: &[u32],
+        max_d: f64,
+    ) -> HashMap<u32, (f64, u32)> {
+        let media = 0.5 * self.malla.lado_km;
+        let f: Vec<(u32, f64, u32)> = fuentes
             .iter()
-            .map(|l| (l.placa.min(l.otra), l.placa.max(l.otra)))
+            .enumerate()
+            .map(|(i, &k)| (k, media, i as u32))
             .collect();
-        // Los pares que ya no son vecinos empiezan de cero.
-        let mut vecinos: Vec<(u64, u64)> = pares
-            .keys()
-            .map(|&(p, q)| {
-                let (a, b) = (self.placas[p as usize].id, self.placas[q as usize].id);
-                (a.min(b), a.max(b))
-            })
+        let dueno = &self.dueno;
+        let mut campo = std::mem::take(&mut self.campo);
+        campo.calcular(
+            &self.malla,
+            &f,
+            |u, v| dueno[u] == p && dueno[v] == p,
+            max_d,
+        );
+        let d: HashMap<u32, (f64, u32)> = campo
+            .orden
+            .iter()
+            .map(|&k| (k, (campo.dist[k as usize], campo.fuente[k as usize])))
             .collect();
-        vecinos.sort_unstable();
-        for par in &mut self.pares {
-            if vecinos.binary_search(&(par.a, par.b)).is_err() {
-                par.inactivo_myr = 0.0;
+        self.campo = campo;
+        d
+    }
+
+    /// Rama D de la nota de demografía de placas v2: subducción de dorsales. Un tramo de dorsal
+    /// activa entre las placas `p` y `r` a menos de `d_dc` de una fosa activa donde `p` se hunde
+    /// bajo una tercera placa (medido por dentro de `p`: la franja de `p` entre la dorsal y la fosa
+    /// es más estrecha que `d_dc`) muere: la franja de `p` entre ese tramo y la fosa pasa a `r` con la conservación de
+    /// `fundir` ([`Deriva::trasladar_franja`]). Así la dorsal ya no separa dos placas, la fosa de
+    /// enfrente se apaga (`r` no hereda su estado) y el borde nuevo entre `r` y la placa de arriba
+    /// se clasifica en el paso siguiente según su movimiento. Si `p` se queda sin muestras, se
+    /// retira, como las placas fantasma. La franja son las celdas de `p` a menos de `d_dc` de la fosa
+    /// cuya suma de distancias a la fosa y al tramo de dorsal no pasa de `d_dc` más una celda: las
+    /// que quedan entre los dos.
+    ///
+    /// Apunta en `dorsal_fosa_paso` todos los encuentros del paso (D6), también con la regla apagada
+    /// (`subduccion_dorsales = false`). Orden fijo: pares (p, r) por índice; una franja por placa y
+    /// por paso, sin tocar una placa que ya cambió en el paso (lo demás, en el paso siguiente).
+    fn subduccion_de_dorsales(&mut self) -> bool {
+        self.dorsal_fosa_paso.clear();
+        let d_dc = self.cfg.d_dc_km;
+        if d_dc <= 0.0 {
+            return false;
+        }
+        let lado = self.malla.lado_km;
+        let con_fosa = self.bordes_con_fosa();
+        // Bordes de fosa activa donde se hunde cada placa.
+        let mut fosa_de: std::collections::BTreeMap<u32, Vec<usize>> = Default::default();
+        for (i, (b, &f)) in self.bordes.iter().zip(&con_fosa).enumerate() {
+            if f && b.p_subduce {
+                fosa_de.entry(b.p).or_default().push(i);
             }
         }
-        let areas = self.area_placa();
-        let mut fundir: Vec<(usize, usize, f64, f64)> = Vec::new();
-        for (&(p, q), &(v_max, largo, fosa)) in &pares {
-            let (ip, iq) = (self.placas[p as usize].id, self.placas[q as usize].id);
-            let i = self.par_idx(ip, iq);
-            if v_max < v_fus {
-                self.pares[i].inactivo_myr += dt;
-            } else {
-                self.pares[i].inactivo_myr = 0.0;
-            }
-            let t_in = self.pares[i].inactivo_myr;
-            if t_in >= self.cfg.tau_fus_myr && !fosa && !en_rift.contains(&(ip.min(iq), ip.max(iq)))
-            {
-                let (a, b) = if areas[p as usize] >= areas[q as usize] {
-                    (p as usize, q as usize)
-                } else {
-                    (q as usize, p as usize)
-                };
-                fundir.push((a, b, largo, t_in));
+        if fosa_de.is_empty() {
+            return false;
+        }
+        // Bordes de dorsal de cada placa con fosa, por la placa del otro lado.
+        let mut dorsal_de: std::collections::BTreeMap<(u32, u32), Vec<usize>> = Default::default();
+        for (i, b) in self.bordes.iter().enumerate() {
+            if b.tipo == TipoBorde::Divergente && b.p != b.q && fosa_de.contains_key(&b.p) {
+                dorsal_de.entry((b.p, b.q)).or_default().push(i);
             }
         }
-        let mut cambio = false;
-        for (a, b, largo, t_in) in fundir {
-            if !self.placas[a].viva || !self.placas[b].viva {
+        type Accion = (usize, usize, Vec<u32>, f64, f64, Vec<u64>, V3);
+        let mut acciones: Vec<Accion> = Vec::new();
+        for (&(p, r), dors) in &dorsal_de {
+            // La fosa tiene que ser con una tercera placa: una dorsal y una fosa entre las mismas dos
+            // placas son un solo borde que cambia de tipo cerca de su polo de rotación, no una dorsal
+            // que llega a una fosa.
+            let fosa_pr: Vec<usize> = fosa_de[&p]
+                .iter()
+                .copied()
+                .filter(|&i| self.bordes[i].q != r)
+                .collect();
+            if fosa_pr.is_empty() {
                 continue;
             }
-            let ids = vec![self.placas[a].id, self.placas[b].id];
-            self.estampar(b, lote::SOLDADURA);
-            self.fundir(a, b);
-            let i = self.par_idx(ids[0], ids[1]);
-            self.pares[i].inactivo_myr = 0.0;
+            let fuentes: Vec<u32> = fosa_pr.iter().map(|&i| self.bordes[i].k).collect();
+            let dfu = self.distancias_y_fuente_en_placa(p, &fuentes, d_dc + lado);
+            let df: HashMap<u32, f64> = dfu.iter().map(|(&k, &(d, _))| (k, d)).collect();
+            // La fosa tiene que estar delante de la dorsal: el tramo de fosa más cercano, a menos de
+            // `θ_dc` de la dirección de apertura hacia dentro de `p`. Así cuenta la franja entre las
+            // dos (Farallón) y no el costado de un punto triple, donde la dorsal llega de lado.
+            let cos_dc = self.cfg.theta_dc_grados.to_radians().cos();
+            let delante = |i: usize| -> bool {
+                let b = &self.bordes[i];
+                let Some(&(d, f)) = dfu.get(&b.k) else {
+                    return false;
+                };
+                if d >= d_dc {
+                    return false;
+                }
+                if self.cfg.theta_dc_grados >= 180.0 {
+                    return true;
+                }
+                let x = self.malla.dir[b.k as usize];
+                let y = self.malla.dir[fuentes[f as usize] as usize];
+                let v = sub(y, x);
+                let v = sub(v, esc(x, dot(v, x)));
+                let nv = dot(v, v).sqrt();
+                if nv < 1e-12 {
+                    return false;
+                }
+                dot(v, esc(b.normal, -1.0)) / nv >= cos_dc
+            };
+            let cerca: Vec<usize> = dors.iter().copied().filter(|&i| delante(i)).collect();
+            if cerca.is_empty() {
+                continue;
+            }
+            let dorsal_km: f64 = cerca.iter().map(|&i| self.bordes[i].largo_km).sum();
+            let dist_min = cerca
+                .iter()
+                .map(|&i| df[&self.bordes[i].k])
+                .fold(f64::INFINITY, f64::min);
+            self.dorsal_fosa_paso.push(EncuentroDorsalFosa {
+                p: self.placas[p as usize].id,
+                r: self.placas[r as usize].id,
+                dorsal_km,
+                dist_min_km: dist_min,
+            });
+            if !self.cfg.subduccion_dorsales {
+                continue;
+            }
+            // La franja: entre el tramo de dorsal cercano y la fosa.
+            let fuentes_d: Vec<u32> = cerca.iter().map(|&i| self.bordes[i].k).collect();
+            let dd = self.distancias_en_placa(p, &fuentes_d, d_dc + lado);
+            let mut franja: Vec<u32> = df
+                .iter()
+                .filter(|&(k, &x)| x < d_dc && dd.get(k).is_some_and(|&y| x + y <= d_dc + lado))
+                .map(|(&k, _)| k)
+                .collect();
+            if franja.is_empty() {
+                continue;
+            }
+            franja.sort_unstable();
+            // La fosa que se apaga: la de `p` en la franja, y las placas de arriba.
+            let mut fosa_km = 0.0;
+            let mut arriba: Vec<u64> = Vec::new();
+            for &i in &fosa_pr {
+                let b = &self.bordes[i];
+                if franja.binary_search(&b.k).is_ok() {
+                    fosa_km += b.largo_km;
+                    arriba.push(self.placas[b.q as usize].id);
+                }
+            }
+            arriba.sort_unstable();
+            arriba.dedup();
+            let punto = self.malla.dir[self.bordes[cerca[0]].k as usize];
+            acciones.push((
+                p as usize, r as usize, franja, dorsal_km, fosa_km, arriba, punto,
+            ));
+        }
+        let mut cambio = false;
+        let mut tocadas: Vec<usize> = Vec::new();
+        for (p, r, franja, dorsal_km, fosa_km, arriba, punto) in acciones {
+            if tocadas.contains(&p)
+                || tocadas.contains(&r)
+                || !self.placas[p].viva
+                || !self.placas[r].viva
+            {
+                continue;
+            }
+            let (id_p, id_r) = (self.placas[p].id, self.placas[r].id);
+            // Procedencia: la franja forma un lote nuevo.
+            let lote_id = self.lotes.len() as u32;
+            self.lotes.push(lote::DORSAL_FOSA);
+            {
+                let en: std::collections::HashSet<u32> = franja.iter().copied().collect();
+                let pl = &mut self.placas[p];
+                for (c, m) in pl.cort.iter_mut().zip(&pl.mundo) {
+                    if en.contains(m) {
+                        c.proc.lote = lote_id;
+                    }
+                }
+            }
+            let area = self.trasladar_franja(r, p, &franja);
+            let retirada = self.placas[p].cort.is_empty();
+            if retirada {
+                self.placas[p].morir();
+            }
+            let mut ids = vec![id_p, id_r];
+            ids.extend(arriba);
             self.evento_det(
-                "soldadura",
+                "subduccion_dorsal",
                 ids,
-                largo,
-                0.0,
-                None,
+                dorsal_km,
+                area,
+                Some(punto),
                 Detalle {
-                    tiempo_choque_myr: Some(t_in),
+                    clase: Some(if retirada { "retirada" } else { "captura" }.to_string()),
+                    fosa_km: Some(fosa_km),
                     ..Detalle::default()
                 },
             );
+            tocadas.push(p);
+            tocadas.push(r);
             cambio = true;
         }
         cambio
@@ -5066,6 +5343,8 @@ impl Deriva {
             bloques_continentales,
             bloque_mayor_frac,
             rifts_estirando: self.rifts_activos.len() as u32,
+            dorsal_fosa_n: self.dorsal_fosa_paso.len() as u32,
+            dorsal_fosa_km: self.dorsal_fosa_paso.iter().map(|e| e.dorsal_km).sum(),
             costa_margen_km,
             franja_estirada_km,
         });

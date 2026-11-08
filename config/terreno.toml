@@ -183,15 +183,18 @@ n_p0         = 12
 n_cratones   = 8
 n_min        = 8
 a_min_frac   = 0.005       # tamaño mínimo de una placa al nacer (rift, salto de dorsal, separación de un margen invadido)
-# Muerte de placas (nota_demografia_placas.md, rama A): soldadura por borde inactivo (A1) y captura de microplacas (A2)
-v_fus_cm_anio = 0.2        # velocidad relativa máxima de un borde por debajo de la cual está inactivo (supuesto: los bordes activos más lentos se mueven milímetros al año; 0,1–0,5)
-tau_fus_myr  = 20.0        # tiempo con el borde inactivo tras el que dos placas se sueldan (supuesto; 10–50)
+# Muerte de placas (nota_demografia_placas.md v2): captura de microplacas (A2) y subducción de dorsales (rama D)
 a_micro_mkm2 = 0.5         # por debajo, una placa es microplaca (del orden de las microplacas de Bird; 0,2–1)
 tau_micro_myr = 10.0       # tiempo sin fosa activa propia tras el que una microplaca es capturada (supuesto; 5–30)
-# Rifts (nota_rifts.md; sustituye a tau_rift_myr): cada bloque continental (región conexa de corteza
-# continental de una placa) se rompe en el paso con probabilidad 1 − exp(−λ_A·A_k·Δt); el trazado
-# sigue su sutura más larga (de al menos l_sut_min_km) o un círculo máximo por su centro
-lambda_a_rift = 4.0e-4      # por Mkm² de continente y por Myr. Calibrado, 5 semillas: 4,9 ± 1,7 rupturas por 100 Myr (con 2,5·10⁻⁴, 4,1; con 6·10⁻⁴, 7,5), el ritmo de la ruptura de Pangea (~4–7)
+d_dc_km      = 300.0       # franja entre una dorsal y la fosa donde se hunde una de sus placas por debajo de la cual la dorsal muere (supuesto: los restos de Farallón capturados frente a California tenían unos cientos de km; 150–500)
+subduccion_dorsales = true # interruptor de la rama D mientras se mide (con false solo se miden los encuentros, D6)
+theta_dc_grados = 45.0     # la fosa está delante de la dorsal: su tramo más cercano, a menos de 45° de la dirección de apertura (geométrico: la franja entre las dos, no el costado de un punto triple; con 180, la letra de la nota)
+# Rifts (nota_rifts.md v2): cada bloque continental (región conexa de corteza continental de una
+# placa) se rompe en el paso con probabilidad 1 − exp(−λ_A·A_k·min(1, t_k/τ_ais)·Δt), con t_k el
+# tiempo que lleva sin romperse ni soldarse a otro continente; el trazado sigue su sutura más larga
+# (de al menos l_sut_min_km) o un círculo máximo por su centro
+lambda_a_rift = 4.0e-4      # por Mkm² de continente y por Myr, para un bloque que lleva unido más de tau_ais (nota de rifts v2). A recalibrar con las placas de ≥1 % (~13) y la duración de los supercontinentes
+tau_ais_myr  = 100.0        # tiempo unido tras el que un bloque alcanza su probabilidad plena de ruptura (nota de rifts v2 §6.1; supuesto, del orden de la duración de los supercontinentes; 50–200)
 a_trozo_min_mkm2 = 0.5      # continente mínimo de cada trozo (físico: Madagascar, ~0,6 Mkm², de los más pequeños separados por un rift)
 l_sut_min_km = 450.0        # longitud mínima de una sutura para guiar la ruptura (numérico: 3·L_borde)
 v_rift_cm_anio = 2.0
