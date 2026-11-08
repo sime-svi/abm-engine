@@ -1636,3 +1636,44 @@ Formato de entrada:
     - 4,1 grandes erupciones por 100 Myr.
   - **Batería:** 238,0 s frente a 246,4 de `main` (473b805) a la vez, −3,4 %. 27 márgenes del planeta movidos con su nota (otra realización del planeta).
   - Fusión de `terreno-margenes-calientes-succion` con `main`.
+
+## [2026-11-08] Modo Tierra real, Fase 1 (rama terreno-modo-tierra)
+
+- **Qué pidió el responsable:** responder al §11 de `diseno_modo_tierra.md` antes de implementar, implementar la Fase 1, validar con su §10 (el modo inventado, idéntico byte a byte) y dejar el informe en `docs/informes/`.
+- **§11:**
+  - **Interfaz del proveedor de mundo:** los campos de nacimiento de cada celda (altura, hielo, textura del suelo, recurso) y el clima de cada día (temperatura y precipitación). El resto lo deriva el motor. Los agentes no leen hoy nada del terreno.
+  - **Carga:** en el nivel 3 (26 km); CRU TS se queda en su rejilla. La caché ocupa 0,51 GB.
+  - **Licencias:**
+    - ETOPO, dominio público;
+    - CHELSA, CC0;
+    - CRU TS, OGL v3 (de la UEA, sin registro);
+    - HydroRIVERS, libre con cita;
+    - MODIS, NASA libre (versión a 0,5° del ICDC, CC BY 4.0).
+  - **Vegetación frente a MODIS:** no, por construcción (biomasa sin unidades).
+- **Hecho** (`crates/abm-terreno/src/tierra/`):
+  - lectores mínimos de GeoTIFF y de NetCDF-3 en flujo, con `miniz_oxide`, la única dependencia nueva;
+  - proyección de ETOPO, CHELSA (todos los píxeles, un hilo por archivo) y CRU TS al nivel 3, y los niveles gruesos por medias;
+  - años reales por bloques con el RNG por contador;
+  - mapas mensuales con las anomalías, y temperatura interpolada entre mitades de mes;
+  - la columna `hielo`;
+  - la salida v8 (`run.tierra`, `diagnostico.tierra`).
+  - Se activa con `--set mundo.modo=tierra`: 7 s por año con las cachés y 1 GB.
+- **Decisiones con datos:**
+  - **La regla del hielo** se aparta de la nota: hace falta la superficie sobre el mar y ≥ 10 m de espesor (`hielo_min_m`). Con «> 0», el ruido entre las dos versiones de ETOPO daba 1,2 Mkm² de hielo sobre el mar del Ártico.
+  - **CHELSA V2.1 tiene clima sobre el mar,** hasta 84° N.
+- **Validación** (`herramientas/tierra/validar.py`):
+  - ✓ relieve, conservación entre niveles (10⁻¹⁴), hielo (15,6 Mkm²), clima medio frente a CHELSA medido aparte, coeficiente de variación de la lluvia anual en 13 regiones y el Sahel de 1984;
+  - ✗ la autocorrelación de un año al siguiente (×0,87) y la vegetación del motor frente a MODIS (r = 0,17);
+  - Miami con el clima real: 61 PgC/año y r = 0,80;
+  - los ríos frente a HydroSHEDS quedan pendientes: Vodafone bloquea `data.hydrosheds.org` (Cloudflare).
+- **Hallazgo grande:** la hidrología del motor sobre el relieve real da 9,4 Mkm² de lagos y ríos por sitios que no son. Hay tres causas:
+  - gargantas tapadas al promediar (el Congo sale por el Ogooué);
+  - cuencas cerradas que se desbordan (el Chad sale por el Níger);
+  - la tierra bajo el mar cuenta como mar (el Nilo acaba en El Fayum).
+- **No regresión:** el planeta inventado sale idéntico byte a byte frente a 42c70f9.
+- **Decisiones que esperan:**
+  - la hidrología;
+  - la vegetación (¿Miami?);
+  - los glaciares de montaña (RGI 7.0);
+  - la autocorrelación;
+  - fusionar la rama.

@@ -23,7 +23,7 @@ Leyenda del estado de un parámetro (CLAUDE §2.8):
 |---|---|---|---|---|
 | `abm` | Forrajeo mínimo en una cuadrícula (fase «inicial») | tick | `config/default.toml` | `docs/design/inicial/` |
 | `agentes` | Biología de los individuos por días (fase «agentes») | día | `config/agentes.toml` | `docs/design/agentes/` |
-| `terreno` | El planeta: relieve, clima, agua, vegetación, suelo | día; la génesis, en Myr | `config/terreno.toml` | `docs/design/terreno/` |
+| `terreno` | El planeta: relieve, clima, agua, vegetación, suelo; con `--set mundo.modo=tierra`, la Tierra real (§2.4) | día; la génesis, en Myr | `config/terreno.toml` | `docs/design/terreno/` |
 
 Todos corren en un solo hilo con un orden fijo: misma semilla y misma config, misma salida bit a bit
 (CLAUDE §6). Cada uno escribe su JSON en `output/` y un `<nombre>_tiempos.json` con lo que tarda
@@ -113,6 +113,35 @@ tectónica (nivel 2, ~52 km) a las celdas del terreno y calcula la altura isost�
 detalle fino continúa el espectro real (ETOPO), según la altura. El levantamiento de la génesis
 geológica usa la derivada de R4 en corteza gruesa (`(ρ_ast − ρ_c_inf + Δρ_ma)/ρ_ast` = 0,086).
 
+### 2.4 El modo Tierra (`--set mundo.modo=tierra`; `tierra/`)
+
+El proveedor de mundo de la Tierra real (`diseno_modo_tierra.md`, Fase 1; técnico:
+`modo-tierra-diseno.md`). El resto del motor recibe los mismos campos que del planeta inventado.
+
+1. **Carga** (`tierra/carga.rs`), en la caché `output/cache/tierra_n3_*.bin` si ya se hizo con las mismas fuentes:
+   1. ETOPO 2022 cada 2': la altura media de cada celda de nivel 3 y la fracción con hielo (superficie − roca ≥ `hielo_min_m`, con la superficie sobre el mar);
+   2. CHELSA V2.1 (30'', los 24 GeoTIFF mensuales, un hilo por archivo): la temperatura y la lluvia de cada mes;
+   3. CRU TS 4.09: las series mensuales 1901–2024 de sus 67 420 celdas de tierra, y la celda de CRU de cada celda de nivel 3;
+   4. los niveles 0–2, como medias por área de sus hijas (conservación exacta).
+2. **Génesis** (`worldgen.rs: generate_tierra`): la malla, la hidrología del motor y el refinado inicial del LOD sobre la altura de ETOPO. No corren la deriva, la génesis geológica ni el agotamiento de humedad.
+3. **Ticks diarios:** los mismos sistemas del §2.1, salvo:
+   - el clima (`tierra/clima.rs: Estado::clima`): la temperatura se interpola entre las mitades de los dos meses que rodean el día, y la lluvia es la del mes repartida entre sus días. Cada mes es la climatología de CHELSA más la anomalía (`ΔT`, `r` ≤ `r_max`) del año real de CRU TS que toca;
+   - el año real se sortea por bloques de `l_bloque` años seguidos, con el RNG por contador;
+   - la erosión, que no corre: el relieve no cambia;
+   - el hielo (`hielo` de cada celda), que quita la vegetación y la habitabilidad y es bioma «hielo».
+4. **Salida:** esquema v8.
+   - `run.tierra`: las fuentes, los parámetros y el año real de cada año simulado.
+   - `diagnostico.tierra`: el hielo, las medias del clima sobre la tierra, la conservación del relieve y las 50 mayores cuencas.
+
+| Parámetro (`[tierra]`) | Valor | Estado |
+|---|---|---|
+| `hielo_min_m` | 10 m | supuesto (por debajo, ruido entre las dos versiones de ETOPO; medido: con 0, 1,2 Mkm² de «hielo» sobre el mar del Ártico) |
+| `nivel_carga` | 3 (~26 km) | el `l_max` del motor |
+| `l_bloque` | 10 años | supuesto de la nota (5–20) |
+| `r_max` | 5 | numérico |
+| `periodo_base` | 1981–2010 | el de CHELSA; otro se corrige con CRU TS |
+| `anio_forzado` | 0 (remuestreo) | — |
+
 ---
 
 ## 3. Los agentes (`agentes`): un día (`abm-ruleset/src/biologia/schedule.rs`)
@@ -154,6 +183,10 @@ Rebrote, orden, forrajeo, reproducción, mortalidad y aplicación de cambios
   - `analisis/estudio_isostasia.py` (estudio de isostasia continental: Lamb et al. 2020 y las reglas R0–R4) y `analisis/nota_isostasia_s0.py` (su ajuste sin la topografía dinámica, la Tierra por clase de edad y las edades de partida);
   - `analisis/supercontinente.py` (diagnóstico del supercontinente, sobre las corridas de `planeta_semillas.py`, con los márgenes como entidades);
   - `analisis/`.
+- **Modo Tierra:**
+  - `herramientas/tierra/descargar.sh` (las fuentes, a `output/referencias/`);
+  - `herramientas/tierra/validar.py` (el §10 de la nota frente a ETOPO, CHELSA, CRU TS, HydroSHEDS y MODIS);
+  - las pruebas de `crates/abm-terreno/tests/tierra.rs`: con datos inventados, y `#[ignore]` con las fuentes (el Sahel de 1984 y la variabilidad por regiones).
 - **Diagnósticos de la tectónica:** las pruebas `#[ignore]` de `crates/abm-terreno/tests/tectonica.rs`:
   - `deriva_en_varias_semillas`;
   - `diagnostico_demografia_placas`;
@@ -171,7 +204,14 @@ Rebrote, orden, forrajeo, reproducción, mortalidad y aplicación de cambios
 - **Agentes:** incremento 1 y revisión 1 hechos; siguen las cohortes y los individuos persistentes.
 - **Terreno:** incrementos 1–3 cerrados.
   - **El planeta inventado v1 está congelado** (sexta ronda del 2026-11-08): `docs/design/terreno/cierre_planeta_inventado_v1.md` tiene su tabla de cierre (5 semillas, sin succión) y la lista de ampliación futura, que encabezan la resistencia de los choques y la succión de las losas. El modo inventado debe salir idéntico byte a byte mientras se construye el modo Tierra.
-  - **Modo Tierra real** (`diseno_modo_tierra.md`): el motor arranca sobre la Tierra medida (relieve, hielo y clima) en lugar de generar un planeta. Fase 1 en construcción en la rama `terreno-modo-tierra` (informe `docs/informes/2026-11-08_cierre_y_modo_tierra.md`).
+  - **Modo Tierra real** (`diseno_modo_tierra.md`; §2.4): el motor arranca sobre la Tierra medida (relieve, hielo y clima) en lugar de generar un planeta. **Fase 1 implementada** en la rama `terreno-modo-tierra` (informe `docs/informes/2026-11-08_cierre_y_modo_tierra.md`).
+    - ✓ el relieve, el hielo de los casquetes, el clima medio (frente a CHELSA medido aparte), la variabilidad de la lluvia anual en 13 regiones y el Sahel de 1984.
+    - Deciden el responsable:
+      - la hidrología del motor sobre el relieve real: 9,4 Mkm² de lagos; el Congo, el Nilo, el Chad o Asia central desembocan donde no es;
+      - la vegetación: sin unidades, r = 0,17 con MODIS (Miami, r = 0,80);
+      - los glaciares de montaña;
+      - la autocorrelación del remuestreo.
+    - Los ríos frente a HydroSHEDS esperan a su servidor, que la red bloquea.
   - **Hundimiento de los márgenes, puntos calientes y succión** (quinta ronda del 2026-11-08): cada uno hace lo que pide su nota (los márgenes se hunden como McKenzie; magmatismo intraplaca y grandes erupciones terrestres; el tirón, ~50 % de la potencia). Pero con la succión los continentes chocan más y **los choques no se agotan nunca** (1,1–1,4 cm/año aun con más de 80 Myr): las placas no se sueldan, se destruye corteza (−13 %), el mar baja a −202 m y la tierra sube a 963 m. Por eso queda apagada (decisión del responsable, sexta ronda).
   - **Isostasia con litosfera** (cuarta ronda del 2026-11-08, en `main`): la regla R4 con la edad tectonotérmica de cada celda y la erosión recalibrada (`E_1` 0,02). La tierra baja a 781 m de media (la Tierra 671) y a un 7 % por encima de 2 000 m (5,3 %); el nivel del mar, a −140 m. **Los márgenes estirados casi no se hunden al enfriarse** (0,38 km en 100 Myr, frente a 2–3): decide el responsable.
   - Diagnóstico del supercontinente (cuarta ronda): los océanos de rift se abren pero casi nunca se cierran, y los continentes no convergen; el modelo no tiene succión de la fosa sobre la placa de arriba.

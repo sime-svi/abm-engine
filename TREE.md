@@ -76,8 +76,14 @@ abm/
 │   │   │   ├── [x] lib.rs           # run / run_with_info / world_dump
 │   │   │   ├── [x] config · error · geometry · noise · statics · world · hydro · lod
 │   │   │   ├── [x] erosion · cache · worldgen · systems
-│   │   │   ├── [x] metrics.rs       # Métricas por tick + diagnóstico del planeta (v5) + diagnóstico del relieve (v6)
+│   │   │   ├── [x] metrics.rs       # Métricas por tick + diagnóstico del planeta (v5) + diagnóstico del relieve (v6) + modo Tierra (v8)
 │   │   │   ├── [x] humedad.rs       # Agotamiento de humedad a favor del viento (anillos, Λ, w, c_P)
+│   │   │   ├── tierra/              # Modo Tierra real (diseno_modo_tierra.md, Fase 1): el proveedor de mundo de la Tierra
+│   │   │   │   ├── [x] mod.rs       # Tablas por nivel (altura, hielo, clima de 12 meses), series de CRU TS, celda de cada nivel
+│   │   │   │   ├── [x] carga.rs     # Proyección de ETOPO, CHELSA y CRU TS al nivel de carga (un hilo por GeoTIFF), niveles gruesos por medias, caché
+│   │   │   │   ├── [x] clima.rs     # Años reales por bloques (RNG por contador), mapas mensuales con las anomalías, clima del día
+│   │   │   │   ├── [x] geotiff.rs   # Lector mínimo de GeoTIFF (tiras, Deflate, predictor 2, 16 bits)
+│   │   │   │   └── [x] netcdf3.rs   # Lector mínimo de NetCDF-3 en flujo desde un gzip (CRU TS)
 │   │   │   └── tectonica/           # Relieve tectónico (incremento 4): deriva de placas → relieve de nacimiento
 │   │   │       ├── [x] mod.rs       # Génesis tectónica, estado final, interpolación a las celdas del terreno
 │   │   │       ├── [x] malla.rs     # Malla tectónica (nivel 2 del cubo) y cuaterniones
@@ -93,6 +99,7 @@ abm/
 │   │   └── tests/
 │   │       ├── [x] terreno.rs       # incr. 1 (uniforme) + incr. 2 (LOD: 2:1, conservación…) + lluvia y w vs resolución + diagnóstico
 │   │       ├── [x] erosion.rs       # incr. 3 (material, hondonadas, camino, tope, caché…) + relieve orográfico + mundo plano
+│   │       ├── [x] tierra.rs        # Modo Tierra: clima del día con datos inventados (interpolación, anomalías, conservación entre niveles, periodo base), altura y hielo, secuencia de años (+ con las fuentes: el Sahel de 1984, la variabilidad por regiones)
 │   │       └── [x] tectonica.rs     # incr. 4: determinismo, giro rígido, sin continentes, India–Asia, rifts (por la sutura, bloque pequeño, determinismo, reloj, márgenes con su edad), captura de placas, subducción de dorsales, edades tectonotérmicas de partida, caché (+ exploratorias: deriva_en_varias_semillas, diagnostico_demografia_placas, diagnostico_nivel_del_mar_y_edad_del_fondo, diagnostico_huella_de_la_deriva, calibraciones, diagnostico_pilas, diagnostico_fondo_viejo)
 │   │
 │   ├── abm-metrics/               # OBSERVADORES + LOD de almacenamiento (→ core, ruleset, persistence)
@@ -130,6 +137,9 @@ abm/
 │   ├── [x] escenarios.toml        # Los escenarios, sus métricas, márgenes y notas
 │   ├── [x] no_regresion.sh        # No regresión byte a byte frente a un commit anterior (worktree temporal)
 │   ├── [x] planeta_semillas.py    # El planeta con varias semillas: tabla de cierre de la tectónica frente a ETOPO
+│   ├── tierra/                    # Modo Tierra real
+│   │   ├── [x] descargar.sh       # Baja las fuentes a output/referencias/ (ETOPO, CHELSA, CRU TS, HydroRIVERS, MODIS); nada va a git
+│   │   └── [x] validar.py         # El §10 de la nota: relieve, CHELSA, variabilidad y Sahel 1984 (CRU TS), ríos (HydroRIVERS), vegetación (MODIS)
 │   └── analisis/
 │       ├── [x] agentes.py         # Resumen de una corrida de agentes (N/N_max, fecundidad, e0, mortalidad…)
 │       ├── [x] terreno.py         # Resumen y comparación de planetas (biomas, diagnóstico, tectónica, sombra pluviométrica)
@@ -162,7 +172,8 @@ abm/
 │   │   ├── [x] 2026-11-08_estudio_isostasia_continental.md # Estudio de isostasia: reproducción de Lamb et al. (2020), reglas R0–R4 con validación cruzada, tabla del §4 y criterios del §5
 │   │   ├── [x] 2026-11-08_demografia_placas_v2.md # Rama D (subducción de dorsales), D6, rifts con reloj, calibración de λ_A y τ_ais, placas y fosas, tiempo
 │   │   ├── [x] 2026-11-08_isostasia_litosfera.md # Isostasia con litosfera (§0, R4, edad tectonotérmica), erosión recalibrada, tabla de cierre, márgenes, nivel del mar y edad del fondo, diagnóstico del supercontinente, tiempo
-│   │   └── [x] 2026-11-08_margenes_calientes_succion.md # Fusión y regla relativa del tiempo; hundimiento de McKenzie, puntos calientes y succión de las losas, cada uno con 5 semillas; recalibración, tabla de cierre (fosa y área con 10 semillas), supercontinente y los choques que no se agotan
+│   │   ├── [x] 2026-11-08_margenes_calientes_succion.md # Fusión y regla relativa del tiempo; hundimiento de McKenzie, puntos calientes y succión de las losas, cada uno con 5 semillas; recalibración, tabla de cierre (fosa y área con 10 semillas), supercontinente y los choques que no se agotan
+│   │   └── [x] 2026-11-08_cierre_y_modo_tierra.md # Congelación del planeta inventado v1 (sin succión) y fusión; modo Tierra real, Fase 1: respuestas al §11, implementación, validación del §10 y hallazgos (hidrología, vegetación)
 │   └── design/                    # Modelos matemáticos y ecuaciones (precede al código)
 │       ├── inicial/               # Una carpeta por fase (ver CLAUDE §8.1)
 │       │   ├── [x] README.md          # Explicación llana de la fase + consideraciones
@@ -192,7 +203,8 @@ abm/
 │       │   ├── [x] nota_puntos_calientes.md               # Nota del responsable: puntos calientes, mesetas, trazas y abombamientos, F_int (IMPLEMENTADA, en main; §75–§76)
 │       │   ├── [x] nota_succion_losas.md                  # Nota del responsable: succión de las losas y de los restos, soldadura tras un choque agotado (IMPLEMENTADA, en main, y APAGADA: ε_suc = 0 hasta arreglar los choques)
 │       │   ├── [x] cierre_planeta_inventado_v1.md         # Cierre del planeta inventado v1 (CONGELADO, 2026-11-08): tabla de cierre sin succión (5 semillas), decisiones fijadas y ampliación futura
-│       │   └── [ ] diseno_modo_tierra.md                  # Diseño del responsable: modo Tierra real (Fase 1, Tierra actual: EN CURSO, rama terreno-modo-tierra; Fase 2, la Tierra del pasado, esbozada)
+│       │   ├── [x] diseno_modo_tierra.md                  # Diseño del responsable: modo Tierra real (Fase 1, la Tierra actual: IMPLEMENTADA, rama terreno-modo-tierra; Fase 2, la Tierra del pasado, esbozada)
+│       │   └── [x] modo-tierra-diseno.md                  # Diseño técnico del modo Tierra: respuestas al §11, carga y clima, validación del §10 y hallazgos (hidrología, vegetación, glaciares)
 │       ├── paquetes/              # Fase: código dividido en el workspace de paquetes
 │       │   └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)
@@ -287,7 +299,16 @@ metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
   - interruptor `worldgen.relieve`: con `"ruido"`, el relieve de ruido de antes.
 
 **Pendiente (fases siguientes):**
-- **Modo Tierra real** (`docs/design/terreno/diseno_modo_tierra.md`, rama `terreno-modo-tierra`): Fase 1, la Tierra actual (relieve, hielo, clima mensual y variabilidad de años reales), EN CURSO; Fase 2, la Tierra del pasado, esbozada.
+- **Modo Tierra real** (`docs/design/terreno/diseno_modo_tierra.md`; técnico `modo-tierra-diseno.md`; rama `terreno-modo-tierra`):
+  - **Fase 1 implementada** (`--set mundo.modo=tierra`): ETOPO, CHELSA y CRU TS en la malla, con la variabilidad de años reales.
+    - ✓ el relieve, el hielo de los casquetes, el clima medio, la variabilidad de la lluvia anual y el Sahel de 1984.
+    - Deciden el responsable:
+      - **la hidrología del motor sobre el relieve real** (9,4 Mkm² de lagos; el Congo, el Nilo, el Chad o Asia central desembocan donde no es);
+      - **la vegetación** (sin unidades, r = 0,17 con MODIS; Miami, r = 0,80);
+      - los glaciares de montaña (RGI 7.0);
+      - la autocorrelación del remuestreo.
+    - La validación de los ríos frente a HydroSHEDS espera a su servidor, que la red bloquea.
+  - **Fase 2,** la Tierra del pasado: esbozada.
 - **Pendientes obligatorios de realismo** (CLAUDE §2.8; responsable, 2026-11-05), en orden:
   - **relieve tectónico, ampliación futura del planeta inventado congelado** (lista en orden en `cierre_planeta_inventado_v1.md` §4: la resistencia de los choques, la succión de las losas, el supercontinente, el exceso de fosas, la corteza joven, la plataforma, el retroceso de las fosas y la topografía dinámica; hallazgos de `incremento-4-diseno.md` §6–§7):
     0. ~~la isostasia continental~~ **hecha** (2026-11-08, cuarta ronda; nota de isostasia con litosfera, `incremento-4-diseno.md` §72–§73): la regla R4 con la edad tectonotérmica por celda. **Limitaciones conocidas:**

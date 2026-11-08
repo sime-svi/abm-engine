@@ -710,3 +710,38 @@ Iba a ser la última ronda del relieve tectónico. Antes de congelar la capa, el
 **Lo que queda por decidir.** Cómo debe frenarse un choque hasta pararse. Mientras tanto, si se deja la succión encendida o no. También se mide ahora la vida de los márgenes como piezas que nacen en cada rift (no celda a celda): viven ~86 millones de años, frente a 130–180 en la Tierra.
 
 **El tiempo.** El planeta ya no tiene un presupuesto fijo. No puede tardar más de un 5 % más que la versión anterior, medidas las dos a la vez, ni pasar de 330 segundos. Con las tres piezas tarda justo un 5 % más.
+
+## El planeta inventado se congela y empieza la Tierra real (08-11-2026, sexta parte)
+
+**El planeta inventado queda congelado.** El responsable decide dejarlo como está y pasar al modo Tierra real.
+- La succión de las losas queda programada pero apagada: con los choques que nunca se paran, destruía corteza.
+- Su estado final está en `cierre_planeta_inventado_v1.md`: cuánto se parece a la Tierra (5 semillas) y qué falta, por orden. Encabezan la lista la resistencia de los choques y la succión.
+- El planeta inventado sigue siendo un modo del motor y sale idéntico, bit a bit, mientras se construye el otro.
+
+**El modo Tierra real.** En vez de inventar un planeta, el motor arranca sobre la Tierra medida:
+- **el relieve y el fondo del mar** de ETOPO 2022, un mapa del relieve de toda la Tierra;
+- **el hielo** de los dos grandes casquetes, la Antártida y Groenlandia;
+- **el clima medio de cada mes** (temperatura y lluvia) de CHELSA, un mapa del clima de 1981–2010 a 1 km que sabe cómo llueve en las montañas;
+- **la variación de un año a otro** de CRU TS, las medidas mes a mes desde 1901 hasta 2024. Cada año simulado toma un año real entero; se eligen por bloques de 10 años seguidos, para que las sequías largas (como la del Sahel en los años setenta y ochenta) salgan como fueron.
+
+Los ríos, la vegetación y lo demás los sigue calculando el motor. Una palabra técnica:
+- **proveedor de mundo**: la pieza que da al motor la altura, el hielo y el clima de cada celda. Hay dos, el planeta inventado y la Tierra, y el resto del motor no sabe de cuál vienen los datos.
+
+**Lo que salió bien.**
+- **El relieve llega a la malla tal cual.** La tierra ocupa el 29 % y tiene 792 m de altura media, como ETOPO a la misma resolución.
+- **El hielo:** 15,6 millones de km², como los casquetes.
+  - La regla de la nota («superficie menos roca, si es mayor que 0») contaba como hielo ruido de los datos sobre el mar del Ártico.
+  - Ahora el hielo tiene que estar sobre el nivel del mar y tener al menos 10 m.
+- **El clima es el de CHELSA:** 8,9 °C y 861 mm de media sobre la tierra, igual que CHELSA medido aparte.
+- **La variación de un año a otro sale como la real:** cuánto varía la lluvia anual queda a menos de un 5 % de CRU TS en las 13 regiones medidas.
+- **El Sahel en 1984**, uno de sus años más secos, llueve en el modelo lo que llovió: un 27 % menos de lo normal.
+
+**Lo que no sale, y se trae al responsable.**
+- **Los ríos.** El motor calcula los ríos rellenando los huecos del relieve hasta que el agua sale al mar. Con el relieve real a 26 km eso falla:
+  - **las gargantas estrechas se tapan al promediar:** el Congo sale al mar por Gabón, y el Amur junto a Vladivostok;
+  - **las cuencas cerradas se desbordan:** el lago Chad o Asia central, que en la Tierra no tienen salida porque evaporan lo que reciben. El Chad acaba vertiendo al Níger;
+  - **la tierra bajo el nivel del mar cuenta como mar:** el Nilo termina en la depresión de El Fayum.
+
+  Salen 9,4 millones de km² de lagos, unas seis veces los reales a esta escala. La comparación exacta con HydroSHEDS, el mapa de los ríos reales, queda pendiente: la red bloquea su servidor de datos.
+- **La vegetación.** La del motor no tiene unidades y su mapa se parece poco a la producción medida por satélite (MODIS); se queda casi sin nada en los bosques del norte. La fórmula de producción de los agentes (Miami) sí se parece (r = 0,80 y 61 frente a 53 mil millones de toneladas de carbono al año). Como pide la nota, no se ha tocado nada.
+- **Los glaciares de montaña** (el Himalaya, los Andes, Alaska…) no salen: el mapa de ETOPO solo tiene la roca bajo los dos casquetes.
