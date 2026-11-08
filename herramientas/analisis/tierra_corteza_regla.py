@@ -63,6 +63,9 @@ import tierra_regla_modelo as trm  # noqa: E402
 import lluvia_observada as lo  # noqa: E402
 
 N = rt.N3
+# La regla vieja del modelo (R0) tenía su cero en 32 km de corteza (`h_nivel_km`); el motor la sustituyó por
+# la isostasia con litosfera el 2026-11-08 (nota_isostasia_litosfera.md).
+H_NIVEL_REGLA_VIEJA = 32.0
 RAIZ = rt.RAIZ
 A_TIERRA_KM2 = 4.0 * math.pi * rt.R_KM ** 2
 
@@ -372,7 +375,7 @@ def con_flotacion(c, z0, b):
 
 
 def b_continental(c, h, s):
-    return (c['rho_m'] - c['rho_c']) * (h - c['h_nivel_km']) + (c['rho_m'] - c['rho_s']) * s
+    return (c['rho_m'] - c['rho_c']) * (h - c.get('h_nivel_km', H_NIVEL_REGLA_VIEJA)) + (c['rho_m'] - c['rho_s']) * s
 
 
 # --- Medidas --------------------------------------------------------------------------------------
@@ -539,7 +542,7 @@ def main():
                   if oc[k] else float('nan') for k in range(m)]
     z_cont_regla = [con_flotacion(c, 0.0, b_continental(c, h[k], s[k])) if es_cont[k] else float('nan')
                     for k in range(m)]
-    b_ref = (c['rho_m'] - c['rho_c']) * c['h_nivel_km']
+    b_ref = (c['rho_m'] - c['rho_c']) * c.get('h_nivel_km', H_NIVEL_REGLA_VIEJA)
     z_cont_dens = [con_flotacion(c, 0.0, ci['b_capas'][k] - b_ref) if es_cont[k] else float('nan')
                    for k in range(m)]
     z_oc_mesetas = [con_flotacion(c, -trm.prof_modelo(c, edad[k]),
@@ -575,7 +578,7 @@ def main():
                 num += (zk - zeta) * wk
                 den += wk
         return num / den
-    lo_h, hi_h = c['h_nivel_km'], c['h_nivel_km'] + 15.0
+    lo_h, hi_h = c.get('h_nivel_km', H_NIVEL_REGLA_VIEJA), c.get('h_nivel_km', H_NIVEL_REGLA_VIEJA) + 15.0
     for _ in range(14):
         mid = 0.5 * (lo_h + hi_h)
         if media_tierra(con_h_nivel(mid)) > 671.0:
@@ -766,7 +769,7 @@ def main():
               f'más de {", ".join(f"{u:.0f}" for u in UMBRALES_H)} km: '
               f'{", ".join(f"{100 * x:.1f}" for x in d["h_mas_de_frac"])} %; sedimento {d["s_media_km"]:.2f} km')
     print(f'  grosor de la corteza a nivel del mar (tierra continental de −100 a +100 m): p10–p90 '
-          f'{", ".join(f"{x:.1f}" for x in h_costa)} km (modelo: h_nivel = {c["h_nivel_km"]:.1f})')
+          f'{", ".join(f"{x:.1f}" for x in h_costa)} km (modelo: h_nivel = {c.get("h_nivel_km", H_NIVEL_REGLA_VIEJA):.1f})')
     print(f'  recta de la altura real frente a h en la tierra: {pend_real:.0f} m por km (r² {r2:.2f}); '
           f'la regla: {1000 * (c["rho_m"] - c["rho_c"]) / c["rho_m"]:.0f} m por km')
     print('\nAltura media por grosor de la corteza (tierra y plataforma continental de la Tierra real):')
@@ -806,7 +809,7 @@ def main():
     print(f'Con un término por grupo de corteza (r² {r2_g:.2f}): {b_g[0]:.0f} + {b_g[1]:.0f}·h + {b_g[2]:.0f}·s; '
           + '; '.join(f'{nombres_g[i]} {b_g[2 + i]:+.0f}' for i in range(1, len(GRUPOS))))
     print(f'Mover el cero de la regla (h_nivel, por bisección hacia la altura media real): {h_nivel_media:.1f} km '
-          f'(modelo {c["h_nivel_km"]:.1f}); con el agua del modelo, la tierra se hunde: ver la columna regla_cero_movido')
+          f'(modelo {c.get("h_nivel_km", H_NIVEL_REGLA_VIEJA):.1f}); con el agua del modelo, la tierra se hunde: ver la columna regla_cero_movido')
     if planeta:
         print('\nCorteza continental del planeta al final (volcado por celda):')
         for nombre, p in planeta.items():

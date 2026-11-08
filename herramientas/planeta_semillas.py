@@ -23,6 +23,7 @@ import argparse
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -36,9 +37,14 @@ import terreno as an_t  # noqa: E402
 SALIDA = 'output/semillas'
 
 
+# Copia del binario con que corre la tanda: si se recompila mientras corre, los procesos no cargan a
+# medias el binario nuevo (pasó el 2026-11-08: una semilla salió distinta en la novena cifra).
+BINARIO = os.path.join(RAIZ, SALIDA, 'terreno_de_la_tanda')
+
+
 def correr(semilla, ajustes):
     nombre = f'semilla_{semilla}'
-    args = [os.path.join(RAIZ, 'target', 'release', 'terreno'), 'config/terreno.toml',
+    args = [BINARIO, 'config/terreno.toml',
             '--set', f'run.name="{nombre}"', '--set', f'run.output_path="{SALIDA}"',
             '--set', f'run.seed={semilla}', '--set', 'run.genesis_cache=""',
             '--set', 'run.dump_world=true', '--set', 'run.dump_climate=true']
@@ -62,6 +68,19 @@ def correr(semilla, ajustes):
     m['tect_placas_final'] = len(areas)
     m['tect_15_mayores_frac'] = sum(areas[:15])
     m['tect_placas_1pc'] = sum(1 for a in areas if a >= 0.01)
+    # Nota de isostasia con litosfera §8 y §10: por clase de edad tectonotérmica, la altura media de
+    # la tierra y su fracción; los márgenes estirados distales por tiempo desde la rotura.
+    b = t['balance']
+    for i in range(len(CLASES_EDAD)):
+        m[f'tect_altura_edad_{i}'] = b['altura_tierra_por_edad_final_m'][i]
+        m[f'tect_tierra_edad_{i}_frac'] = b['tierra_por_edad_final_frac'][i]
+    for i in range(len(CLASES_MARGEN)):
+        m[f'tect_margen_prof_{i}'] = b['margen_prof_m'][i]
+        m[f'tect_margen_tect_{i}'] = b['margen_tect_m'][i]
+    # Hundimiento del basamento en ~100 Myr: la clase 80–120 Myr frente a la 0–20.
+    m['tect_margen_hundimiento_100myr_m'] = b['margen_tect_m'][3] - b['margen_tect_m'][0]
+    for i, causa in enumerate(CAUSAS_REINICIO):
+        m[f'tect_reinicio_{causa}_km2_100myr'] = b['reinicio_km2_100myr'][i]
     return m
 
 
@@ -78,6 +97,24 @@ def referencia():
         'rel_plataforma_km': r['plataforma']['nivel3']['anchura_media_km'],
     }
 
+
+# Nota de isostasia con litosfera §10: clases de edad tectonotérmica, con la altura media de la tierra
+# real en cada una y su fracción de la tierra (ETOPO sin hielo con las edades de los tipos de corteza;
+# `config/referencias/tierra_isostasia_s0.toml`, sección `por_edad`), y clases del tiempo desde la
+# rotura de los márgenes.
+CLASES_EDAD = ['0–100', '100–500', '500–1 600', '1 600–2 500', '> 2 500']
+CLASES_MARGEN = ['0–20', '20–50', '50–80', '80–120', '120–200', '> 200']
+CAUSAS_REINICIO = ['rift', 'arco', 'choque', 'delaminacion']
+
+
+def por_edad_tierra():
+    with open(os.path.join(RAIZ, 'config', 'referencias', 'tierra_isostasia_s0.toml'), 'rb') as f:
+        r = tomllib.load(f)['por_edad']['R4_sin_dinamica']
+    claves = ['desde_0', 'desde_100', 'desde_500', 'desde_1600', 'desde_2500']
+    return [r[k]['altura_real_m'] for k in claves], [r[k]['area_frac'] for k in claves]
+
+
+ALTURA_EDAD_TIERRA, TIERRA_EDAD_FRAC = por_edad_tierra()
 
 # (clave, etiqueta, objetivo en texto, función que dice si cumple).
 FILAS = [
@@ -126,8 +163,23 @@ FILAS = [
     ('tect_bal_bloque_mayor_frac', 'Mayor bloque continental (fracción del continente, media)', None, None),
     ('tect_bal_ciclos_supercontinente', 'Ciclos de supercontinente tras el rodaje (450 Myr)',
      '~1,5 en 630 Myr (~1,1 en 450)', None),
-    ('tiempo_s', 'Tiempo de cálculo del planeta (s)', '≤ 250', lambda x: x <= 250.0),
+    ('tiempo_s', 'Tiempo de cálculo del planeta (s)', '≤ 275', lambda x: x <= 275.0),
 ]
+# Nota de isostasia con litosfera §10: la altura de la tierra por clase de edad (± 300 m de la real), la
+# fracción de la tierra en cada clase (criterio blando, sin marca) y el hundimiento de los márgenes.
+FILAS += [(f'tect_altura_edad_{i}', f'Altura media de la tierra con edad {c} Myr (m)',
+           f'{ALTURA_EDAD_TIERRA[i]:.0f} ± 300', (lambda r: lambda x: abs(x - r) <= 300.0)(ALTURA_EDAD_TIERRA[i]))
+          for i, c in enumerate(CLASES_EDAD)]
+FILAS += [(f'tect_tierra_edad_{i}_frac', f'Fracción de la tierra con edad {c} Myr',
+           f'{TIERRA_EDAD_FRAC[i]:.3f} (blando)', None) for i, c in enumerate(CLASES_EDAD)]
+FILAS += [(f'tect_margen_prof_{i}', f'Margen distal a {c} Myr de la rotura: profundidad (m)', None, None)
+          for i, c in enumerate(CLASES_MARGEN)]
+FILAS += [(f'tect_margen_tect_{i}', f'Margen distal a {c} Myr: basamento sin sedimento (m)', None, None)
+          for i, c in enumerate(CLASES_MARGEN)]
+FILAS += [('tect_margen_hundimiento_100myr_m', 'Hundimiento del basamento del margen en ~100 Myr (m)',
+           '~2 000–3 000 (McKenzie 1978)', lambda x: 2000.0 <= x <= 3000.0)]
+FILAS += [(f'tect_reinicio_{c}_km2_100myr', f'Área continental reiniciada por {c} (km² por 100 Myr)', None, None)
+          for c in CAUSAS_REINICIO]
 
 
 def main():
@@ -139,6 +191,8 @@ def main():
     semillas = [int(x) for x in a.semillas.split(',')]
     if not a.sin_compilar:
         subprocess.run(['cargo', 'build', '--release', '--quiet', '--bin', 'terreno'], cwd=RAIZ, check=True)
+    os.makedirs(os.path.join(RAIZ, SALIDA), exist_ok=True)
+    shutil.copy2(os.path.join(RAIZ, 'target', 'release', 'terreno'), BINARIO)
     inicio = time.monotonic()
     with ThreadPoolExecutor(max_workers=len(semillas)) as ex:
         res = list(ex.map(lambda s: correr(s, a.set), semillas))

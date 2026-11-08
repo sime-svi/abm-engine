@@ -199,6 +199,33 @@ pub struct MetricaMyr {
     pub dorsal_fosa_n: u32,
     #[serde(default)]
     pub dorsal_fosa_km: f64,
+    /// Nota de isostasia con litosfera §8, por clase de edad tectonotérmica (0–100, 100–500,
+    /// 500–1 600, 1 600–2 500 y más de 2 500 Myr): fracción del área continental, altura media de la
+    /// tierra (m sobre el mar) y área de tierra (km²).
+    #[serde(default)]
+    pub edad_tt_area_frac: [f64; 5],
+    #[serde(default)]
+    pub altura_tierra_por_edad_m: [f64; 5],
+    #[serde(default)]
+    pub tierra_por_edad_km2: [f64; 5],
+    /// Área continental cuya edad volvió a 0 en el paso, por causa: rift, arco, choque y
+    /// delaminación (km²).
+    #[serde(default)]
+    pub reinicio_km2: [f64; 4],
+    /// Márgenes estirados distales (corteza de menos de 20 km) por tiempo desde la rotura (0–20,
+    /// 20–50, 50–80, 80–120, 120–200 y más de 200 Myr): profundidad media bajo el mar (m; negativa
+    /// si asoman), la del basamento sin su sedimento con agua encima (m) y área (km²).
+    #[serde(default)]
+    pub margen_prof_m: [f64; 6],
+    #[serde(default)]
+    pub margen_tect_m: [f64; 6],
+    #[serde(default)]
+    pub margen_area_km2: [f64; 6],
+    /// Margen pasivo que deja de serlo en el paso (km), por causa: invasión (fosa o convergencia
+    /// difusa cerca), choque, sin borde convergente cerca y muestra desaparecida (diagnóstico del
+    /// supercontinente).
+    #[serde(default)]
+    pub margen_fin_causa_km: [f64; 4],
 }
 
 /// Cuentas del material continental (km³) a lo largo de la deriva (adenda de balance §6 y §8).
@@ -335,6 +362,77 @@ pub struct ResumenTectonica {
     pub placas_final: Vec<PlacaFinal>,
     pub eventos: Vec<EventoTectonico>,
     pub metricas: Vec<MetricaMyr>,
+    /// Diagnóstico del supercontinente: una foto cada 25 Myr (solo diagnóstico).
+    #[serde(default)]
+    pub fotos_supercontinente: Vec<FotoSupercontinente>,
+}
+
+/// Foto del diagnóstico del supercontinente (pedido del responsable el 2026-11-08; cada 25 Myr). Solo
+/// mide: el modelo no lee nada de aquí.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct FotoSupercontinente {
+    pub myr: f64,
+    /// Fracción del continente en la mayor masa conexa (por encima de los bordes de placa; la del
+    /// índice de supercontinente) y en el mayor bloque de una sola placa.
+    pub masa_mayor_frac: f64,
+    pub bloque_mayor_frac: f64,
+    /// Masas continentales conexas de al menos el 1 % del continente: cuántas, distancia media entre
+    /// sus centros (km, por pares pesados por el producto de sus áreas), su ritmo de cambio con las
+    /// velocidades del paso (km/Myr; negativo si se acercan) y fracción de los pares (con el mismo
+    /// peso) que se acercan.
+    pub masas: u32,
+    pub dist_media_km: f64,
+    pub dist_ritmo_km_myr: f64,
+    pub pares_acercandose_frac: f64,
+    /// Océanos abiertos por un rift ya roto, con margen a los dos lados.
+    pub oceanos: Vec<OceanoRift>,
+    /// Placas que llevan al menos el 5 % del continente.
+    pub placas: Vec<PlacaConContinente>,
+    /// Todo el continente frente a la fosa activa más cercana: fracción del área que se acerca a
+    /// ella y velocidad media hacia ella (cm/año), y fracción del continente cuya fosa más cercana es
+    /// una donde se hunde su propia placa (va unido a una losa) o una bajo la que cabalga su placa.
+    pub hacia_fosa_frac: f64,
+    pub v_hacia_fosa_cm_anio: f64,
+    pub fosa_propia_hundiendose_frac: f64,
+    pub fosa_propia_cabalgando_frac: f64,
+    /// El margen pasivo de la foto anterior (fracción de su longitud), ahora: sigue pasivo, activo
+    /// por invasión (una fosa o una convergencia difusa cerca), activo por un choque, ya no es margen
+    /// sin borde convergente cerca, o su muestra ya no está. Ceros en la primera foto.
+    pub margen_tras_25myr_frac: [f64; 5],
+}
+
+/// Un océano de rift en una foto del diagnóstico del supercontinente.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct OceanoRift {
+    /// Número del rift (en el orden en que empezaron) y Myr de su rotura.
+    pub rift: u32,
+    pub rotura_myr: f64,
+    /// Anchura entre los dos márgenes (km): la mediana, sobre las celdas de cada lado, de la
+    /// distancia a la celda más cercana del otro lado (media de los dos sentidos), y la mínima.
+    pub ancho_km: f64,
+    pub ancho_min_km: f64,
+    /// Celdas de margen de cada lado y fracción de ellas con un borde convergente cerca (margen
+    /// activo).
+    pub celdas: [u32; 2],
+    pub activo_frac: [f64; 2],
+}
+
+/// Una placa con continente en una foto del diagnóstico del supercontinente.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PlacaConContinente {
+    pub id: u64,
+    /// Fracción del planeta que ocupa y del continente que lleva.
+    pub area_frac: f64,
+    pub continente_frac: f64,
+    /// Velocidad media cuadrática de la placa (cm/año).
+    pub v_cm_anio: f64,
+    /// Potencias (par·ω, unidades del modelo) del tirón de sus losas, del empuje (dorsales y resto
+    /// del par de borde), de los choques y del arrastre basal.
+    pub potencias: [f64; 4],
+    /// Su continente frente a la fosa activa más cercana: velocidad media hacia ella (cm/año) y
+    /// fracción que se acerca.
+    pub v_hacia_fosa_cm_anio: f64,
+    pub hacia_fosa_frac: f64,
 }
 
 /// Medias del balance de la corteza continental tras el rodaje (adenda de balance §10).
@@ -469,4 +567,21 @@ pub struct BalanceMedio {
     pub fosa_apagada_dorsal_km_100myr: f64,
     #[serde(default)]
     pub dorsal_fosa_km: f64,
+    /// Nota de isostasia con litosfera §8 y §10: al final de la deriva, por clase de edad
+    /// tectonotérmica, la altura media de la tierra (m), la fracción de la tierra y la del área
+    /// continental; la profundidad media de los márgenes estirados distales por tiempo desde la
+    /// rotura (media de los pasos tras el rodaje, por área; m), la de su basamento sin el sedimento
+    /// y el área reiniciada por 100 Myr por rift, arco, choque y delaminación (km²).
+    #[serde(default)]
+    pub altura_tierra_por_edad_final_m: [f64; 5],
+    #[serde(default)]
+    pub tierra_por_edad_final_frac: [f64; 5],
+    #[serde(default)]
+    pub edad_tt_area_final_frac: [f64; 5],
+    #[serde(default)]
+    pub margen_prof_m: [f64; 6],
+    #[serde(default)]
+    pub margen_tect_m: [f64; 6],
+    #[serde(default)]
+    pub reinicio_km2_100myr: [f64; 4],
 }

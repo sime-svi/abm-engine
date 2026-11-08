@@ -1549,7 +1549,15 @@ impl Deriva {
                 puesto += self.en_celda(&inv, j as usize, w, false, |c, _, f| {
                     // `f` = w / Σ área de las muestras de la celda: el espesor por km³ repartido.
                     if v_hc > 0.0 {
-                        c.sumar_hc(v_hc * f, d.c.arco, rs, rc, h_cont_min, via::DIFUSA);
+                        c.sumar_hc(
+                            v_hc * f,
+                            d.c.arco,
+                            d.c.edad_tt,
+                            rs,
+                            rc,
+                            h_cont_min,
+                            via::DIFUSA,
+                        );
                         c.dh_dt += v_hc * f / cfg.dt_myr;
                         c.edad_orog = 0.0;
                     }

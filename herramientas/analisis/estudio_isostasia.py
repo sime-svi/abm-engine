@@ -53,6 +53,9 @@ import lluvia_observada as lo  # noqa: E402
 import tierra_corteza_regla as tcr  # noqa: E402
 
 RAIZ = rt.RAIZ
+# La regla vieja del modelo (R0) tenía su cero en 32 km de corteza (`h_nivel_km`); el motor la sustituyó por
+# la isostasia con litosfera el 2026-11-08 (nota_isostasia_litosfera.md).
+H_NIVEL_REGLA_VIEJA = 32.0
 N = rt.N3
 A_TIERRA_KM2 = 4.0 * math.pi * rt.R_KM ** 2
 CAM2016 = 'https://data.earthscope.org/archive/seismology/products/emc/data/CAM2016/CAM2016Litho.tgz?type=file'
@@ -503,7 +506,7 @@ def main():
 
     # --- 2 y 3. Reglas y validación cruzada ---
     r0_tal_cual = {'rho_a': 3300.0, 'rho_c': 2800.0, 'rho_s': 2400.0,
-                   'h0': 1000.0 * (3300.0 - 2800.0) * c_mod['h_nivel_km'] / 3300.0}
+                   'h0': 1000.0 * (3300.0 - 2800.0) * c_mod.get('h_nivel_km', H_NIVEL_REGLA_VIEJA) / 3300.0}
     rho_a_lit = 3255.0   # Lamb: (ρ_m − ρ_a)/ρ_a = 1/β con Δρ_ma = 35
     # R2 con las constantes de Lamb (α, β y la referencia de 32 km a nivel del mar con 100 km de
     # litosfera; el sedimento cuenta como corteza): ρ_m − ρ_c = ρ_a/α, ρ_m − ρ_a = ρ_a/β.

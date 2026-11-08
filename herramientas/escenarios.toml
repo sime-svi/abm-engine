@@ -39,9 +39,9 @@ nota = "conservación del agua: peor residual relativo de un tick (hoy ~4e-12)"
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "temp_media"
-min = 7.18
-max = 8.43
-nota = "temperatura media del último tick (7,24 °C; con el relieve de ruido 9,35): más fría porque la tierra está más alta; 7,81 con la adenda de balance de la corteza (2026-11-05)"
+min = 8.056
+max = 9.458
+nota = "temperatura media del último tick (7,24 °C; con el relieve de ruido 9,35): más fría porque la tierra está más alta; 7,81 con la adenda de balance de la corteza (2026-11-05); 8,757 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -53,16 +53,16 @@ nota = "tierra emergida (33,1 %; ruido 38,8 %; la Tierra 28,4 %, banda del dise�
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "altura_media_tierra_m"
-min = 1326
-max = 1617
-nota = "altura media de la tierra (1 459 m; ruido 407; la Tierra 671): alta porque el nivel del mar queda 1 079 m bajo el dato (hallazgo); 1 544 m tras la conservación exacta; 1 277 con la adenda de balance de la corteza (2026-11-05); 989,4 con la nota de bordes y el flujo lateral (2026-11-06); 1 203 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 921 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 1400 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 1228 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 997,5 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 1 471 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 743.4
+max = 906.5
+nota = "altura media de la tierra (1 459 m; ruido 407; la Tierra 671): alta porque el nivel del mar queda 1 079 m bajo el dato (hallazgo); 1 544 m tras la conservación exacta; 1 277 con la adenda de balance de la corteza (2026-11-05); 989,4 con la nota de bordes y el flujo lateral (2026-11-06); 1 203 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 921 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 1400 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 1228 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 997,5 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 1 471 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 825 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.hipsometria_frac"
 franja = 0
-min = 0.05995
-max = 0.06672
-nota = "tierra por debajo de 200 m (0,9 %; ruido 68 %; la Tierra 28 %); 0,0342 con la adenda de balance de la corteza (2026-11-05); 0,08983 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 0,02563 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 0,03333 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 0,07479 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 0,06334 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 0.123
+max = 0.1369
+nota = "tierra por debajo de 200 m (0,9 %; ruido 68 %; la Tierra 28 %); 0,0342 con la adenda de balance de la corteza (2026-11-05); 0,08983 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 0,02563 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 0,03333 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 0,07479 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 0,06334 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 0,1299 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.hipsometria_frac"
@@ -81,9 +81,9 @@ nota = "profundidad media del océano (3 945 m; ruido 3 153; la Tierra 3 667; ba
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "c_p"
-min = 1.855
-max = 2.171
-nota = "factor provisional de la lluvia de la tierra (1,99; ruido 1,21): la tierra alta seca el aire; se retirará al calibrar la lluvia con la Tierra; 1,78 con la adenda de balance de la corteza (2026-11-05); 1,932 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 1,674 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 2,016 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 1,76 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 2,013 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 1.431
+max = 1.674
+nota = "factor provisional de la lluvia de la tierra (1,99; ruido 1,21): la tierra alta seca el aire; se retirará al calibrar la lluvia con la Tierra; 1,78 con la adenda de balance de la corteza (2026-11-05); 1,932 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 1,674 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 2,016 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 1,76 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 2,013 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 1,553 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -95,30 +95,30 @@ nota = "lluvia media anual sobre tierra (559 mm; ruido 687; la Tierra ~800); 595
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tierra_w_bajo_frac"
-min = 0.5169
-max = 0.6164
-nota = "tierra donde el aire llega con menos de la mitad de su vapor (64 %; ruido 16 %); 76 % tras la conservación exacta; 0,286 con la adenda de balance de la corteza (2026-11-05); 0,248 con la nota de bordes y el flujo lateral (2026-11-06); 0,3956 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,531 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 0,3041 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 0,2734 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 0,5666 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 0.2611
+max = 0.3114
+nota = "tierra donde el aire llega con menos de la mitad de su vapor (64 %; ruido 16 %); 76 % tras la conservación exacta; 0,286 con la adenda de balance de la corteza (2026-11-05); 0,248 con la nota de bordes y el flujo lateral (2026-11-06); 0,3956 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,531 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 0,3041 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 0,2734 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 0,5666 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 0,2862 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "ppn_miami_tierra"
-min = 465.9
-max = 546.8
-nota = "PPN media de la tierra (551 g/m²/año; ruido 704): la base del forraje de los agentes; 645,8 con la adenda de balance de la corteza (2026-11-05); 536,7 con la nota de bordes y el flujo lateral (2026-11-06); 634 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 506,3 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
+min = 558.6
+max = 655.6
+nota = "PPN media de la tierra (551 g/m²/año; ruido 704): la base del forraje de los agentes; 645,8 con la adenda de balance de la corteza (2026-11-05); 536,7 con la nota de bordes y el flujo lateral (2026-11-06); 634 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 506,3 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 607,1 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.bioma_pct"
 bioma = "desierto"
-min = 4.266
-max = 4.825
-nota = "desierto, % del planeta (5,64; ruido 6,08); 5,13 tras la conservación exacta; 3,63 con la adenda de balance de la corteza (2026-11-05); 6,89 con la nota de bordes y el flujo lateral (2026-11-06); 8,112 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 4,41 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 5,724 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 4,546 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 4.606
+max = 5.21
+nota = "desierto, % del planeta (5,64; ruido 6,08); 5,13 tras la conservación exacta; 3,63 con la adenda de balance de la corteza (2026-11-05); 6,89 con la nota de bordes y el flujo lateral (2026-11-06); 8,112 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 4,41 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 5,724 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 4,546 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 4,908 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.bioma_pct"
 bioma = "selva"
-min = 1.806
-max = 2.21
-nota = "selva, % del planeta (1,41; ruido 2,73); 2,36 con la adenda de balance de la corteza (2026-11-05); 1,42 con la nota de bordes y el flujo lateral (2026-11-06); 2,029 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 1,041 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 1,259 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 1,009 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 2,008 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 1.612
+max = 1.972
+nota = "selva, % del planeta (1,41; ruido 2,73); 2,36 con la adenda de balance de la corteza (2026-11-05); 1,42 con la nota de bordes y el flujo lateral (2026-11-06); 2,029 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 1,041 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 1,259 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 1,009 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 2,008 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 1,792 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.bioma_pct"
@@ -130,58 +130,58 @@ nota = "bosque templado, % del planeta (4,09; ruido 5,66); 3,21 tras la conserva
 [[escenario.metrica]]
 medida = "terreno.bioma_pct"
 bioma = "pradera"
-min = 1.81
-max = 1.99
-nota = "pradera, % del planeta (2,21; ruido 2,91); 2,01 tras la conservación exacta; 1,43 con la adenda de balance de la corteza (2026-11-05); 1,75 con la nota de bordes y el flujo lateral (2026-11-06); 2,015 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 4,165 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 1,362 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 1,227 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 2,007 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 1,9 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 2.346
+max = 2.579
+nota = "pradera, % del planeta (2,21; ruido 2,91); 2,01 tras la conservación exacta; 1,43 con la adenda de balance de la corteza (2026-11-05); 1,75 con la nota de bordes y el flujo lateral (2026-11-06); 2,015 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 4,165 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 1,362 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 1,227 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 2,007 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 1,9 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 2,462 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.bioma_pct"
 bioma = "hielo"
-min = 8.553
-max = 10.19
-nota = "hielo, % del planeta (7,01; ruido 3,90): la tierra alta es más fría; 4,78 tras la conservación exacta; 8,61 con la adenda de balance de la corteza (2026-11-05); 4,842 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 3,354 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 7,119 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 10,26 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 9,374 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta)"
+min = 4.149
+max = 4.943
+nota = "hielo, % del planeta (7,01; ruido 3,90): la tierra alta es más fría; 4,78 tras la conservación exacta; 8,61 con la adenda de balance de la corteza (2026-11-05); 4,842 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 3,354 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 7,119 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 10,26 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 9,374 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 4,546 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "lagos"
-min = 2039
-max = 2393
-nota = "celdas de lago (9 969; ruido 42): ver la tierra en cuencas cerradas; 6 423 tras la conservación exacta; 4 030 con la adenda de balance de la corteza (2026-11-05); 9 301 con la nota de bordes y el flujo lateral (2026-11-06); 5 256 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 7987 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 6661 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 2 216 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 1431
+max = 1679
+nota = "celdas de lago (9 969; ruido 42): ver la tierra en cuencas cerradas; 6 423 tras la conservación exacta; 4 030 con la adenda de balance de la corteza (2026-11-05); 9 301 con la nota de bordes y el flujo lateral (2026-11-06); 5 256 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 7987 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 6661 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 2 216 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 1555 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "rel_tierra_en_depresion_frac"
-min = 0.007827
-max = 0.01761
-nota = "tierra en cuencas cerradas (4,4 %; la Tierra a 26 km, 10,4 %: Caspio, Tarim, Gran Cuenca, Altiplano…); 3,2 % tras la conservación exacta; 0,01272 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 0.004782
+max = 0.01076
+nota = "tierra en cuencas cerradas (4,4 %; la Tierra a 26 km, 10,4 %: Caspio, Tarim, Gran Cuenca, Altiplano…); 3,2 % tras la conservación exacta; 0,01272 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 0,00777 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "rios_km"
-min = 139800
-max = 161700
-nota = "longitud de los ríos (261 843 km; ruido 198 425); 199 300 km tras la conservación exacta; 163 463 con la adenda de balance de la corteza (2026-11-05); 271 771 con la nota de bordes y el flujo lateral (2026-11-06); 220 652 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 2,6e+05 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 2,244e+05 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 2,471e+05 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 150 751 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 1.145e+05
+max = 1.324e+05
+nota = "longitud de los ríos (261 843 km; ruido 198 425); 199 300 km tras la conservación exacta; 163 463 con la adenda de balance de la corteza (2026-11-05); 271 771 con la nota de bordes y el flujo lateral (2026-11-06); 220 652 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 2,6e+05 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 2,244e+05 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 2,471e+05 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 150 751 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 1,235e+05 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.sotavento"
 campo = "lluvia_mm"
-min = 521.2
-max = 611.9
-nota = "lluvia a sotavento de las cordilleras grandes en latitudes medias (638 mm; ruido 250): sin contraste, toda la tierra alta está seca; 802 mm tras la conservación exacta; 650,6 con la adenda de balance de la corteza (2026-11-05); 469,5 con la nota de bordes y el flujo lateral (2026-11-06); 559,9 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 452,7 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 566,6 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta)"
+min = 454.1
+max = 533.1
+nota = "lluvia a sotavento de las cordilleras grandes en latitudes medias (638 mm; ruido 250): sin contraste, toda la tierra alta está seca; 802 mm tras la conservación exacta; 650,6 con la adenda de balance de la corteza (2026-11-05); 469,5 con la nota de bordes y el flujo lateral (2026-11-06); 559,9 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 452,7 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 566,6 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 493,6 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.sotavento"
 campo = "desierto_pct"
-min = 7.316
-max = 7.825
-nota = "desierto a sotavento de las cordilleras grandes (1,7 %; ruido 16,5 %); 6,34 con la adenda de balance de la corteza (2026-11-05); 10,3 con la nota de bordes y el flujo lateral (2026-11-06); 3,019 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 13,57 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 2,345 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 3,9 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 9,43 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 7,571 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 9.769
+max = 10.45
+nota = "desierto a sotavento de las cordilleras grandes (1,7 %; ruido 16,5 %); 6,34 con la adenda de balance de la corteza (2026-11-05); 10,3 con la nota de bordes y el flujo lateral (2026-11-06); 3,019 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 13,57 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 2,345 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 3,9 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 9,43 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 7,571 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 10,11 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.resto_latitudes_medias"
 campo = "lluvia_mm"
-min = 833.7
-max = 962.1
-nota = "lluvia en el resto de las latitudes medias (608 mm; ruido 870); 648 mm tras la conservación exacta; 825,9 con la adenda de balance de la corteza (2026-11-05); 662,1 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 742,2 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 680,2 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 760,9 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 897,9 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 733.3
+max = 846.2
+nota = "lluvia en el resto de las latitudes medias (608 mm; ruido 870); 648 mm tras la conservación exacta; 825,9 con la adenda de balance de la corteza (2026-11-05); 662,1 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 742,2 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 680,2 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 760,9 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 897,9 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 789,7 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -193,16 +193,16 @@ nota = "factor orográfico medio en las laderas de barlovento de las cordilleras
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "rel_pendiente_p50_sobre_2000"
-min = 0.02005
-max = 0.02386
-nota = "pendiente mediana a 25 km de la tierra por encima de 2 000 m (0,0157; la Tierra 0,0103); 0,0374 con la adenda de balance de la corteza (2026-11-05); 0,0231 con la nota de bordes y el flujo lateral (2026-11-06); 0,01935 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,01742 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 0,01936 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 0,02195 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 0.01478
+max = 0.01759
+nota = "pendiente mediana a 25 km de la tierra por encima de 2 000 m (0,0157; la Tierra 0,0103); 0,0374 con la adenda de balance de la corteza (2026-11-05); 0,0231 con la nota de bordes y el flujo lateral (2026-11-06); 0,01935 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,01742 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 0,01936 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 0,02195 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 0,01619 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "rel_plataforma_km"
-min = 6.817
-max = 7.372
-nota = "anchura media de la plataforma continental (0,6 km; la Tierra a 26 km, 43 km): faltan márgenes (hallazgo); 3,64 con la adenda de balance de la corteza (2026-11-05); 6,25 con la nota de bordes y el flujo lateral (2026-11-06); 5,416 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 10,19 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 4,052 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 4,459 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 9,119 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 7,094 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 8.239
+max = 8.91
+nota = "anchura media de la plataforma continental (0,6 km; la Tierra a 26 km, 43 km): faltan márgenes (hallazgo); 3,64 con la adenda de balance de la corteza (2026-11-05); 6,25 con la nota de bordes y el flujo lateral (2026-11-06); 5,416 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 10,19 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 4,052 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 4,459 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 9,119 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 7,094 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 8,575 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -256,16 +256,16 @@ nota = "nivel del mar respecto al dato (−1 079 m; el diseño esperaba ~0): cue
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_edad_media_myr"
-min = 66.75
-max = 75.07
-nota = "edad media del fondo oceánico (104 Myr; la Tierra 64, Seton et al. 2020); 79,0 con la adenda de balance de la corteza (2026-11-05); 132,2 con la nota de bordes y el flujo lateral (2026-11-06); 114,1 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 61,8 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 115,4 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 157,6 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 70,91 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 77.33
+max = 86.96
+nota = "edad media del fondo oceánico (104 Myr; la Tierra 64, Seton et al. 2020); 79,0 con la adenda de balance de la corteza (2026-11-05); 132,2 con la nota de bordes y el flujo lateral (2026-11-06); 114,1 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 61,8 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 115,4 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 157,6 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 70,91 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 82,15 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_edad_mas_200_frac"
-min = 0.07014
-max = 0.07816
-nota = "fondo oceánico de más de 200 Myr (15 %; la Tierra ~0,1 %): falta el inicio de subducción en márgenes viejos (hallazgo); 0,084 con la adenda de balance de la corteza (2026-11-05); 0,239 con la nota de bordes y el flujo lateral (2026-11-06); 0,1545 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,06089 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 0,1881 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 0,2766 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 0,07415 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 0.1157
+max = 0.1289
+nota = "fondo oceánico de más de 200 Myr (15 %; la Tierra ~0,1 %): falta el inicio de subducción en márgenes viejos (hallazgo); 0,084 con la adenda de balance de la corteza (2026-11-05); 0,239 con la nota de bordes y el flujo lateral (2026-11-06); 0,1545 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 0,06089 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 0,1881 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 0,2766 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 0,07415 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 0,1223 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -284,23 +284,23 @@ nota = "adenda de balance §6.9: en cada paso, el cambio de V_cont es fuentes me
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_area_subducida_km2_anio"
-min = 4.794
-max = 5.997
-nota = "fondo oceánico que se hunde (6,29 km²/año); la Tierra 2,7–3,4: el doble, problema de base (longitud y forma de los bordes y cinemática, nota siguiente); 3,64 con la nota de bordes y el flujo lateral (2026-11-06); 4,937 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 3,602 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 3,102 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 5,395 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 3.794
+max = 4.746
+nota = "fondo oceánico que se hunde (6,29 km²/año); la Tierra 2,7–3,4: el doble, problema de base (longitud y forma de los bordes y cinemática, nota siguiente); 3,64 con la nota de bordes y el flujo lateral (2026-11-06); 4,937 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 3,602 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 3,102 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 5,395 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 4,27 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_arcos_au"
-min = 5.299
-max = 6.639
-nota = "producción de los arcos (6,92 AU); la Tierra 2,7–5: alta porque se hunde el doble de placa; 3,87 con la nota de bordes y el flujo lateral (2026-11-06); 4,965 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 3,771 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 4,177 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 3,363 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 5,969 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 4.13
+max = 5.174
+nota = "producción de los arcos (6,92 AU); la Tierra 2,7–5: alta porque se hunde el doble de placa; 3,87 con la nota de bordes y el flujo lateral (2026-11-06); 4,965 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 3,771 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 4,177 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 3,363 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 5,969 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 4,652 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_erosion_subduccion_au"
-min = 1.829
-max = 2.343
-nota = "erosión por subducción (2,39 AU); la Tierra 1,3–1,7: alta por la misma razón; 1,40 con la nota de bordes y el flujo lateral (2026-11-06); 1,894 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 1,381 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 1,2 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 2,086 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 1.453
+max = 1.861
+nota = "erosión por subducción (2,39 AU); la Tierra 1,3–1,7: alta por la misma razón; 1,40 con la nota de bordes y el flujo lateral (2026-11-06); 1,894 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 1,381 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 1,2 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); 2,086 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 1,657 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -333,9 +333,9 @@ nota = "sedimento que llega al mar (4,93 AU); la Tierra ≈1,8: con tau_ero = 63
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_v_cont_cambio_frac"
-min = -0.1346
-max = -0.02501
-nota = "cambio de V_cont tras el rodaje (−15,9 % en 450 Myr); criterio de la adenda ±10 %; -0,0658 con la nota de bordes y el flujo lateral (2026-11-06); -0,1252 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); -0,002847 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); -0,1169 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); -0,1602 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); -0,07981 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta)"
+min = -0.2632
+max = -0.04891
+nota = "cambio de V_cont tras el rodaje (−15,9 % en 450 Myr); criterio de la adenda ±10 %; -0,0658 con la nota de bordes y el flujo lateral (2026-11-06); -0,1252 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); -0,002847 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); -0,1169 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); -0,1602 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); -0,07981 con la curva de profundidad real, sin las zonas de fractura (nota de fosas v6), los rifts estirados (adenda v8), la pérdida en choques según el grosor (adenda v7) y D_0 = 400 (2026-11-07 f: otra realización del planeta); -0,1561 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -347,9 +347,9 @@ nota = "espesor máximo de la corteza al final (78,8 km; tope H_max = 80); la Ti
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_transformantes_km"
-min = 82810
-max = 97200
-nota = "fallas transformantes con la regla del modelo (62 250 km); la Tierra medida igual: 38 500 (52 placas) o 29 600 (15 placas), tierra_bordes.toml; 51 211 con la nota de bordes y el flujo lateral (2026-11-06); 56 497 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 64 156 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 4,77e+04 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 5,401e+04 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 90 006 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 7.156e+04
+max = 8.4e+04
+nota = "fallas transformantes con la regla del modelo (62 250 km); la Tierra medida igual: 38 500 (52 placas) o 29 600 (15 placas), tierra_bordes.toml; 51 211 con la nota de bordes y el flujo lateral (2026-11-06); 56 497 con la caída de las raíces de los arcos (adenda v4, 2026-11-07: otra realización del planeta); 64 156 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 4,77e+04 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 5,401e+04 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 90 006 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 7,778e+04 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
@@ -368,23 +368,23 @@ nota = "corteza continental solapada en bordes divergentes y transformantes (4,4
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_perimetro_km"
-min = 322700
-max = 394400
-nota = "perímetro de los bordes (205 730 km); la Tierra de 15 placas medida igual, 182 600 ± 25 % (tierra_bordes.toml, regla_nota); 264 464 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 1,948e+05 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 2,151e+05 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 358 550 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 2.742e+05
+max = 3.351e+05
+nota = "perímetro de los bordes (205 730 km); la Tierra de 15 placas medida igual, 182 600 ± 25 % (tierra_bordes.toml, regla_nota); 264 464 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 1,948e+05 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 2,151e+05 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 358 550 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 3,046e+05 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_dorsales_km"
-min = 108300
-max = 132400
-nota = "dorsales (74 552 km); la Tierra de 15 placas medida igual, 86 700 ± 25 %; 95 136 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 6,656e+04 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 7,448e+04 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 120 334 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 9.265e+04
+max = 1.133e+05
+nota = "dorsales (74 552 km); la Tierra de 15 placas medida igual, 86 700 ± 25 %; 95 136 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 6,656e+04 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 7,448e+04 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 120 334 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 1,03e+05 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"
 campo = "tect_bal_fosas_km"
-min = 100300
-max = 122600
-nota = "fosas (74 038 km); la Tierra de 15 placas medida igual, 37 300: 2 veces aun con L_borde = 300 km (1,56), así que la causa son las fuerzas que mueven las placas (nota de bordes §11.2); 86 308 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 6,602e+04 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 7,273e+04 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 111 448 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta)"
+min = 8.081e+04
+max = 9.877e+04
+nota = "fosas (74 038 km); la Tierra de 15 placas medida igual, 37 300: 2 veces aun con L_borde = 300 km (1,56), así que la causa son las fuerzas que mueven las placas (nota de bordes §11.2); 86 308 con la base corregida (adenda v5), la nota de fosas y la erosión con la altura (2026-11-07: otra realización del planeta); 6,602e+04 con la nota de fosas v3, el flujo lateral cúbico (adenda v6), el sedimento solo al mar abierto y la calibración conjunta (2026-11-07 c: otra realización del planeta); 7,273e+04 con la nota de fosas v4: invasión, rotura de la losa y el sedimento al océano mundial (2026-11-07 d: otra realización del planeta); 111 448 con la última ronda de la tectónica: origen de arco por fracción (adenda v9), rifts por bloques y por suturas (nota de rifts, λ_A = 4·10⁻⁴) y E_1 = 0,0075 (2026-11-08: otra realización del planeta); 8,979e+04 con la isostasia con litosfera (regla R4 y edad tectonotérmica, nota_isostasia_litosfera.md) y E_1 = 0,02 (2026-11-08, cuarta ronda: otra realización del planeta)"
 
 [[escenario.metrica]]
 medida = "terreno.valor"

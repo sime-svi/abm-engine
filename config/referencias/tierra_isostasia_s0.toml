@@ -1,0 +1,248 @@
+# Comprobación del §0 de la nota de isostasia con litosfera, y datos de la Tierra para implementarla.
+# Generado por herramientas/analisis/nota_isostasia_s0.py (los datos del estudio de isostasia).
+
+[s0]
+celdas_ajuste_frac_tierra = 0.328228
+residuo_lamb_max_m = 300
+
+[relieve.tierra]
+nivel_mar_m = 0
+tierra_frac = 0.28366
+altura_media_tierra_m = 670.604
+altura_mediana_tierra_m = 403.899
+tierra_bajo_200_frac = 0.282638
+tierra_sobre_2000_frac = 0.0531289
+hipsometria_frac = [0.282638, 0.296174, 0.208413, 0.159646, 0.0255136, 0.0231407, 0.00447456]
+pendiente_media_tierra = 0.00522728
+plataforma_km = 42.772
+profundidad_media_oceano_m = 3667.29
+
+[relieve.R4_estudio]
+nivel_mar_m = 31.2965
+tierra_frac = 0.299795
+altura_media_tierra_m = 648.227
+altura_mediana_tierra_m = 519.816
+tierra_bajo_200_frac = 0.153004
+tierra_sobre_2000_frac = 0.0317676
+hipsometria_frac = [0.153004, 0.323106, 0.362535, 0.129587, 0.0189106, 0.012857, 0]
+pendiente_media_tierra = 0.00330133
+plataforma_km = 25.0253
+profundidad_media_oceano_m = 3737.48
+
+[relieve.R4_sin_dinamica]
+nivel_mar_m = 12.3512
+tierra_frac = 0.285711
+altura_media_tierra_m = 598.858
+altura_mediana_tierra_m = 454.818
+tierra_bajo_200_frac = 0.197125
+tierra_sobre_2000_frac = 0.0310062
+hipsometria_frac = [0.197125, 0.349557, 0.307207, 0.115105, 0.0178608, 0.0131454, 0]
+pendiente_media_tierra = 0.00329448
+plataforma_km = 26.4496
+profundidad_media_oceano_m = 3663.78
+
+[relieve.R4_sedimento_como_corteza]
+nivel_mar_m = 33.6493
+tierra_frac = 0.279543
+altura_media_tierra_m = 578.523
+altura_mediana_tierra_m = 431.009
+tierra_bajo_200_frac = 0.221608
+tierra_sobre_2000_frac = 0.0309383
+hipsometria_frac = [0.221608, 0.35711, 0.277536, 0.112808, 0.0176773, 0.013261, 0]
+pendiente_media_tierra = 0.00315518
+plataforma_km = 33.0091
+profundidad_media_oceano_m = 3632.42
+
+[R4_estudio_todo.todo]
+sesgo_m = -0.00810058
+error_medio_m = 431.675
+rms_m = 564.314
+area = 11636.4
+
+[R4_estudio_todo.ajuste]
+sesgo_m = -0.00810058
+error_medio_m = 431.675
+rms_m = 564.314
+area = 11636.4
+
+[R4_estudio_todo.parametros]
+rho_a = 3255
+rho_s = 2400
+k_sed = 0
+rho_u = 2750
+rho_l = 3000
+z_t = 15
+drho = 20
+drho_arcaico = 10
+l_min = 40
+tau_l = 100
+h0 = 3005.32
+
+[R4_estudio_todo.en_borde]
+rho_u = true
+rho_l = true
+z_t = true
+drho = true
+drho_arcaico = false
+l_min = true
+tau_l = false
+
+[R4_sin_dinamica.todo]
+sesgo_m = -102.891
+error_medio_m = 434.743
+rms_m = 579.477
+area = 11636.4
+
+[R4_sin_dinamica.ajuste]
+sesgo_m = -0.00803114
+error_medio_m = 287.899
+rms_m = 359.842
+area = 3819.38
+
+[R4_sin_dinamica.parametros]
+rho_a = 3255
+rho_s = 2400
+k_sed = 0
+rho_u = 2750
+rho_l = 3000
+z_t = 15
+drho = 20
+drho_arcaico = 15
+l_min = 50
+tau_l = 100
+h0 = 3051.4
+
+[R4_sin_dinamica.en_borde]
+rho_u = true
+rho_l = true
+z_t = true
+drho = true
+drho_arcaico = false
+l_min = false
+tau_l = false
+
+[R4_sedimento_como_corteza.todo]
+sesgo_m = -127.299
+error_medio_m = 449.135
+rms_m = 602.93
+area = 11636.4
+
+[R4_sedimento_como_corteza.ajuste]
+sesgo_m = -0.00374822
+error_medio_m = 285.478
+rms_m = 365.765
+area = 3819.38
+
+[R4_sedimento_como_corteza.parametros]
+rho_a = 3255
+rho_s = 2400
+k_sed = 0
+rho_u = 2750
+rho_l = 3000
+z_t = 15
+drho = 25
+drho_arcaico = 15
+l_min = 50
+tau_l = 100
+h0 = 3076.91
+
+[R4_sedimento_como_corteza.en_borde]
+rho_u = true
+rho_l = true
+z_t = true
+drho = false
+drho_arcaico = false
+l_min = false
+tau_l = false
+
+[R4_sin_dinamica.validacion_cruzada]
+ajuste_A_error_medio_m = 292.85
+prueba_B_error_medio_m = 467.753
+ajuste_B_error_medio_m = 248.755
+prueba_A_error_medio_m = 443.885
+
+[por_edad.R4_sin_dinamica.desde_0]
+desde_myr = 0
+area_frac = 0.275369
+altura_real_m = 1246.72
+altura_regla_m = 1050.74
+h_media_km = 39.6815
+s_media_km = 0.96672
+
+[por_edad.R4_sin_dinamica.desde_100]
+desde_myr = 100
+area_frac = 0.17078
+altura_real_m = 325.805
+altura_regla_m = 449.752
+h_media_km = 35.2718
+s_media_km = 1.88353
+
+[por_edad.R4_sin_dinamica.desde_500]
+desde_myr = 500
+area_frac = 0.172443
+altura_real_m = 490.816
+altura_regla_m = 415.212
+h_media_km = 36.6222
+s_media_km = 1.35629
+
+[por_edad.R4_sin_dinamica.desde_1600]
+desde_myr = 1600
+area_frac = 0.225028
+altura_real_m = 420.578
+altura_regla_m = 327.085
+h_media_km = 38.3037
+s_media_km = 1.27605
+
+[por_edad.R4_sin_dinamica.desde_2500]
+desde_myr = 2500
+area_frac = 0.156381
+altura_real_m = 543.067
+altura_regla_m = 312.765
+h_media_km = 38.7654
+s_media_km = 0.710579
+
+[por_edad.R4_estudio.desde_0]
+desde_myr = 0
+area_frac = 0.275369
+altura_real_m = 1246.72
+altura_regla_m = 1136.15
+h_media_km = 39.6815
+s_media_km = 0.96672
+
+[por_edad.R4_estudio.desde_100]
+desde_myr = 100
+area_frac = 0.17078
+altura_real_m = 325.805
+altura_regla_m = 502.369
+h_media_km = 35.2718
+s_media_km = 1.88353
+
+[por_edad.R4_estudio.desde_500]
+desde_myr = 500
+area_frac = 0.172443
+altura_real_m = 490.816
+altura_regla_m = 463.881
+h_media_km = 36.6222
+s_media_km = 1.35629
+
+[por_edad.R4_estudio.desde_1600]
+desde_myr = 1600
+area_frac = 0.225028
+altura_real_m = 420.578
+altura_regla_m = 375.858
+h_media_km = 38.3037
+s_media_km = 1.27605
+
+[por_edad.R4_estudio.desde_2500]
+desde_myr = 2500
+area_frac = 0.156381
+altura_real_m = 543.067
+altura_regla_m = 638.941
+h_media_km = 38.7654
+s_media_km = 0.710579
+
+[edades_iniciales]
+bordes_myr = [0, 100, 200, 300, 400, 500, 750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 2750, 3000, 3250]
+frac_tipos = [0.0400214, 0.0678329, 0.0678329, 0.0678329, 0.0678329, 0.067716, 0.067716, 0.067716, 0.067716, 0.067716, 0.067716, 0.0579594, 0.0579594, 0.0693467, 0.0693467, 0.0277387]
+frac_tc1_invertido = [0.060111, 0.0631889, 0.057891, 0.0509928, 0.0561011, 0.142715, 0.0961884, 0.0812895, 0.120388, 0.0725173, 0.058796, 0.0601643, 0.0164004, 0.0146233, 0.0104079, 0.0382254]
+tierra_de_mas_de_500_frac = 0.553852

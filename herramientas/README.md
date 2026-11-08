@@ -172,6 +172,23 @@ Sigue el protocolo de `docs/design/terreno/estudio_isostasia_continental.md` con
 
 La edad tectonotérmica de cada celda sale de su tipo de corteza de CRUST1.0 (tabla `EDAD_TIPO`, un supuesto del estudio). TC1 solo se publica libre a 5° (www.lithosphere.info): se rellenan sus nodos de costa con la media de los vecinos. Descarga a `output/referencias/` CAM2016Litho (EarthScope), TC1 y los conjuntos de Lamb. Escribe `config/referencias/tierra_isostasia.toml`.
 
+## La comprobación del §0 de la nota de isostasia con litosfera
+
+```bash
+python3 -I herramientas/analisis/nota_isostasia_s0.py   # ~2 min con las cachés del estudio de isostasia
+```
+
+Repite el ajuste de R4 sin las celdas donde la regla de Lamb et al. (2020) deja más de 300 m de residuo (la topografía dinámica), también con el sedimento contado como corteza (la variante del motor). Da la altura de la tierra por clase de edad tectonotérmica (real y con la regla) y la distribución de edades de partida de los continentes (la tierra de hoy de más de 500 Myr, menos 500), con la del grosor de TC1 invertido como comprobación. Escribe `config/referencias/tierra_isostasia_s0.toml`, que usa `planeta_semillas.py` para las filas por clase de edad.
+
+## El diagnóstico del supercontinente
+
+```bash
+herramientas/planeta_semillas.py                        # corre las 5 semillas
+python3 -I herramientas/analisis/supercontinente.py     # lee output/semillas/semilla_*_terreno.json
+```
+
+Con las fotos que la deriva toma cada 25 Myr (`fotos_supercontinente`, solo diagnóstico) y las métricas de cada Myr: la fracción del continente en la mayor masa conexa y en el mayor bloque de una placa; la distancia media entre las masas de ≥ 1 % y su ritmo (¿se acercan?); los océanos de cada rift (anchura, cuándo se activa un margen, si se cierran); el destino del margen pasivo 25 Myr después; las potencias de las fuerzas de las placas con continente y si el continente va hacia la fosa activa más cercana. Escribe `output/semillas/supercontinente.json` y una tabla en Markdown.
+
 ## La deriva en varias semillas
 
 ```bash
@@ -185,6 +202,10 @@ SEMILLA=3 VARIANTE="tectonica.n_ero=3" UMBRAL=140 \
   cargo test --release -p abm-terreno --test tectonica diagnostico_pilas -- --ignored --nocapture
 SEMILLAS=42,1,2,3,4 \
   cargo test --release -p abm-terreno --test tectonica diagnostico_fondo_viejo -- --ignored --nocapture
+SEMILLAS=42,1,2,3,4 \
+  cargo test --release -p abm-terreno --test tectonica diagnostico_nivel_del_mar_y_edad_del_fondo -- --ignored --nocapture
+SEMILLA=2 \
+  cargo test --release -p abm-terreno --test tectonica diagnostico_huella_de_la_deriva -- --ignored --nocapture
 ```
 
 `VARIANTES` son ajustes de la config como los de `--set`: separados por comas dentro de una variante y por `;` entre variantes. Sin ella, la config tal cual.
@@ -208,6 +229,8 @@ Las otras pruebas exploratorias:
 - `calibracion_flujo_lateral`: espesor máximo y meseta de India–Asia con cada `D_0`;
 - `diagnostico_pilas`: dos pasadas de la misma deriva. La primera halla los pasos en que alguna etapa deja una muestra por encima de `UMBRAL`, aunque otra la baje en el mismo paso. La segunda sigue esa muestra etapa a etapa, con su placa, su borde más cercano y sus vecinas;
 - `diagnostico_fondo_viejo`: dónde queda al final el fondo de más de 180 Myr (en qué placa, a qué distancia de su fosa y de su orilla continental);
+- `diagnostico_nivel_del_mar_y_edad_del_fondo`: el nivel del mar al final de la deriva con las edades del fondo del modelo y con las de la Tierra (Seton et al. 2020) en los mismos cuantiles de área, y la tierra por clase de edad tectonotérmica (altura, corteza con su sedimento y litosfera);
+- `diagnostico_huella_de_la_deriva`: una huella de todo el estado de la deriva cada 50 pasos y al final. Para comprobar el determinismo entre procesos, se corre varias veces el binario de la prueba y se comparan las huellas;
 - `diagnostico_procedencia_del_fondo` (nota de fosas v6): cada 100 Myr, de dónde salen los escalones de edad enormes y cuánto del fondo de más de 180 Myr y de los márgenes pasivos viejos viene del estado inicial. Usa la procedencia de cada muestra (`Corteza.proc`: cómo nació, con qué evento llegó a su placa y por qué vía le llegó su corteza continental), que el modelo no lee.
 
 `deriva_en_varias_semillas` da además:
@@ -227,7 +250,9 @@ Corre el planeta entero (génesis, relieve y un año de clima) con cada semilla 
 - **frente a los objetivos de la adenda y de la nota de fosas:** corteza máxima, edad del fondo, `f_cont`, cambio de volumen, velocidad de las placas, sedimento al mar, longitud de fosa, área que se hunde, vida y edad de los márgenes pasivos (Bradley 2008) y tiempo;
 - **los choques, frente a Bird CCB:** longitud, convergencia, duración y pérdida antes y después de la rotura de la losa; la pérdida total, frente a 0,4–0,7 AU (adenda v7).
 
-Escribe cada corrida en `output/semillas/` y el resumen en `output/semillas/cierre.json`. El tiempo de cada semilla está medido con las cinco a la vez: el de una sola es el de la batería.
+Desde la cuarta ronda del 2026-11-08 tiene también las filas de la nota de isostasia con litosfera: la altura de la tierra y su fracción por clase de edad tectonotérmica, la profundidad de los márgenes estirados por tiempo desde la rotura (del agua y del basamento sin sedimento), su hundimiento en ~100 Myr y el área reiniciada por causa.
+
+Escribe cada corrida en `output/semillas/` y el resumen en `output/semillas/cierre.json`. El tiempo de cada semilla está medido con las cinco a la vez: el de una sola es el de la batería. Corre una copia del binario (`output/semillas/terreno_de_la_tanda`): si se recompila a mitad de una tanda, sus procesos no cargan a medias el binario nuevo.
 
 ## La batería de escenarios
 

@@ -417,7 +417,7 @@ impl Deriva {
                 match self.placas[q as usize].get_mut(lq) {
                     Some(d) => {
                         // Ya hay una muestra de q ahí: se suman con su volumen.
-                        d.sumar_hc(c.hc * f, c.arco, rs, rc, h_cont_min, via::ISLAS);
+                        d.sumar_hc(c.hc * f, c.arco, c.edad_tt, rs, rc, h_cont_min, via::ISLAS);
                         d.sed += c.sed * f;
                     }
                     None => {

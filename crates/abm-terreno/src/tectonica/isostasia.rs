@@ -1,8 +1,12 @@
 //! Altura isostática y nivel del mar (§6.7 del diseño, con la corrección de realismo C1).
 //!
-//! - Corteza continental (isostasia de Airy con la relación empírica terrestre): la flotación de una
-//!   columna es `B = (ρ_m − ρ_c)·(H − H_nivel) + (ρ_m − ρ_s)·s` (s = sedimento). Por encima del nivel
-//!   del mar sube `B/ρ_m`; por debajo, con agua encima, `B/(ρ_m − ρ_w)` (C1).
+//! - Corteza continental: isostasia de toda la litosfera (nota de isostasia con litosfera; regla R4
+//!   del estudio de isostasia continental, con los parámetros de la comprobación de su §0). La
+//!   flotación de una columna de corteza `h` (con su sedimento, que cuenta como corteza) sobre una
+//!   litosfera de `L` km es
+//!   `B = (ρ_a − ρ_sup)·min(h, z_t) + (ρ_a − ρ_inf)·max(0, h − z_t) − Δρ_ma·max(0, L − h)`,
+//!   con `L` de la edad tectonotérmica ([`litosfera_km`]) y `Δρ_ma` menor en el manto arcaico. Sobre
+//!   el mar, `H = B/ρ_a − H_0`; bajo el mar, la profundidad se multiplica por `ρ_a/(ρ_a − ρ_w)`.
 //! - Corteza oceánica: profundidad por edad (Parsons y Sclater, 1977) **más** la flotación del
 //!   espesor extra de los arcos (decisión del responsable), con el mismo tratamiento del agua.
 //! - Fosas: sobreprofundidad gaussiana en el lado de la placa que subduce.
@@ -51,15 +55,85 @@ pub fn con_flotacion(c: &TectonicaCfg, z0_m: f64, b: f64) -> f64 {
     }
 }
 
+/// Grosor de la litosfera (km) con la edad tectonotérmica `t` (Myr): la recta de Artemieva (2006),
+/// `L_lin = l0 + l_pend·t`, con recuperación tras el evento que la calentó,
+/// `L = L_min + (L_lin − L_min)·(1 − e^(−t/τ_L))` (forma R3b del estudio).
+pub fn litosfera_km(c: &TectonicaCfg, t: f64) -> f64 {
+    let t = t.max(0.0);
+    let l_lin = c.l0_lit_km + c.l_pend_km_myr * t;
+    c.l_min_km + (l_lin - c.l_min_km) * (1.0 - (-t / c.tau_l_myr).exp())
+}
+
+/// Contraste neto del manto litosférico con la astenosfera (kg/m³) con la edad `t` (Myr): el del
+/// manto arcaico, más empobrecido, por encima de `t_arc`.
+#[inline]
+pub fn drho_ma(c: &TectonicaCfg, t: f64) -> f64 {
+    if t > c.t_arc_myr {
+        c.drho_ma_arcaico
+    } else {
+        c.drho_ma
+    }
+}
+
+/// Flotación (km·kg/m³) de una columna continental de corteza total `h_tot` (km, con su sedimento)
+/// sobre una litosfera de `l` km con contraste `drho`: la densidad de la corteza crece con la
+/// profundidad (`ρ_sup` hasta `z_t`, `ρ_inf` debajo) y el manto litosférico pesa `drho` más que la
+/// astenosfera.
+#[inline]
+pub fn flotacion_litosfera(c: &TectonicaCfg, h_tot: f64, l: f64, drho: f64) -> f64 {
+    (c.rho_ast - c.rho_c_sup) * h_tot.min(c.z_t_km)
+        + (c.rho_ast - c.rho_c_inf) * (h_tot - c.z_t_km).max(0.0)
+        - drho * (l - h_tot).max(0.0)
+}
+
+/// Altura (m, respecto al dato) de una flotación de litosfera `b`: `b/ρ_a − H_0` sobre el mar y,
+/// bajo el mar, la profundidad por `ρ_a/(ρ_a − ρ_w)` (el agua también pesa).
+#[inline]
+pub fn altura_de_flotacion(c: &TectonicaCfg, b: f64) -> f64 {
+    let z = 1000.0 * b / c.rho_ast - c.h0_lit_m;
+    if z < 0.0 {
+        z * c.rho_ast / (c.rho_ast - c.rho_w)
+    } else {
+        z
+    }
+}
+
 /// Altura isostática (m, respecto al dato) de una columna de corteza, sin fosa ni detalle.
 pub fn altura(c: &TectonicaCfg, k: &Corteza) -> f64 {
-    let sed = (c.rho_m - c.rho_s) * k.sed;
     if k.cont {
-        con_flotacion(c, 0.0, (c.rho_m - c.rho_c) * (k.h - c.h_nivel_km) + sed)
+        // El sedimento cuenta como corteza (nota de isostasia con litosfera §11.1; la variante del
+        // estudio que el motor puede llevar: su reparto del sedimento rellena hasta una cota).
+        let l = litosfera_km(c, k.edad_tt);
+        altura_de_flotacion(
+            c,
+            flotacion_litosfera(c, k.h + k.sed, l, drho_ma(c, k.edad_tt)),
+        )
     } else {
+        let sed = (c.rho_m - c.rho_s) * k.sed;
         let z0 = -profundidad_por_edad(c, k.edad_oc);
         con_flotacion(c, z0, (c.rho_m - c.rho_oc) * (k.h - c.h_oc_km) + sed)
     }
+}
+
+/// Lo que baja la superficie de una columna al aire por km de roca que se le quita de arriba
+/// (km/km): en la continental, la derivada de su flotación de litosfera; en la oceánica, la de la
+/// corteza con el manto (como antes de la nota).
+pub fn baja_por_km(c: &TectonicaCfg, k: &Corteza) -> f64 {
+    if !k.cont {
+        return (c.rho_m - c.rho_c) / c.rho_m;
+    }
+    let h_tot = k.h + k.sed;
+    let corteza = if h_tot > c.z_t_km {
+        c.rho_ast - c.rho_c_inf
+    } else {
+        c.rho_ast - c.rho_c_sup
+    };
+    let manto = if litosfera_km(c, k.edad_tt) > h_tot {
+        drho_ma(c, k.edad_tt)
+    } else {
+        0.0
+    };
+    (corteza + manto) / c.rho_ast
 }
 
 /// Sobreprofundidad (m, positiva) de la fosa a una distancia firmada `s` (km) del borde: solo en el
@@ -73,13 +147,52 @@ pub fn fosa_m(c: &TectonicaCfg, s_km: f64) -> f64 {
     }
 }
 
-/// Espesor de sedimento (km) que lleva una columna de corteza continental hasta la altura `z_obj`
-/// (m) desde la suya `z` (m), las dos bajo el agua.
-pub fn sedimento_hasta(c: &TectonicaCfg, z_m: f64, z_obj_m: f64) -> f64 {
-    if z_obj_m <= z_m {
+/// Espesor de sedimento (km) que hay que añadir a la columna `k` para llevarla hasta la altura
+/// `z_obj` (m), con su isostasia (bisección sobre [`altura`]; 0 si ya llega). Lo que no depende del
+/// sedimento se calcula una vez.
+pub fn sedimento_hasta_columna(c: &TectonicaCfg, k: &Corteza, z_obj: f64) -> f64 {
+    // Continental: litosfera y contraste de su edad; oceánica: su profundidad y su flotación.
+    let (l, drho) = if k.cont {
+        (litosfera_km(c, k.edad_tt), drho_ma(c, k.edad_tt))
+    } else {
+        (0.0, 0.0)
+    };
+    let (z0, b0) = if k.cont {
+        (0.0, 0.0)
+    } else {
+        (
+            -profundidad_por_edad(c, k.edad_oc),
+            (c.rho_m - c.rho_oc) * (k.h - c.h_oc_km),
+        )
+    };
+    let (cont, h_tot, sed0, f_sed) = (k.cont, k.h + k.sed, k.sed, c.rho_m - c.rho_s);
+    let altura_con = |ds: f64| -> f64 {
+        if cont {
+            altura_de_flotacion(c, flotacion_litosfera(c, h_tot + ds, l, drho))
+        } else {
+            con_flotacion(c, z0, b0 + f_sed * (sed0 + ds))
+        }
+    };
+    if altura_con(0.0) >= z_obj {
         return 0.0;
     }
-    (z_obj_m - z_m) / 1000.0 * (c.rho_m - c.rho_w) / (c.rho_m - c.rho_s)
+    let (mut lo, mut hi) = (0.0, 1.0);
+    while altura_con(hi) < z_obj && hi < 1e3 {
+        hi *= 2.0;
+    }
+    for _ in 0..60 {
+        let mid = 0.5 * (lo + hi);
+        // Sin punto representable entre los dos, el resto de las vueltas no cambiaría nada.
+        if mid <= lo || mid >= hi {
+            break;
+        }
+        if altura_con(mid) < z_obj {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    hi
 }
 
 /// Nivel del mar (m, respecto al dato) que llena las cuencas con `volumen_km3` de agua:
@@ -110,9 +223,11 @@ pub fn nivel_del_mar(z_m: &[f64], area_km2: &[f64], volumen_km3: f64) -> f64 {
 mod tests {
     use super::*;
 
-    fn cont(h: f64) -> Corteza {
+    fn cont(h: f64, sed: f64, edad_tt: f64) -> Corteza {
         Corteza {
             edad_orog: 0.0,
+            sed,
+            edad_tt,
             ..Corteza::continental(h)
         }
     }
@@ -140,17 +255,69 @@ mod tests {
     }
 
     #[test]
-    fn isostasia_continental_al_aire_y_bajo_el_agua() {
+    fn la_isostasia_con_litosfera_da_los_numeros_del_estudio() {
+        // Nota de isostasia con litosfera §10, prueba 1: la regla dentro del motor da los mismos
+        // números que la herramienta del estudio (herramientas/analisis/estudio_isostasia.py, con
+        // los parámetros del §0 y el sedimento como corteza): (h, s, edad) → altura en m.
         let c = TectonicaCfg::default();
-        // Al aire, 0,152 km por km (§6.7): 65 km → +5,0 km; 35 km → +0,45 km.
-        assert!((altura(&c, &cont(65.0)) - 5000.0).abs() < 5.0);
-        assert!((altura(&c, &cont(35.0)) - 454.5).abs() < 1.0);
-        assert!(altura(&c, &cont(32.0)).abs() < 1e-9);
-        // Bajo el agua, 0,220 km por km (C1): 25 km → −1,54 km (el documento daba −1,06 al aire).
-        assert!((altura(&c, &cont(25.0)) + 1541.9).abs() < 1.0);
-        // El sedimento rellena: lleva el margen hasta la plataforma sin pasarse.
-        let mut m = cont(25.0);
-        m.sed = sedimento_hasta(&c, altura(&c, &m), -130.0);
+        let casos = [
+            (35.0, 0.0, 1000.0, 59.8324),
+            (40.0, 2.0, 3000.0, 574.7034),
+            (70.0, 0.0, 30.0, 3559.0352),
+            (10.0, 3.0, 0.0, -1966.4452),
+            (33.0, 1.0, 50.0, 478.0659),
+            (45.0, 0.5, 1800.0, 717.2533),
+            (20.0, 4.0, 100.0, -695.5344),
+        ];
+        for (h, s, t, esperada) in casos {
+            let z = altura(&c, &cont(h, s, t));
+            assert!(
+                (z - esperada).abs() < 0.1,
+                "({h}, {s}, {t}): {z:.4} m frente a {esperada:.4} del estudio"
+            );
+        }
+        assert!((litosfera_km(&c, 1000.0) - 133.5962).abs() < 1e-3);
+        assert!((litosfera_km(&c, 0.0) - c.l_min_km).abs() < 1e-12);
+    }
+
+    #[test]
+    fn un_margen_estirado_se_hunde_al_envejecer() {
+        // §10, prueba 2 (la parte de la regla): una columna fina (12 km) recién estirada queda baja y
+        // se hunde a medida que su litosfera se engruesa al enfriarse.
+        let c = TectonicaCfg::default();
+        let prof = |t: f64| -altura(&c, &cont(12.0, 0.0, t));
+        let (p0, p50, p100, p300) = (prof(0.0), prof(50.0), prof(100.0), prof(300.0));
+        assert!(p0 > 0.0, "nace bajo el mar: {p0:.0} m");
+        assert!(
+            p50 > p0 && p100 > p50 && p300 > p100,
+            "se hunde con la edad: {p0:.0}, {p50:.0}, {p100:.0}, {p300:.0} m"
+        );
+        // Lo que baja por el manto litosférico que crece: Δρ_ma·ΔL/ρ_a, bajo el agua.
+        let esperado =
+            c.drho_ma * (litosfera_km(&c, 100.0) - c.l_min_km) / (c.rho_ast - c.rho_w) * 1000.0;
+        assert!(
+            ((p100 - p0) - esperado).abs() < 1.0,
+            "en 100 Myr baja {:.0} m (esperado {esperado:.0})",
+            p100 - p0
+        );
+    }
+
+    #[test]
+    fn el_sedimento_cuenta_como_corteza_y_rellena_hasta_la_plataforma() {
+        // §11.1: el sedimento de una columna continental cuenta como corteza (su capa de arriba), así
+        // que sumarlo sube la columna lo que su grosor de corteza; el reparto del sedimento puede
+        // rellenar un margen hasta la plataforma sin pasarse.
+        let c = TectonicaCfg::default();
+        let a = altura(&c, &cont(25.0, 0.0, 200.0));
+        let b = altura(&c, &cont(24.0, 1.0, 200.0));
+        assert!(
+            (a - b).abs() < 1e-9,
+            "1 km de sedimento pesa como 1 km de corteza"
+        );
+        let mut m = cont(14.0, 0.0, 120.0);
+        let z0 = altura(&c, &m);
+        assert!(z0 < -130.0, "el margen empieza hondo: {z0:.0} m");
+        m.sed = sedimento_hasta_columna(&c, &m, -130.0);
         assert!((altura(&c, &m) + 130.0).abs() < 1e-6);
     }
 

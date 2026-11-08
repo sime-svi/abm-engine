@@ -30,6 +30,8 @@ pub(super) struct LadoRift {
     abierta_km2: f64,
     /// Ya se rompió: lo que se abre en este lado es fondo oceánico.
     roto: bool,
+    /// Margen (diagnóstico): `2·id + lado` (`Corteza::rift_id`).
+    rift_id: u32,
 }
 
 impl Deriva {
@@ -68,7 +70,10 @@ impl Deriva {
             return;
         }
         let mut lados: Vec<LadoRift> = Vec::new();
-        for (p, q) in [(h1, h2), (h2, h1)] {
+        self.rifts_empezados += 1;
+        let rid = self.rifts_empezados;
+        self.rotura_rift_myr.push(f64::NAN);
+        for (lado_i, (p, q)) in [(h1, h2), (h2, h1)].into_iter().enumerate() {
             let d = self.distancia_a_placa(p as u32, q as u32, w_m + self.malla.lado_km);
             // Espesor de partida: el medio de la corteza continental a menos de W_m del corte.
             let (mut v, mut a) = (0.0, 0.0);
@@ -102,6 +107,12 @@ impl Deriva {
             }
             celdas.sort_unstable();
             celdas.dedup();
+            let rift_id = 2 * rid + lado_i as u32;
+            for &l in &celdas {
+                if let Some(c) = self.placas[p].get_mut(l) {
+                    c.rift_id = rift_id;
+                }
+            }
             lados.push(LadoRift {
                 placa: self.placas[p].id,
                 otra: self.placas[q].id,
@@ -111,6 +122,7 @@ impl Deriva {
                 largo_km: a_franja / w0,
                 abierta_km2: 0.0,
                 roto: false,
+                rift_id,
             });
         }
         self.rifts_activos.extend(lados);
@@ -170,6 +182,8 @@ impl Deriva {
                                 hc: 0.0,
                                 arco: 0.0,
                                 edad_orog: 1000.0,
+                                edad_tt: 0.0,
+                                rift_id: lado.rift_id,
                                 ..*c
                             };
                             c.proc.nace = nace::RIFT;
@@ -229,6 +243,24 @@ impl Deriva {
             // 3. Rotura: la rampa ya mide W_m.
             if e >= w_m - lado.w0_km {
                 lado.roto = true;
+                // La franja estirada, adelgazada y caliente, empieza su edad tectonotérmica (nota de
+                // isostasia con litosfera §6.2): desde aquí se hunde al enfriarse.
+                let mut reinicio = 0.0;
+                for &l in &lado.celdas {
+                    if let Some(c) = self.placas[pi].get_mut(l)
+                        && c.cont
+                    {
+                        c.edad_tt = 0.0;
+                        reinicio += self.malla.area[l as usize];
+                    }
+                }
+                self.reinicio_km2_paso[0] += reinicio;
+                let rid = (lado.rift_id >> 1) as usize;
+                if let Some(t) = self.rotura_rift_myr.get_mut(rid)
+                    && t.is_nan()
+                {
+                    *t = self.t_myr;
+                }
                 // Nace el océano en este lado (nota de rifts §7).
                 let ids = vec![lado.placa, lado.otra];
                 self.evento_det(

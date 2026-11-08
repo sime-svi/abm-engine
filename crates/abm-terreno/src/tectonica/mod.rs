@@ -197,7 +197,9 @@ pub fn estado_final(d: &Deriva) -> (Tectonica, ResumenTectonica) {
         zeta_m: zeta,
         d_fosa_m: c.d_fosa_m,
         w_fosa_km: c.w_fosa_km,
-        f_levantamiento: (c.rho_m - c.rho_c) / c.rho_m,
+        // Lo que sube la superficie por km de engrosamiento de una corteza gruesa, con la isostasia de
+        // la litosfera (nota de isostasia con litosfera).
+        f_levantamiento: (c.rho_ast - c.rho_c_inf + c.drho_ma) / c.rho_ast,
     };
     for (k, &zk) in z.iter().enumerate() {
         if let Some(cr) = d.corteza(k) {
@@ -417,7 +419,24 @@ fn resumen(d: &Deriva, t: &Tectonica) -> ResumenTectonica {
         placas_final,
         eventos: d.eventos.clone(),
         metricas: d.metricas.clone(),
+        fotos_supercontinente: d.fotos_supercontinente.clone(),
     }
+}
+
+/// Media por área, sobre los pasos `val`, de una métrica de los márgenes por clase de tiempo desde
+/// la rotura.
+fn media_margen(val: &[&MetricaMyr], f: impl Fn(&MetricaMyr) -> &[f64; 6]) -> [f64; 6] {
+    std::array::from_fn(|i| {
+        let a: f64 = val.iter().map(|m| m.margen_area_km2[i]).sum();
+        if a > 0.0 {
+            val.iter()
+                .map(|m| f(m)[i] * m.margen_area_km2[i])
+                .sum::<f64>()
+                / a
+        } else {
+            0.0
+        }
+    })
 }
 
 /// Medias del balance de la corteza sin el rodaje (adenda de balance §10).
@@ -656,6 +675,19 @@ fn balance_medio(
             * 100.0
             / n,
         dorsal_fosa_km: media(|m| m.dorsal_fosa_km),
+        altura_tierra_por_edad_final_m: ultima.altura_tierra_por_edad_m,
+        tierra_por_edad_final_frac: {
+            let t: f64 = ultima.tierra_por_edad_km2.iter().sum();
+            ultima
+                .tierra_por_edad_km2
+                .map(|x| if t > 0.0 { x / t } else { 0.0 })
+        },
+        edad_tt_area_final_frac: ultima.edad_tt_area_frac,
+        margen_prof_m: media_margen(&val, |m| &m.margen_prof_m),
+        margen_tect_m: media_margen(&val, |m| &m.margen_tect_m),
+        reinicio_km2_100myr: std::array::from_fn(|i| {
+            val.iter().map(|m| m.reinicio_km2[i]).sum::<f64>() * 100.0 / n
+        }),
     }
 }
 

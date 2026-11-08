@@ -18,8 +18,9 @@
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 
-use super::historia::{CuentasCorteza, EventoTectonico, MetricaMyr};
+use super::historia::{CuentasCorteza, EventoTectonico, FotoSupercontinente, MetricaMyr};
 
+mod diagnostico;
 mod fosas;
 mod rifts;
 mod suavizado;
@@ -116,6 +117,13 @@ pub struct Corteza {
     /// nueva no cambia el reloj de su bloque). Viaja con la muestra: el reloj de un bloque es el
     /// tiempo desde el reinicio más reciente de sus muestras (al juntarse dos bloques, el menor).
     pub reinicio_myr: f64,
+    /// Edad tectonotérmica (Myr; nota de isostasia con litosfera §3): tiempo desde el último evento
+    /// que calentó la columna (rift, arco, choque o delaminación). De ella sale el grosor de su
+    /// litosfera. Se mezcla por volumen cuando se junta corteza de varias procedencias.
+    pub edad_tt: f64,
+    /// Margen de rift al que pertenece la muestra (diagnóstico, el modelo no lo lee): `2·id + lado`,
+    /// con `id ≥ 1` el rift en el orden en que empezaron; 0 si ninguno.
+    pub rift_id: u32,
     /// De dónde viene la muestra (diagnóstico; el modelo nunca la lee).
     pub proc: Procedencia,
 }
@@ -237,6 +245,8 @@ impl Corteza {
             dh_dt: 0.0,
             sutura: 0,
             reinicio_myr: f64::NEG_INFINITY,
+            edad_tt: 0.0,
+            rift_id: 0,
             proc: Procedencia::default(),
         }
     }
@@ -256,6 +266,8 @@ impl Corteza {
             dh_dt: 0.0,
             sutura: 0,
             reinicio_myr: f64::NEG_INFINITY,
+            edad_tt: 0.0,
+            rift_id: 0,
             proc,
         }
     }
@@ -304,10 +316,17 @@ impl Corteza {
     /// de la columna se mezcla por volumen, `a ← (a·h_c + f_arco·dh)/(h_c + roca + dh)`. La
     /// oceánica que supera `h_cont_min` pasa a continental. Devuelve `true` si la columna acaba de
     /// pasar a continental.
+    ///
+    /// La edad tectonotérmica se mezcla por volumen con la del aporte, `edad_aporte` (nota de
+    /// isostasia con litosfera §6.3): la de la corteza que llega, o 0 si es de un arco o de un choque.
+    /// Una columna oceánica que pasa a continental se queda con la edad de su corteza de tipo
+    /// continental.
+    #[allow(clippy::too_many_arguments)]
     fn sumar_hc(
         &mut self,
         dh: f64,
         f_arco: f64,
+        edad_aporte: f64,
         rs: f64,
         rc: f64,
         h_cont_min: f64,
@@ -324,6 +343,12 @@ impl Corteza {
             self.sed = 0.0;
             self.proc.vias[via::SEDIMENTO] += roca as f32;
         }
+        let antes = self.hc;
+        self.edad_tt = if antes > 0.0 {
+            (self.edad_tt * antes + edad_aporte * dh) / (antes + dh)
+        } else {
+            edad_aporte
+        };
         self.h += dh;
         self.hc += dh;
         self.arco = (v_arco / self.hc).clamp(0.0, 1.0);
@@ -687,6 +712,14 @@ struct Detalle {
 /// de L_borde da ~0,04; un borde real, 0,3–0,7).
 const PHI_SUELTA: f64 = 0.15;
 
+/// Clases de edad tectonotérmica de las métricas (Myr; nota de isostasia con litosfera §8): 0–100,
+/// 100–500, 500–1 600, 1 600–2 500 y más de 2 500.
+pub const CLASES_EDAD_TT_MYR: [f64; 5] = [0.0, 100.0, 500.0, 1600.0, 2500.0];
+
+/// Clases del tiempo desde la rotura de los márgenes estirados (Myr): 0–20, 20–50, 50–80, 80–120,
+/// 120–200 y más de 200.
+pub const CLASES_MARGEN_MYR: [f64; 6] = [0.0, 20.0, 50.0, 80.0, 120.0, 200.0];
+
 /// Límites (cm/año) de las clases de la convergencia perpendicular en las fosas (diagnóstico de la
 /// nota de fosas §0); la última clase no tiene tope.
 pub const CLASES_CONVERGENCIA_CM_ANIO: [f64; 10] =
@@ -729,6 +762,10 @@ struct RedFlujo {
     /// flujo transporta la fracción con el volumen).
     arco: Vec<f64>,
     delta_arco: Vec<f64>,
+    /// Edad tectonotérmica de cada muestra y cambio de su volumen por edad en el subpaso (nota de
+    /// isostasia con litosfera §6.3: la edad viaja con el volumen y se mezcla por él).
+    edad: Vec<f64>,
+    delta_edad: Vec<f64>,
     grupos: Vec<GrupoFlujo>,
     lados: Vec<LadoFlujo>,
     parejas: Vec<(u32, u32)>,
@@ -770,8 +807,10 @@ impl RedFlujo {
         self.indice.insert(m, i);
         self.hc.push(c.map_or(0.0, |c| c.hc));
         self.arco.push(c.map_or(0.0, |c| c.arco));
+        self.edad.push(c.map_or(0.0, |c| c.edad_tt));
         self.delta.push(0.0);
         self.delta_arco.push(0.0);
+        self.delta_edad.push(0.0);
         let muestras = &self.muestras;
         let pos = self.orden.partition_point(|&x| muestras[x as usize] < m);
         self.orden.insert(pos, i);
@@ -958,6 +997,100 @@ pub struct EncuentroDorsalFosa {
     pub dist_min_km: f64,
 }
 
+/// Edad (Myr) a la que es más vieja la fracción `q` del área de la distribución (`bordes`, `frac`):
+/// uniforme dentro de cada clase.
+fn edad_de_cuantil(bordes: &[f64], frac: &[f64], q: f64) -> f64 {
+    let total: f64 = frac.iter().sum();
+    let mut acum = 0.0;
+    for b in (0..frac.len()).rev() {
+        let f = frac[b] / total;
+        if f > 0.0 && acum + f >= q {
+            let (lo, hi) = (bordes[b], bordes[b + 1]);
+            return hi - (q - acum) / f * (hi - lo);
+        }
+        acum += f;
+    }
+    bordes[0]
+}
+
+/// Edades tectonotérmicas de la corteza continental de partida (nota de isostasia con litosfera
+/// §6.5): dentro de cada continente (componente conexa de `es_cont`), las celdas se ordenan de la más
+/// interior a la más costera por su distancia a la costa (por dentro del continente; desempate por
+/// índice), y la fracción `q` de área que queda por dentro de cada una le da la edad de ese cuantil
+/// de la distribución de la config (`edad_tt_ini_*`): las más viejas, en el interior, como crecen
+/// los continentes, añadiendo corteza por los bordes. Las celdas que no son continentales, 0.
+pub fn edades_tt_iniciales(cfg: &TectonicaCfg, malla: &Malla, es_cont: &[bool]) -> Vec<f64> {
+    use std::cmp::Reverse;
+    let num = malla.num;
+    let mut edad = vec![0.0; num];
+    // Distancia a la costa (km): Dijkstra desde las celdas continentales con alguna vecina que no lo
+    // es, por las continentales.
+    let mut dist = vec![f64::INFINITY; num];
+    let mut heap: BinaryHeap<Reverse<(u64, u32)>> = BinaryHeap::new();
+    let clave = |d: f64| (d * 1e6) as u64;
+    for k in 0..num {
+        if es_cont[k]
+            && malla.vec[k]
+                .iter()
+                .any(|&v| v != NADA && !es_cont[v as usize])
+        {
+            dist[k] = 0.5 * malla.lado_km;
+            heap.push(Reverse((clave(dist[k]), k as u32)));
+        }
+    }
+    while let Some(Reverse((dk, k))) = heap.pop() {
+        let ku = k as usize;
+        if dk > clave(dist[ku]) {
+            continue;
+        }
+        for (j, &v) in malla.vec[ku].iter().enumerate() {
+            if v == NADA || !es_cont[v as usize] {
+                continue;
+            }
+            let nd = dist[ku] + malla.dvec[ku][j];
+            if nd < dist[v as usize] {
+                dist[v as usize] = nd;
+                heap.push(Reverse((clave(nd), v)));
+            }
+        }
+    }
+    // Componentes conexas y reparto por cuantiles de área desde el interior.
+    let mut visto = vec![false; num];
+    let mut pila: Vec<u32> = Vec::new();
+    for k0 in 0..num {
+        if !es_cont[k0] || visto[k0] {
+            continue;
+        }
+        visto[k0] = true;
+        pila.push(k0 as u32);
+        let mut comp: Vec<u32> = Vec::new();
+        while let Some(k) = pila.pop() {
+            comp.push(k);
+            for &v in &malla.vec[k as usize] {
+                if v != NADA && es_cont[v as usize] && !visto[v as usize] {
+                    visto[v as usize] = true;
+                    pila.push(v);
+                }
+            }
+        }
+        comp.sort_unstable_by(|&a, &b| {
+            dist[b as usize]
+                .total_cmp(&dist[a as usize])
+                .then(a.cmp(&b))
+        });
+        let total: f64 = comp.iter().map(|&k| malla.area[k as usize]).sum();
+        let mut acum = 0.0;
+        for &k in &comp {
+            let a = malla.area[k as usize];
+            let q = ((acum + 0.5 * a) / total).clamp(0.0, 1.0);
+            edad[k as usize] =
+                edad_de_cuantil(&cfg.edad_tt_ini_bordes_myr, &cfg.edad_tt_ini_frac, q);
+            acum += a;
+        }
+    }
+    edad
+}
+
 /// Estado de la deriva de placas.
 pub struct Deriva {
     pub cfg: TectonicaCfg,
@@ -1072,6 +1205,21 @@ pub struct Deriva {
     /// Encuentros entre dorsales y fosas del último paso (nota de demografía de placas v2, D6),
     /// también con la rama D apagada.
     pub dorsal_fosa_paso: Vec<EncuentroDorsalFosa>,
+    /// Área continental cuya edad tectonotérmica volvió a 0 en el último paso, por causa: rift,
+    /// arco, choque y delaminación (km²; nota de isostasia con litosfera §8).
+    pub reinicio_km2_paso: [f64; 4],
+    /// Margen pasivo que dejó de serlo en el último paso, por causa (diagnóstico del
+    /// supercontinente; `MetricaMyr::margen_fin_causa_km`).
+    margen_fin_causa_paso: [f64; 4],
+    /// Myr de la rotura de cada rift (por su número; NaN si aún no se ha roto; diagnóstico).
+    pub rotura_rift_myr: Vec<f64>,
+    /// Muestras de margen pasivo de la foto anterior del diagnóstico del supercontinente (id de su
+    /// placa y celda local).
+    margenes_foto: Vec<(u64, u32)>,
+    /// Fotos del diagnóstico del supercontinente (cada 25 Myr).
+    pub fotos_supercontinente: Vec<FotoSupercontinente>,
+    /// Rifts empezados (el id del último; diagnóstico de los márgenes, `Corteza::rift_id`).
+    pub rifts_empezados: u32,
     pub creacion_paso: Vec<u32>,
     // Trabajo (se reserva una vez).
     cov: Vec<[(u32, u32); MAXC]>,
@@ -1202,7 +1350,14 @@ impl Deriva {
                 }
             }
         };
-        let cortezas: Vec<Corteza> = (0..malla.num).map(corteza).collect();
+        let mut cortezas: Vec<Corteza> = (0..malla.num).map(corteza).collect();
+        // Edades tectonotérmicas de partida (nota de isostasia con litosfera §6.5).
+        let edades = edades_tt_iniciales(cfg, &malla, &es_cont);
+        for (c, &t) in cortezas.iter_mut().zip(&edades) {
+            if c.cont {
+                c.edad_tt = t;
+            }
+        }
         let ids: Vec<u64> = (0..n as u64)
             .map(|i| splitmix64(seed ^ splitmix64(i + 1)))
             .collect();
@@ -1308,6 +1463,12 @@ impl Deriva {
             consumo_paso: Vec::new(),
             hundido_paso: Vec::new(),
             dorsal_fosa_paso: Vec::new(),
+            reinicio_km2_paso: [0.0; 4],
+            margen_fin_causa_paso: [0.0; 4],
+            rotura_rift_myr: vec![f64::NAN],
+            margenes_foto: Vec::new(),
+            fotos_supercontinente: Vec::new(),
+            rifts_empezados: 0,
             creacion_paso: Vec::new(),
             ruido_def,
             vecindad,
@@ -1342,6 +1503,7 @@ impl Deriva {
             self.traza_reloj = Some(std::time::Instant::now());
         }
         self.fosas_paso = ConteoFosas::default();
+        self.envejecer_tt();
         let v0 = self.inventario_continental();
         let c0 = self.cuentas;
         self.velocidades();
@@ -1492,6 +1654,7 @@ impl Deriva {
     /// Un paso sin movimiento de las placas (prueba de relajación de la adenda de balance §10: «se
     /// detiene la convergencia»): solo actúan la delaminación y la erosión con su sedimento.
     pub fn paso_sin_movimiento(&mut self) {
+        self.envejecer_tt();
         for p in self.placas.iter_mut().filter(|p| p.viva) {
             p.cort.iter_mut().for_each(|c| c.dh_dt = 0.0);
         }
@@ -1502,6 +1665,18 @@ impl Deriva {
         self.sedimento_al_mar(&erosion, z);
         self.paso += 1;
         self.t_myr = self.t0_myr + self.paso as f64 * self.cfg.dt_myr;
+    }
+
+    /// Envejecimiento de la edad tectonotérmica, al principio de cada paso (nota de isostasia con
+    /// litosfera §6.1 y §9), y puesta a cero del área reiniciada en el paso.
+    fn envejecer_tt(&mut self) {
+        let dt = self.cfg.dt_myr;
+        self.reinicio_km2_paso = [0.0; 4];
+        for p in self.placas.iter_mut().filter(|p| p.viva) {
+            for c in p.cort.iter_mut() {
+                c.edad_tt += dt;
+            }
+        }
     }
 
     /// Espesor máximo de la corteza continental que ve el mundo (km).
@@ -1529,6 +1704,7 @@ impl Deriva {
     /// (para las pruebas de la malla y de las fosas).
     pub fn paso_cinematico(&mut self) {
         let dt = self.cfg.dt_myr;
+        self.envejecer_tt();
         for p in self.placas.iter_mut().filter(|p| p.viva) {
             p.q = Quat::de_rotacion(add(p.omega, p.empuje), dt)
                 .componer(p.q)
@@ -2654,7 +2830,15 @@ impl Deriva {
                 let w = self.malla.area[ju] / a_tot;
                 if let Some(d) = self.placas[pj as usize].get_mut(lj) {
                     let r = a * w / aj;
-                    d.sumar_hc(c.hc * r, c.arco, rs, rc, h_cont_min, via::DIENTES);
+                    d.sumar_hc(
+                        c.hc * r,
+                        c.arco,
+                        c.edad_tt,
+                        rs,
+                        rc,
+                        h_cont_min,
+                        via::DIENTES,
+                    );
                     d.sed += c.sed * r;
                     if d.cont {
                         self.max_tras_dientes_km[cual] = self.max_tras_dientes_km[cual].max(d.h);
@@ -3254,19 +3438,27 @@ impl Deriva {
         }
         arco_dh.sort_unstable_by_key(|x| x.0);
         let mut pasa_a_cont = 0.0;
+        let mut reinicio = 0.0;
         for (k, vol) in arco_dh {
             let ku = k as usize;
             let mut a_cont = 0.0;
             let puesto = self.en_celda(&inv, ku, vol, false, |c, a, dh| {
-                if c.sumar_hc(dh, 1.0, rs, rc, h_cont_min, via::ARCO) {
+                if c.sumar_hc(dh, 1.0, 0.0, rs, rc, h_cont_min, via::ARCO) {
                     a_cont += a;
                 }
                 c.dh_dt += dh / cfg.dt_myr;
                 c.edad_orog = 0.0;
+                // La franja del arco que recibe corteza se calienta: su edad tectonotérmica vuelve
+                // a 0 (nota de isostasia con litosfera §6.2).
+                if c.cont {
+                    reinicio += a;
+                }
+                c.edad_tt = 0.0;
             });
             self.cuentas.arcos_km3 += puesto;
             pasa_a_cont += a_cont;
         }
+        self.reinicio_km2_paso[1] += reinicio;
         for t in tramos {
             if w_placa[self.dueno[t.k as usize] as usize] <= 0.0 {
                 let continental = self.corteza(t.k as usize).is_some_and(|c| c.continente());
@@ -3331,7 +3523,7 @@ impl Deriva {
                     let v = vol * self.malla.area[k as usize] / a_tot;
                     pegado += self.en_celda(&inv, k as usize, v, false, |c, _, dh| {
                         // El sedimento acrecionado no es de arco (adenda v9).
-                        c.sumar_hc(dh, 0.0, rs, rc, h_cont_min, via::ACRECION);
+                        c.sumar_hc(dh, 0.0, 0.0, rs, rc, h_cont_min, via::ACRECION);
                     });
                 }
             }
@@ -3681,20 +3873,28 @@ impl Deriva {
         self.cuentas.choque_sin_sitio_km3 += sin_sitio;
         dh_mundo.sort_unstable_by_key(|x| x.0);
         let h_cont_min = cfg.h_cont_min_km;
+        let mut reinicio = 0.0;
         for (k, vol, fa) in dh_mundo {
-            let puesto = self.en_celda(&inv, k as usize, vol, solo_cont, |c, _, dh| {
+            let puesto = self.en_celda(&inv, k as usize, vol, solo_cont, |c, a, dh| {
                 // Lo que deja un choque sobre un continente se une a él: fracción de arco 0 (adenda
                 // v9). Fuera de un continente (sobre fondo oceánico o sobre otro arco), la corteza de
                 // arco aún no se ha unido a ninguno y sigue siendo de arco (incremento-4-diseno.md
                 // §60).
                 let f_choque = if c.continente() { 0.0 } else { fa };
-                c.sumar_hc(dh, f_choque, rs, rc, h_cont_min, via::CHOQUE);
+                c.sumar_hc(dh, f_choque, 0.0, rs, rc, h_cont_min, via::CHOQUE);
                 c.dh_dt += dh / cfg.dt_myr;
                 c.edad_orog = 0.0;
+                // La franja que engruesa el choque se calienta (nota de isostasia con litosfera
+                // §6.2).
+                if c.cont {
+                    reinicio += a;
+                }
+                c.edad_tt = 0.0;
             });
             self.cuentas.choque_engrosamiento_km3 += puesto;
             self.cuentas.choque_sin_sitio_km3 += vol - puesto;
         }
+        self.reinicio_km2_paso[2] += reinicio;
     }
 
     /// Delaminación (adenda de balance v5 §6.6): por encima de `h_del` la base de la corteza pasa a
@@ -3704,6 +3904,7 @@ impl Deriva {
     fn delaminar(&mut self) {
         let cfg = &self.cfg;
         let mut total = 0.0;
+        let mut reinicio = 0.0;
         for p in self.placas.iter_mut().filter(|p| p.viva) {
             for s in 0..p.cort.len() {
                 let c = &mut p.cort[s];
@@ -3713,11 +3914,21 @@ impl Deriva {
                     c.hc -= dh;
                     c.h -= dh;
                     c.anotar_hc(antes, -dh, 0);
-                    total += dh * self.malla.area[p.celda[s] as usize];
+                    let a = self.malla.area[p.celda[s] as usize];
+                    total += dh * a;
+                    // Al desprenderse la raíz sube astenosfera caliente: la columna que pierde más
+                    // de ε_del se calienta (nota de isostasia con litosfera §6.2).
+                    if dh > cfg.eps_del_km {
+                        c.edad_tt = 0.0;
+                        if c.cont {
+                            reinicio += a;
+                        }
+                    }
                 }
             }
         }
         self.cuentas.delaminacion_km3 += total;
+        self.reinicio_km2_paso[3] += reinicio;
     }
 
     /// Flujo lateral de la corteza engrosada (adenda de balance v6 §6.6b): la corteza inferior de
@@ -3860,6 +4071,9 @@ impl Deriva {
                     let va = v * red.arco[g.i as usize];
                     red.delta_arco[g.i as usize] -= va;
                     red.delta_arco[e.j as usize] += va;
+                    let ve = v * red.edad[g.i as usize];
+                    red.delta_edad[g.i as usize] -= ve;
+                    red.delta_edad[e.j as usize] += ve;
                     // Solo hace falta mirar después las que aún no son fuente.
                     if !es_fuente[e.k2 as usize] {
                         recibe.push(e.k2);
@@ -3883,6 +4097,9 @@ impl Deriva {
                 let va = v * red.arco[li as usize];
                 red.delta_arco[li as usize] -= va;
                 red.delta_arco[lk as usize] += va;
+                let ve = v * red.edad[li as usize];
+                red.delta_edad[li as usize] -= ve;
+                red.delta_edad[lk as usize] += ve;
             }
             for x in 0..red.orden.len() {
                 let i = red.orden[x] as usize;
@@ -3893,6 +4110,8 @@ impl Deriva {
                 red.delta[i] = 0.0;
                 let dva = red.delta_arco[i];
                 red.delta_arco[i] = 0.0;
+                let dve = red.delta_edad[i];
+                red.delta_edad[i] = 0.0;
                 let (p, l) = red.muestras[i];
                 let a = malla.area[l as usize];
                 let sp = red.pos[i];
@@ -3909,7 +4128,11 @@ impl Deriva {
                 } else {
                     0.0
                 };
+                if c.hc > 0.0 {
+                    c.edad_tt = ((c.edad_tt * antes * a + dve) / (c.hc * a)).max(0.0);
+                }
                 red.arco[i] = c.arco;
+                red.edad[i] = c.edad_tt;
                 red.hc[i] = c.hc;
                 if dv > 0.0 {
                     movido += dv;
@@ -3985,8 +4208,6 @@ impl Deriva {
         let cfg = &self.cfg;
         let (rs, rc) = (cfg.rho_s, cfg.rho_c);
         let zeta = self.zeta_m;
-        // Lo que baja la superficie por km de roca retirada, con el rebote isostático.
-        let baja = (cfg.rho_m - cfg.rho_c) / cfg.rho_m;
         let mut ero: Vec<(u32, f64)> = Vec::new();
         let mut total = 0.0;
         for (pi, p) in self.placas.iter_mut().enumerate().filter(|(_, p)| p.viva) {
@@ -3995,6 +4216,8 @@ impl Deriva {
                 let c = &mut p.cort[s];
                 let zi = (isostasia::altura(cfg, c) - zeta) / 1000.0;
                 if zi > 0.0 && !cuenca[k_ve] {
+                    // Lo que baja la superficie por km de roca retirada, con su isostasia.
+                    let baja = isostasia::baja_por_km(cfg, c);
                     let e = cfg.e1_km_myr * zi.powf(cfg.n_ero) * cfg.dt_myr;
                     let sed_roca = c.sed * rs / rc;
                     let roca = e.min(zi / baja).min(sed_roca + c.hc);
@@ -4026,44 +4249,11 @@ impl Deriva {
     }
 
     /// Espesor de sedimento (km) que lleva la columna de la celda del mundo `k` hasta la altura
-    /// `z_obj` (m), con su isostasia (bisección sobre [`isostasia::altura`]).
+    /// `z_obj` (m), con su isostasia ([`isostasia::sedimento_hasta_columna`]).
     fn sed_hasta(&self, k: usize, z_obj: f64) -> f64 {
-        let Some(c0) = self.corteza(k) else {
-            return 0.0;
-        };
-        // La altura de `isostasia::altura` con `ds` km más de sedimento, con las mismas cuentas y en
-        // el mismo orden; lo que no depende del sedimento se calcula una vez.
-        let cfg = &self.cfg;
-        let (z0, b0) = if c0.cont {
-            (0.0, (cfg.rho_m - cfg.rho_c) * (c0.h - cfg.h_nivel_km))
-        } else {
-            (
-                -isostasia::profundidad_por_edad(cfg, c0.edad_oc),
-                (cfg.rho_m - cfg.rho_oc) * (c0.h - cfg.h_oc_km),
-            )
-        };
-        let (sed0, f_sed) = (c0.sed, cfg.rho_m - cfg.rho_s);
-        let altura = |ds: f64| isostasia::con_flotacion(cfg, z0, b0 + f_sed * (sed0 + ds));
-        if altura(0.0) >= z_obj {
-            return 0.0;
-        }
-        let (mut lo, mut hi) = (0.0, 1.0);
-        while altura(hi) < z_obj && hi < 1e3 {
-            hi *= 2.0;
-        }
-        for _ in 0..60 {
-            let mid = 0.5 * (lo + hi);
-            // Sin punto representable entre los dos, el resto de las vueltas no cambiaría nada.
-            if mid <= lo || mid >= hi {
-                break;
-            }
-            if altura(mid) < z_obj {
-                lo = mid;
-            } else {
-                hi = mid;
-            }
-        }
-        hi
+        self.corteza(k).map_or(0.0, |c0| {
+            isostasia::sedimento_hasta_columna(&self.cfg, c0, z_obj)
+        })
     }
 
     /// Mar abierto: las celdas de mar (`z < zeta`) conectadas al océano mundial, la mayor masa de
@@ -4485,7 +4675,7 @@ impl Deriva {
                 let h_cont_min = self.cfg.h_cont_min_km;
                 if let Some(d) = self.placas[a].get_mut(destino) {
                     let r = ar_b / ar_a;
-                    d.sumar_hc(c.hc * r, c.arco, rs, rc, h_cont_min, via::FUSION);
+                    d.sumar_hc(c.hc * r, c.arco, c.edad_tt, rs, rc, h_cont_min, via::FUSION);
                     d.sed += c.sed * r;
                 }
             }
@@ -4860,9 +5050,9 @@ impl Deriva {
     /// cuya suma de distancias a la fosa y al tramo de dorsal no pasa de `d_dc` más una celda: las
     /// que quedan entre los dos.
     ///
-    /// Apunta en `dorsal_fosa_paso` todos los encuentros del paso (D6), también con la regla apagada
-    /// (`subduccion_dorsales = false`). Orden fijo: pares (p, r) por índice; una franja por placa y
-    /// por paso, sin tocar una placa que ya cambió en el paso (lo demás, en el paso siguiente).
+    /// Apunta en `dorsal_fosa_paso` todos los encuentros del paso (D6). Orden fijo: pares (p, r) por
+    /// índice; una franja por placa y por paso, sin tocar una placa que ya cambió en el paso (lo
+    /// demás, en el paso siguiente).
     fn subduccion_de_dorsales(&mut self) -> bool {
         self.dorsal_fosa_paso.clear();
         let d_dc = self.cfg.d_dc_km;
@@ -4917,9 +5107,6 @@ impl Deriva {
                 if d >= d_dc {
                     return false;
                 }
-                if self.cfg.theta_dc_grados >= 180.0 {
-                    return true;
-                }
                 let x = self.malla.dir[b.k as usize];
                 let y = self.malla.dir[fuentes[f as usize] as usize];
                 let v = sub(y, x);
@@ -4945,9 +5132,6 @@ impl Deriva {
                 dorsal_km,
                 dist_min_km: dist_min,
             });
-            if !self.cfg.subduccion_dorsales {
-                continue;
-            }
             // La franja: entre el tramo de dorsal cercano y la fosa.
             let fuentes_d: Vec<u32> = cerca.iter().map(|&i| self.bordes[i].k).collect();
             let dd = self.distancias_en_placa(p, &fuentes_d, d_dc + lado);
@@ -5217,6 +5401,12 @@ impl Deriva {
         let (mut a_oc, mut edad_a, mut edad_max, mut a_cont) = (0.0, 0.0, 0.0f64, 0.0);
         let (mut h_max, mut h_cont, mut sed_tot, mut sed_oc) = (0.0f64, 0.0, 0.0, 0.0);
         let mut a_70 = 0.0;
+        // Nota de isostasia con litosfera §8: área continental y altura de la tierra por clase de
+        // edad tectonotérmica, y profundidad de los márgenes estirados distales (corteza de menos de
+        // 20 km) por tiempo desde la rotura.
+        let zeta = self.zeta_m;
+        let (mut a_edad, mut a_tierra_edad, mut z_tierra_edad) = ([0.0; 5], [0.0; 5], [0.0; 5]);
+        let (mut prof_margen, mut tect_margen, mut a_margen) = ([0.0; 6], [0.0; 6], [0.0; 6]);
         for k in 0..num {
             if let Some(cz) = self.corteza(k) {
                 let a = self.malla.area[k];
@@ -5227,6 +5417,22 @@ impl Deriva {
                     h_cont += cz.h * a;
                     if cz.h > 70.0 {
                         a_70 += a;
+                    }
+                    let ic = CLASES_EDAD_TT_MYR.partition_point(|&x| x <= cz.edad_tt) - 1;
+                    a_edad[ic] += a;
+                    let z = isostasia::altura(&self.cfg, cz) - zeta;
+                    if z >= 0.0 {
+                        a_tierra_edad[ic] += a;
+                        z_tierra_edad[ic] += z * a;
+                    }
+                    if cz.rift_id != 0 && cz.h < 20.0 {
+                        let im = CLASES_MARGEN_MYR.partition_point(|&x| x <= cz.edad_tt) - 1;
+                        prof_margen[im] -= z * a;
+                        // El basamento sin su sedimento, con agua encima (lo que mide el
+                        // «backstripping» y da McKenzie, 1978).
+                        let sin_sed = Corteza { sed: 0.0, ..*cz };
+                        tect_margen[im] -= (isostasia::altura(&self.cfg, &sin_sed) - zeta) * a;
+                        a_margen[im] += a;
                     }
                 } else {
                     a_oc += a;
@@ -5257,6 +5463,7 @@ impl Deriva {
             self.evento("supercontinente_roto", vec![], 0.0, a_cont, None);
         }
         self.eventos_de_inicio();
+        self.foto_supercontinente_si_toca();
         if !rodaje {
             self.v_rms_acum.0 += v_rms;
             self.v_rms_acum.1 += 1;
@@ -5345,6 +5552,32 @@ impl Deriva {
             rifts_estirando: self.rifts_activos.len() as u32,
             dorsal_fosa_n: self.dorsal_fosa_paso.len() as u32,
             dorsal_fosa_km: self.dorsal_fosa_paso.iter().map(|e| e.dorsal_km).sum(),
+            edad_tt_area_frac: a_edad.map(|x| if a_cont > 0.0 { x / a_cont } else { 0.0 }),
+            altura_tierra_por_edad_m: std::array::from_fn(|i| {
+                if a_tierra_edad[i] > 0.0 {
+                    z_tierra_edad[i] / a_tierra_edad[i]
+                } else {
+                    0.0
+                }
+            }),
+            tierra_por_edad_km2: a_tierra_edad,
+            reinicio_km2: self.reinicio_km2_paso,
+            margen_prof_m: std::array::from_fn(|i| {
+                if a_margen[i] > 0.0 {
+                    prof_margen[i] / a_margen[i]
+                } else {
+                    0.0
+                }
+            }),
+            margen_tect_m: std::array::from_fn(|i| {
+                if a_margen[i] > 0.0 {
+                    tect_margen[i] / a_margen[i]
+                } else {
+                    0.0
+                }
+            }),
+            margen_area_km2: a_margen,
+            margen_fin_causa_km: self.margen_fin_causa_paso,
             costa_margen_km,
             franja_estirada_km,
         });
@@ -5360,6 +5593,9 @@ impl Deriva {
         let num = self.malla.num;
         let lado = self.malla.lado_km;
         let mut conv_cerca = vec![false; num];
+        // Diagnóstico del supercontinente: qué borde convergente hay cerca (choque o, si no, fosa o
+        // convergencia difusa).
+        let mut choque_cerca = vec![false; num];
         for b in &self.bordes {
             if matches!(
                 b.tipo,
@@ -5367,6 +5603,9 @@ impl Deriva {
             ) {
                 for &j in self.vecindad.de(b.k as usize) {
                     conv_cerca[j as usize] = true;
+                    if b.tipo == TipoBorde::Colision {
+                        choque_cerca[j as usize] = true;
+                    }
                 }
             }
         }
@@ -5405,6 +5644,7 @@ impl Deriva {
         ahora.sort_unstable_by_key(|x| x.0);
         // Los que estaban y ya no: ¿les llegó un borde convergente?
         let (mut fin_km, mut fin_vida) = (0.0, 0.0);
+        let mut causa = [0.0; 4];
         let previos = std::mem::take(&mut self.margenes_previos);
         for &((id, l), edad) in &previos {
             if ahora.binary_search_by_key(&(id, l), |x| x.0).is_ok() {
@@ -5420,7 +5660,15 @@ impl Deriva {
                 fin_km += lado;
                 fin_vida += lado * edad;
             }
+            let i = match k {
+                Some(k) if choque_cerca[k] => 1,
+                Some(k) if conv_cerca[k] => 0,
+                Some(_) => 2,
+                None => 3,
+            };
+            causa[i] += lado;
         }
+        self.margen_fin_causa_paso = causa;
         self.margenes_previos = ahora;
         (
             largo,
@@ -5717,4 +5965,36 @@ fn resolver(k: &mut [f64], b: &mut [f64], n: usize) -> Vec<f64> {
         x[r] = s / d;
     }
     x
+}
+
+#[cfg(test)]
+mod pruebas {
+    use super::*;
+
+    #[test]
+    fn la_mezcla_de_edades_es_por_volumen_y_no_cambia_ningun_volumen() {
+        // Nota de isostasia con litosfera §10, prueba 3: juntar corteza mezcla la edad
+        // tectonotérmica por volumen y no toca ningún volumen (el sedimento pasa a roca como antes).
+        let (rs, rc) = (2400.0, 2800.0);
+        let mut c = Corteza {
+            edad_tt: 1000.0,
+            sed: 1.4,
+            ..Corteza::continental(30.0)
+        };
+        let roca = 1.4 * rs / rc;
+        let (h0, hc0) = (c.h, c.hc);
+        c.sumar_hc(10.0, 0.0, 200.0, rs, rc, 20.0, via::CHOQUE);
+        assert!((c.h - (h0 + roca + 10.0)).abs() < 1e-12);
+        assert!((c.hc - (hc0 + roca + 10.0)).abs() < 1e-12);
+        assert_eq!(c.sed, 0.0);
+        let esperada = (1000.0 * (hc0 + roca) + 200.0 * 10.0) / (hc0 + roca + 10.0);
+        assert!((c.edad_tt - esperada).abs() < 1e-9, "{}", c.edad_tt);
+        // Una columna oceánica sin corteza de tipo continental toma la edad del aporte.
+        let mut o = Corteza {
+            edad_tt: 80.0,
+            ..Corteza::oceanica(7.0)
+        };
+        o.sumar_hc(5.0, 1.0, 0.0, rs, rc, 20.0, via::ARCO);
+        assert_eq!(o.edad_tt, 0.0);
+    }
 }

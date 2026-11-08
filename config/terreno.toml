@@ -122,8 +122,31 @@ rho_s        = 2400.0      # sedimento compactado de los márgenes (corrección 
 h_oc_km      = 7.0
 h0_km        = 35.0        # corteza continental estable (± sigma_h0_km de ruido suave)
 sigma_h0_km  = 3.0
-h_nivel_km   = 32.0        # espesor continental que queda al nivel del mar (relación empírica)
 h_cont_min_km = 20.0       # un arco oceánico más grueso pasa a continental
+# Isostasia con litosfera (nota_isostasia_litosfera.md; regla R4 del estudio de isostasia continental,
+# docs/informes/2026-11-08_estudio_isostasia_continental.md, con los parámetros de la comprobación del §0:
+# herramientas/analisis/nota_isostasia_s0.py, sin las celdas donde la regla de Lamb deja más de 300 m de
+# residuo, y el sedimento contado como corteza, la variante que el motor puede llevar). La altura de una
+# columna continental de corteza h (con su sedimento) sobre una litosfera de L km es
+# H = [(ρ_ast − ρ_c_sup)·min(h, z_t) + (ρ_ast − ρ_c_inf)·max(0, h − z_t) − Δρ_ma·max(0, L − h)]/ρ_ast − H_0, y
+# bajo el mar la profundidad se multiplica por ρ_ast/(ρ_ast − ρ_w).
+rho_ast      = 3255.0      # astenosfera (Lamb et al. 2020: (ρ_m − ρ_a)/ρ_a = 1/93 con Δρ = 35)
+rho_c_sup    = 2750.0      # corteza superior (Christensen y Mooney 1995: 2 700–2 750; en el borde del rango, limitación conocida)
+rho_c_inf    = 3000.0      # corteza inferior (2 900–3 000; en el borde)
+z_t_km       = 15.0        # profundidad del paso de una a otra (15–25 km; en el borde)
+drho_ma      = 25.0        # contraste neto del manto litosférico con la astenosfera (Lamb: 20–40)
+drho_ma_arcaico = 15.0     # el del manto arcaico, más empobrecido (Poudjom Djomani et al. 2001; 0–20)
+t_arc_myr    = 2500.0      # edad tectonotérmica por encima de la cual el manto es arcaico (límite del Arcaico)
+l0_lit_km    = 93.6        # L_lin = l0 + l_pend·t (Artemieva 2006, TC1)
+l_pend_km_myr = 0.04
+l_min_km     = 50.0        # litosfera tras un evento (40–80; sale del borde en la comprobación del §0)
+tau_l_myr    = 100.0       # recuperación de la litosfera tras el evento (20–200)
+h0_lit_m     = 3076.9      # constante de referencia, fijada con el nivel del mar real en el ajuste
+eps_del_km   = 1.0         # delaminación mínima en un paso para reiniciar la edad (supuesto)
+# Edades tectonotérmicas de partida: la tierra de hoy de más de 500 Myr (55 %), menos 500, por clases
+# (tipos de corteza de CRUST1.0, alineados con las provincias de Artemieva y Mooney; nota_isostasia_s0.py).
+edad_tt_ini_bordes_myr = [0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0, 1750.0, 2000.0, 2250.0, 2500.0, 2750.0, 3000.0, 3250.0]
+edad_tt_ini_frac = [0.040, 0.068, 0.068, 0.068, 0.068, 0.068, 0.068, 0.068, 0.068, 0.068, 0.068, 0.058, 0.058, 0.069, 0.069, 0.028]
 # Fondo oceánico (Parsons y Sclater, 1977; §5.3)
 d_r_m        = 2500.0
 c_hs         = 350.0
@@ -187,8 +210,7 @@ a_min_frac   = 0.005       # tamaño mínimo de una placa al nacer (rift, salto 
 a_micro_mkm2 = 0.5         # por debajo, una placa es microplaca (del orden de las microplacas de Bird; 0,2–1)
 tau_micro_myr = 10.0       # tiempo sin fosa activa propia tras el que una microplaca es capturada (supuesto; 5–30)
 d_dc_km      = 300.0       # franja entre una dorsal y la fosa donde se hunde una de sus placas por debajo de la cual la dorsal muere (supuesto: los restos de Farallón capturados frente a California tenían unos cientos de km; 150–500)
-subduccion_dorsales = true # interruptor de la rama D mientras se mide (con false solo se miden los encuentros, D6)
-theta_dc_grados = 45.0     # la fosa está delante de la dorsal: su tramo más cercano, a menos de 45° de la dirección de apertura (geométrico: la franja entre las dos, no el costado de un punto triple; con 180, la letra de la nota)
+theta_dc_grados = 45.0     # la fosa está delante de la dorsal: su tramo más cercano, a menos de 45° de la dirección de apertura (geométrico: la franja entre las dos, no el costado de un punto triple; versión aceptada por el responsable el 2026-11-08)
 # Rifts (nota_rifts.md v2): cada bloque continental (región conexa de corteza continental de una
 # placa) se rompe en el paso con probabilidad 1 − exp(−λ_A·A_k·min(1, t_k/τ_ais)·Δt), con t_k el
 # tiempo que lleva sin romperse ni soldarse a otro continente; el trazado sigue su sutura más larga
@@ -200,8 +222,8 @@ l_sut_min_km = 450.0        # longitud mínima de una sutura para guiar la ruptu
 v_rift_cm_anio = 2.0
 v_sutura_cm_anio = 0.5
 t_sutura_myr = 10.0
-e1_km_myr    = 0.0075      # erosión a 1 km sobre el mar (km/Myr; adenda v5 §6.7: E = E_1·(z/1 km)^n_ero). Recalibrado con el mar nuevo (2026-11-07 g): relajación de India–Asia en 171 Myr (100–200; con 0,005, 242). La exportación al mar no cumple a la vez: 5,1 AU (5 semillas; objetivo ~1,8), por la base (fondo que se hunde y tierra alta de más; incremento-4-diseno.md §63)
-n_ero        = 2.5         # exponente de la erosión con la altura (rango 1,5–3; Montgomery y Brandon 2002). Con 3 (E_1 = 0,005) relaja en 132 Myr y exporta 5,5 AU; con 2 (E_1 = 0,014), 175 Myr y 5,4 AU
+e1_km_myr    = 0.02        # erosión a 1 km sobre el mar (km/Myr; adenda v5 §6.7: E = E_1·(z/1 km)^n_ero). Recalibrado con la isostasia con litosfera (2026-11-08, cuarta ronda; incremento-4-diseno.md §73): relajación de India–Asia en 159 Myr (100–200; con 0,015, 205; con 0,03, 105). La exportación al mar sigue sin cumplir: 4,4 AU (5 semillas; objetivo ~1,8), porque a la larga se exporta lo que añaden los arcos y los choques (la base, §63)
+n_ero        = 2.5         # exponente de la erosión con la altura (rango 1,5–3; Montgomery y Brandon 2002). Con la misma relajación (~160–175 Myr): con 3 (E_1 = 0,01), la tierra a 948 m y 3,7 AU; con 2 (E_1 = 0,03), a 736 m y 4,7 AU, con más corteza máxima (85 km) y más pérdida de volumen (−12 %). Las diferencias con 2,5 quedan dentro de la dispersión entre semillas
 deformacion  = 0.06        # deformación de bordes de Voronoi, cratones y líneas de rift (fracción del radio)
 # Malla, tiempo y detalle (§5.7)
 nivel_malla  = 2           # nivel del cubo del terreno (~52 km con n0 = 48; decisión del responsable)

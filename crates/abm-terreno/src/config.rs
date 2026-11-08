@@ -154,9 +154,37 @@ pub struct TectonicaCfg {
     pub h_oc_km: f64,
     pub h0_km: f64,
     pub sigma_h0_km: f64,
-    /// Espesor continental que queda al nivel del mar (relación empírica terrestre, §6.7).
-    pub h_nivel_km: f64,
     pub h_cont_min_km: f64,
+    // --- Isostasia con litosfera (nota_isostasia_litosfera.md: la regla R4 del estudio de
+    // isostasia continental, con los parámetros de su §0 y el sedimento contado como corteza) ---
+    /// Densidad de la astenosfera (kg/m³; Lamb et al. 2020).
+    pub rho_ast: f64,
+    /// Densidad de la corteza (con su sedimento) hasta `z_t` km de profundidad y por debajo
+    /// (kg/m³; Christensen y Mooney 1995).
+    pub rho_c_sup: f64,
+    pub rho_c_inf: f64,
+    pub z_t_km: f64,
+    /// Contraste neto del manto litosférico con la astenosfera (kg/m³) y el del manto arcaico, más
+    /// empobrecido (edad tectonotérmica de más de `t_arc`).
+    pub drho_ma: f64,
+    pub drho_ma_arcaico: f64,
+    pub t_arc_myr: f64,
+    /// Grosor de la litosfera según la edad tectonotérmica `t`: la recta de Artemieva (2006),
+    /// `L_lin = l0 + l_pend·t`, con recuperación tras el evento:
+    /// `L = L_min + (L_lin − L_min)·(1 − e^(−t/τ_L))` (km, Myr).
+    pub l0_lit_km: f64,
+    pub l_pend_km_myr: f64,
+    pub l_min_km: f64,
+    pub tau_l_myr: f64,
+    /// Constante de referencia de la altura (m): la fija el nivel del mar real en el ajuste.
+    pub h0_lit_m: f64,
+    /// Delaminación mínima en un paso para reiniciar la edad tectonotérmica (km).
+    pub eps_del_km: f64,
+    /// Edades tectonotérmicas de la corteza continental al empezar la deriva: la distribución de la
+    /// Tierra de hoy con las edades de más de 500 Myr, menos 500 (bordes de las clases, Myr, y área
+    /// de cada clase). Las más viejas, en el interior de cada continente.
+    pub edad_tt_ini_bordes_myr: Vec<f64>,
+    pub edad_tt_ini_frac: Vec<f64>,
     // --- Fondo oceánico (Parsons y Sclater, 1977; §5.3) ---
     pub d_r_m: f64,
     pub c_hs: f64,
@@ -285,13 +313,11 @@ pub struct TectonicaCfg {
     pub tau_micro_myr: f64,
     /// Rama D (subducción de dorsales): cuando la franja de una placa entre una de sus dorsales y una
     /// fosa activa donde se hunde es más estrecha que `d_dc` (km), la dorsal muere, la franja pasa a
-    /// la placa del otro lado de la dorsal y la fosa de enfrente se apaga. Interruptor mientras se
-    /// mide (CLAUDE §5): con `false`, solo se miden los encuentros (D6).
+    /// la placa del otro lado de la dorsal y la fosa de enfrente se apaga. Con `d_dc` = 0, no actúa.
     pub d_dc_km: f64,
-    pub subduccion_dorsales: bool,
     /// La fosa está delante de la dorsal si su tramo más cercano cae a menos de `θ_dc` (grados) de la
-    /// dirección de apertura hacia dentro de la placa: la franja entre las dos de la nota, no el
-    /// costado de un punto triple. Con 180, cualquier fosa a menos de `d_dc` (la letra de la nota).
+    /// dirección de apertura hacia dentro de la placa: la franja entre las dos, no el costado de un
+    /// punto triple (versión aceptada por el responsable el 2026-11-08).
     pub theta_dc_grados: f64,
     pub v_rift_cm_anio: f64,
     pub v_sutura_cm_anio: f64,
@@ -336,8 +362,28 @@ impl Default for TectonicaCfg {
             h_oc_km: 7.0,
             h0_km: 35.0,
             sigma_h0_km: 3.0,
-            h_nivel_km: 32.0,
             h_cont_min_km: 20.0,
+            rho_ast: 3255.0,
+            rho_c_sup: 2750.0,
+            rho_c_inf: 3000.0,
+            z_t_km: 15.0,
+            drho_ma: 25.0,
+            drho_ma_arcaico: 15.0,
+            t_arc_myr: 2500.0,
+            l0_lit_km: 93.6,
+            l_pend_km_myr: 0.04,
+            l_min_km: 50.0,
+            tau_l_myr: 100.0,
+            h0_lit_m: 3076.9,
+            eps_del_km: 1.0,
+            edad_tt_ini_bordes_myr: vec![
+                0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0, 1750.0,
+                2000.0, 2250.0, 2500.0, 2750.0, 3000.0, 3250.0,
+            ],
+            edad_tt_ini_frac: vec![
+                0.040, 0.068, 0.068, 0.068, 0.068, 0.068, 0.068, 0.068, 0.068, 0.068, 0.068, 0.058,
+                0.058, 0.069, 0.069, 0.028,
+            ],
             d_r_m: 2500.0,
             c_hs: 350.0,
             d_inf_m: 5310.0,
@@ -397,12 +443,11 @@ impl Default for TectonicaCfg {
             a_micro_mkm2: 0.5,
             tau_micro_myr: 10.0,
             d_dc_km: 300.0,
-            subduccion_dorsales: true,
             theta_dc_grados: 45.0,
             v_rift_cm_anio: 2.0,
             v_sutura_cm_anio: 0.5,
             t_sutura_myr: 10.0,
-            e1_km_myr: 0.0075,
+            e1_km_myr: 0.02,
             n_ero: 2.5,
             deformacion: 0.06,
             nivel_malla: 2,
@@ -920,6 +965,29 @@ impl TectonicaCfg {
         if !(self.a_micro_mkm2 >= 0.0 && self.tau_micro_myr >= 0.0 && self.d_dc_km >= 0.0) {
             return Err(invalid(
                 "se requiere a_micro_mkm2, tau_micro_myr y d_dc_km >= 0",
+            ));
+        }
+        if !(self.rho_ast > self.rho_w
+            && self.rho_c_sup < self.rho_ast
+            && self.rho_c_inf < self.rho_ast
+            && self.z_t_km >= 0.0
+            && self.drho_ma >= 0.0
+            && self.drho_ma_arcaico >= 0.0
+            && self.l_min_km > 0.0
+            && self.tau_l_myr > 0.0
+            && self.eps_del_km >= 0.0)
+        {
+            return Err(invalid(
+                "isostasia con litosfera: se requiere rho_c_sup, rho_c_inf < rho_ast, rho_w < rho_ast, z_t, drho_ma, eps_del >= 0 y l_min, tau_l > 0",
+            ));
+        }
+        if self.edad_tt_ini_bordes_myr.len() != self.edad_tt_ini_frac.len() + 1
+            || self.edad_tt_ini_bordes_myr.windows(2).any(|w| w[1] <= w[0])
+            || self.edad_tt_ini_frac.iter().any(|&f| f < 0.0)
+            || self.edad_tt_ini_frac.iter().sum::<f64>() <= 0.0
+        {
+            return Err(invalid(
+                "edad_tt_ini_bordes_myr (creciente) debe tener una entrada más que edad_tt_ini_frac (>= 0, con suma > 0)",
             ));
         }
         if !(self.lambda_a_rift >= 0.0

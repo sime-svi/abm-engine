@@ -328,7 +328,7 @@ fn cfg_india_asia() -> TectonicaCfg {
         // océano exterior tiene a la vez una dorsal con Asia y una fosa bajo la placa de la India, y
         // la regla se las comería paso a paso.
         v_inv_km_myr: 0.0,
-        subduccion_dorsales: false,
+        d_dc_km: 0.0,
         n_min: 2,
         recalibrar_myr: 1e9, // c_b se calibra una vez, al principio
         ..TectonicaCfg::default()
@@ -772,6 +772,98 @@ fn un_rift_estira_sus_bordes_en_rampa_conservando_el_volumen_y_despues_abre_el_o
         h[0] < 20.0 && h[0] < h[1] && h[1] < h[2] && h[2] <= h[3] + 1.0 && h[3] > 33.0,
         "rampa de h_rot junto al eje a h_0 lejos: {h:?} km a <50 / 50–100 / 100–150 / 200–300 km"
     );
+    // Nota de isostasia con litosfera §6.2 y §10, prueba 2: al romper, la franja estirada de cada
+    // lado lleva su margen y su edad tectonotérmica vuelve a 0; desde ahí envejece con la deriva.
+    let rotura = d
+        .eventos
+        .iter()
+        .filter(|e| e.tipo == "rotura_rift")
+        .map(|e| e.myr)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let margen: Vec<_> = [i1, i2]
+        .iter()
+        .flat_map(|&i| d.placas[i].cort.iter())
+        .filter(|c| c.cont && c.rift_id != 0)
+        .collect();
+    assert!(!margen.is_empty(), "las franjas estiradas llevan su margen");
+    let lados: std::collections::BTreeSet<u32> = margen.iter().map(|c| c.rift_id & 1).collect();
+    assert_eq!(lados.len(), 2, "un margen a cada lado del rift");
+    // El evento lleva la hora del principio del paso en que se rompe; la edad cuenta desde el final
+    // de ese paso (el envejecimiento va al principio de cada paso).
+    let desde_rotura = d.t_myr - (rotura + d.cfg.dt_myr);
+    let jovenes = margen
+        .iter()
+        .filter(|c| (c.edad_tt - desde_rotura).abs() < 1.0)
+        .count();
+    assert!(
+        jovenes * 10 >= margen.len() * 9,
+        "la edad de los márgenes cuenta desde la rotura: {jovenes} de {} ({desde_rotura} Myr)",
+        margen.len()
+    );
+}
+
+#[test]
+fn las_edades_tectonotermicas_de_partida_son_viejas_por_dentro_y_deterministas() {
+    // Nota de isostasia con litosfera §6.5 y §10, prueba 4: misma semilla, mismas edades; las más
+    // viejas, en el interior de cada continente; su distribución, la de la config.
+    let cfg = cfg_rapida();
+    let a = Deriva::nueva(&cfg, 21, Malla::new(24, 1, 6371.0));
+    let b = Deriva::nueva(&cfg, 21, Malla::new(24, 1, 6371.0));
+    let edades = |d: &Deriva| -> Vec<f64> {
+        d.placas
+            .iter()
+            .flat_map(|p| p.cort.iter().map(|c| c.edad_tt))
+            .collect()
+    };
+    assert_eq!(edades(&a), edades(&b), "misma semilla, mismas edades");
+    // Interior (sin vecinas oceánicas a dos anillos) frente a costa.
+    let (mut interior, mut costa) = ((0.0, 0.0), (0.0, 0.0));
+    let mut a_cont = 0.0;
+    let mut a_viejo = 0.0;
+    for k in 0..a.malla.num {
+        let Some(c) = a.corteza(k) else { continue };
+        if !c.cont {
+            continue;
+        }
+        let w = a.malla.area[k];
+        a_cont += w;
+        if c.edad_tt > 2000.0 {
+            a_viejo += w;
+        }
+        let cerca_del_mar = a.malla.vec[k].iter().any(|&v| {
+            v != NADA
+                && (a.corteza(v as usize).is_some_and(|cv| !cv.cont)
+                    || a.malla.vec[v as usize]
+                        .iter()
+                        .any(|&u| u != NADA && a.corteza(u as usize).is_some_and(|cu| !cu.cont)))
+        });
+        let x = if cerca_del_mar {
+            &mut costa
+        } else {
+            &mut interior
+        };
+        x.0 += c.edad_tt * w;
+        x.1 += w;
+    }
+    let (ti, tc) = (interior.0 / interior.1, costa.0 / costa.1);
+    assert!(
+        ti > tc + 300.0,
+        "interior {ti:.0} Myr frente a costa {tc:.0}"
+    );
+    // La fracción de más de 2 000 Myr, la de la distribución (las clases de 2 000 en adelante).
+    let esperada: f64 = cfg
+        .edad_tt_ini_bordes_myr
+        .windows(2)
+        .zip(&cfg.edad_tt_ini_frac)
+        .filter(|(w, _)| w[0] >= 2000.0)
+        .map(|(_, f)| f)
+        .sum::<f64>()
+        / cfg.edad_tt_ini_frac.iter().sum::<f64>();
+    assert!(
+        (a_viejo / a_cont - esperada).abs() < 0.03,
+        "{:.3} del continente de más de 2 000 Myr (distribución: {esperada:.3})",
+        a_viejo / a_cont
+    );
 }
 
 // --- Rifts (nota_rifts.md §10) -------------------------------------------------------------------
@@ -1138,7 +1230,7 @@ fn mover_las_placas_conserva_exactamente_la_corteza() {
 fn la_relajacion_de_un_orogeno_tarda_entre_100_y_200_myr() {
     // Adenda de balance §10, prueba 2: tras el choque India–Asia se detiene la convergencia y el
     // espesor máximo vuelve a menos de 38 km en 100–200 Myr (con E_1 y n_ero calibrados así,
-    // adenda v5).
+    // adenda v5; recalibrados con la isostasia con litosfera, incremento-4-diseno.md §73).
     let (h0, t) = relajacion(&cfg_india_asia(), 1, 48, 50);
     assert!(h0 > 60.0, "el choque debe engrosar la corteza: {h0:.1} km");
     assert!((100.0..=200.0).contains(&t), "relajación en {t} Myr");
@@ -2997,8 +3089,12 @@ fn la_losa_sigue_tirando_tras_el_choque_y_se_rompe_a_los_t_rot() {
         (t - t_rot).abs() <= 2.0,
         "la losa se rompe a los t_rot = {t_rot} Myr del choque: {t}"
     );
+    // El frente visible (tres bordes de choque) se adelanta al inicio del choque del modelo (el
+    // primer solape continental): hasta 3 Myr con E_1 = 0,0075 y 4 Myr con E_1 = 0,02, la erosión
+    // recalibrada con la isostasia con litosfera (incremento-4-diseno.md §73). La rotura respecto
+    // al inicio del modelo no cambia (la aserción de arriba).
     assert!(
-        ((rotura - inicio) as f64 - t_rot).abs() <= 3.0,
+        ((rotura - inicio) as f64 - t_rot).abs() <= 4.0,
         "rotura {rotura} Myr tras el inicio del choque {inicio}"
     );
     assert!(
@@ -4453,23 +4549,271 @@ fn una_dorsal_que_llega_a_la_fosa_muere_y_su_franja_pasa_a_la_placa_del_otro_lad
     assert!(err < 1e-9, "el balance de la corteza cierra: {err:.2e}");
 }
 
-#[test]
-fn con_la_rama_d_apagada_solo_se_miden_los_encuentros() {
-    // D6 se mide también sin la regla: el encuentro se apunta y no pasa nada más.
-    let cfg = TectonicaCfg {
-        subduccion_dorsales: false,
-        ..cfg_dorsal()
-    };
-    let mut d = dorsal_junto_a_la_fosa(&cfg);
-    let mut visto = false;
-    for _ in 0..5 {
-        d.dar_paso();
-        visto |= d
-            .dorsal_fosa_paso
-            .iter()
-            .any(|e| e.p == 20 && e.r == 10 && e.dist_min_km < cfg.d_dc_km);
+// --- Nivel del mar y edad del fondo (nota de isostasia con litosfera; ronda del 2026-11-08) -------
+
+/// Edad (Myr) del cuantil `q` de una distribución por clases de 10 Myr (`frac`), uniforme dentro de
+/// cada clase.
+fn edad_del_cuantil_10myr(frac: &[f64], q: f64) -> f64 {
+    let total: f64 = frac.iter().sum();
+    let mut acum = 0.0;
+    for (i, &f) in frac.iter().enumerate() {
+        let f = f / total;
+        if f > 0.0 && acum + f >= q {
+            return 10.0 * (i as f64 + (q - acum) / f);
+        }
+        acum += f;
     }
-    assert!(visto, "se mide el encuentro entre la dorsal y la fosa");
-    assert!(!d.eventos.iter().any(|e| e.tipo == "subduccion_dorsal"));
-    assert!(d.placas.iter().any(|p| p.viva && p.id == 20));
+    10.0 * frac.len() as f64
+}
+
+#[test]
+#[ignore = "exploratoria: el nivel del mar al final de la deriva con las edades del fondo del modelo y con las de la Tierra en los mismos cuantiles (Seton et al. 2020, config/referencias/tierra_relieve.toml); SEMILLAS=42,1,2,3,4 y VARIANTES como en deriva_en_varias_semillas (~5 min)"]
+fn diagnostico_nivel_del_mar_y_edad_del_fondo() {
+    use abm_terreno::tectonica::deriva::Corteza;
+    use abm_terreno::tectonica::isostasia;
+    let semillas: Vec<u64> = std::env::var("SEMILLAS")
+        .unwrap_or_else(|_| "42,1,2,3,4".into())
+        .split(',')
+        .map(|x| x.trim().parse().expect("semilla"))
+        .collect();
+    let variante = std::env::var("VARIANTES").unwrap_or_default();
+    let ajustes: Vec<String> = variante
+        .split(',')
+        .map(|x| x.trim().to_string())
+        .filter(|x| !x.is_empty())
+        .collect();
+    let referencia: toml::Value = toml::from_str(
+        &std::fs::read_to_string("../../config/referencias/tierra_relieve.toml")
+            .expect("tierra_relieve.toml"),
+    )
+    .expect("toml");
+    let frac_tierra: Vec<f64> = referencia["fondo_oceanico"]["edades"]["area_frac_por_10_myr"]
+        .as_array()
+        .expect("area_frac_por_10_myr")
+        .iter()
+        .map(|x| x.as_float().expect("número"))
+        .collect();
+    let media_tierra: f64 = frac_tierra
+        .iter()
+        .enumerate()
+        .map(|(i, f)| f * (10.0 * i as f64 + 5.0))
+        .sum::<f64>()
+        / frac_tierra.iter().sum::<f64>();
+    let res: Vec<(u64, [f64; 7], [[f64; 4]; 5])> = std::thread::scope(|sc| {
+        let hilos: Vec<_> = semillas
+            .iter()
+            .map(|&s| {
+                let (ajustes, frac_tierra) = (&ajustes, &frac_tierra);
+                sc.spawn(move || {
+                    let cfg = abm_terreno::config::TerrenoConfig::load_con(
+                        "../../config/terreno.toml",
+                        ajustes,
+                    )
+                    .expect("config");
+                    let tc = cfg.tectonica.clone();
+                    let malla = Malla::new(cfg.planet.n0, tc.nivel_malla, cfg.planet.r_km);
+                    let mut d = Deriva::nueva(&tc, s, malla);
+                    let pasos = (tc.t_deriva_myr / tc.dt_myr).round() as u64;
+                    for _ in 0..pasos {
+                        d.dar_paso();
+                    }
+                    let z = d.alturas();
+                    let vol = tc.gel_m / 1000.0 * d.malla.area_total();
+                    let zeta = isostasia::nivel_del_mar(&z, &d.malla.area, vol);
+                    // Cuantil de área de cada celda oceánica por su edad (desempate por índice).
+                    let mut oc: Vec<(f64, usize)> = (0..d.malla.num)
+                        .filter_map(|k| d.corteza(k).filter(|c| !c.cont).map(|c| (c.edad_oc, k)))
+                        .collect();
+                    oc.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+                    let a_oc: f64 = oc.iter().map(|&(_, k)| d.malla.area[k]).sum();
+                    let edad_media: f64 =
+                        oc.iter().map(|&(e, k)| e * d.malla.area[k]).sum::<f64>() / a_oc;
+                    let mut z_t = z.clone();
+                    let mut acum = 0.0;
+                    for &(_, k) in &oc {
+                        let a = d.malla.area[k];
+                        let q = (acum + 0.5 * a) / a_oc;
+                        acum += a;
+                        let c = d.corteza(k).expect("corteza");
+                        let nueva = Corteza {
+                            edad_oc: edad_del_cuantil_10myr(frac_tierra, q),
+                            ..*c
+                        };
+                        z_t[k] = isostasia::altura(&tc, &nueva);
+                    }
+                    let zeta_t = isostasia::nivel_del_mar(&z_t, &d.malla.area, vol);
+                    // Profundidad media del océano (sin la corteza continental) con cada nivel.
+                    let prof = |z: &[f64], zeta: f64| {
+                        let (mut s, mut a) = (0.0, 0.0);
+                        for &(_, k) in &oc {
+                            if z[k] < zeta {
+                                s += (zeta - z[k]) * d.malla.area[k];
+                                a += d.malla.area[k];
+                            }
+                        }
+                        s / a.max(1e-9)
+                    };
+                    let f_cont = (0..d.malla.num)
+                        .filter(|&k| d.corteza(k).is_some_and(|c| c.cont))
+                        .map(|k| d.malla.area[k])
+                        .sum::<f64>()
+                        / d.malla.area_total();
+                    // §11.3: por clase de edad tectonotérmica, la tierra (área, altura media sobre el
+                    // mar, corteza con su sedimento y litosfera medias).
+                    let clases = abm_terreno::tectonica::deriva::CLASES_EDAD_TT_MYR;
+                    let mut por_clase = [[0.0f64; 4]; 5];
+                    for (k, &zk) in z.iter().enumerate() {
+                        let Some(c) = d.corteza(k).filter(|c| c.cont) else {
+                            continue;
+                        };
+                        if zk < zeta {
+                            continue;
+                        }
+                        let i = clases.partition_point(|&x| x <= c.edad_tt) - 1;
+                        let a = d.malla.area[k];
+                        por_clase[i][0] += a;
+                        por_clase[i][1] += (zk - zeta) * a;
+                        por_clase[i][2] += (c.h + c.sed) * a;
+                        por_clase[i][3] += isostasia::litosfera_km(&tc, c.edad_tt) * a;
+                    }
+                    let tierra: f64 = por_clase.iter().map(|x| x[0]).sum();
+                    for x in por_clase.iter_mut() {
+                        if x[0] > 0.0 {
+                            x[1] /= x[0];
+                            x[2] /= x[0];
+                            x[3] /= x[0];
+                            x[0] /= tierra;
+                        }
+                    }
+                    (
+                        s,
+                        [
+                            zeta,
+                            zeta_t,
+                            edad_media,
+                            prof(&z, zeta),
+                            prof(&z_t, zeta_t),
+                            f_cont,
+                            d.zeta_m,
+                        ],
+                        por_clase,
+                    )
+                })
+            })
+            .collect();
+        hilos.into_iter().map(|h| h.join().expect("hilo")).collect()
+    });
+    println!(
+        "Edad media del fondo de la Tierra (Seton et al. 2020): {media_tierra:.1} Myr. Variante: [{variante}]"
+    );
+    println!(
+        "semilla | nivel del mar (m) | con las edades de la Tierra | coste de la edad | edad media | prof. fondo oceánico (m), modelo / Tierra | f_cont | zeta de la deriva"
+    );
+    for (s, r, _) in &res {
+        println!(
+            "{s:>7} | {:>8.0} | {:>8.0} | {:>+6.0} | {:>6.1} | {:>6.0} / {:>6.0} | {:.3} | {:.0}",
+            r[0],
+            r[1],
+            r[0] - r[1],
+            r[2],
+            r[3],
+            r[4],
+            r[5],
+            r[6]
+        );
+    }
+    let n = res.len() as f64;
+    let m = |i: usize| res.iter().map(|x| x.1[i]).sum::<f64>() / n;
+    println!(
+        "  media | {:>8.0} | {:>8.0} | {:>+6.0} | {:>6.1} | {:>6.0} / {:>6.0} | {:.3}",
+        m(0),
+        m(1),
+        m(0) - m(1),
+        m(2),
+        m(3),
+        m(4),
+        m(5)
+    );
+    println!(
+        "§11.3, la tierra por clase de edad tectonotérmica (media de las semillas): fracción de la tierra, altura media (m), corteza con su sedimento (km), litosfera (km)"
+    );
+    let nombres = ["0–100", "100–500", "500–1 600", "1 600–2 500", "> 2 500"];
+    for (i, nom) in nombres.iter().enumerate() {
+        let mc = |j: usize| res.iter().map(|x| x.2[i][j]).sum::<f64>() / n;
+        println!(
+            "  {nom:>12}: {:.3} | {:>6.0} m | {:>5.1} km | {:>5.1} km",
+            mc(0),
+            mc(1),
+            mc(2),
+            mc(3)
+        );
+    }
+}
+
+#[test]
+#[ignore = "exploratoria: huella del estado final de la deriva del planeta (SEMILLA, por defecto 2), para comparar procesos distintos (determinismo, CLAUDE §6)"]
+fn diagnostico_huella_de_la_deriva() {
+    let semilla: u64 = std::env::var("SEMILLA")
+        .ok()
+        .and_then(|x| x.parse().ok())
+        .unwrap_or(2);
+    let cfg = abm_terreno::config::TerrenoConfig::load_con("../../config/terreno.toml", &[])
+        .expect("config");
+    let tc = cfg.tectonica.clone();
+    let malla = Malla::new(cfg.planet.n0, tc.nivel_malla, cfg.planet.r_km);
+    let mut d = Deriva::nueva(&tc, semilla, malla);
+    let pasos = (tc.t_deriva_myr / tc.dt_myr).round() as u64;
+    // FNV-1a sobre los bits de todo lo que la génesis toma de la deriva y de su estado.
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut mete = |x: u64| {
+        for b in x.to_le_bytes() {
+            h ^= b as u64;
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+    };
+    for paso in 1..=pasos {
+        d.dar_paso();
+        if paso % 50 == 0 || paso == pasos {
+            let mut hp: u64 = 0;
+            for p in d.placas.iter().filter(|p| p.viva) {
+                for c in &p.cort {
+                    for x in [
+                        c.h,
+                        c.hc,
+                        c.sed,
+                        c.arco,
+                        c.edad_oc,
+                        c.edad_orog,
+                        c.dh_dt,
+                        c.edad_tt,
+                    ] {
+                        hp = hp.rotate_left(7) ^ x.to_bits();
+                    }
+                }
+            }
+            println!("paso {paso}: {hp:016x}");
+        }
+    }
+    for p in d.placas.iter().filter(|p| p.viva) {
+        mete(p.id);
+        for c in &p.cort {
+            for x in [
+                c.h,
+                c.hc,
+                c.sed,
+                c.arco,
+                c.edad_oc,
+                c.edad_orog,
+                c.dh_dt,
+                c.edad_tt,
+            ] {
+                mete(x.to_bits());
+            }
+        }
+    }
+    for k in 0..d.malla.num {
+        mete(d.dueno[k] as u64);
+        mete(d.rep[k] as u64);
+    }
+    println!("huella final de la deriva (semilla {semilla}): {h:016x}");
 }
