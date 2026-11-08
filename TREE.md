@@ -188,9 +188,11 @@ abm/
 │       │   ├── [x] nota_demografia_placas.md              # Nota del responsable, v2: demografía de placas; A2, retirada de las fantasma y rama D (subducción de dorsales) con D6 (IMPLEMENTADA, rama terreno-demografia-placas; §66, §69)
 │       │   ├── [x] estudio_isostasia_continental.md       # Protocolo del responsable: estudio de isostasia continental previo al diseño (HECHO con datos reales; §70; informe en docs/informes/)
 │       │   ├── [x] nota_isostasia_litosfera.md            # Nota del responsable: isostasia con litosfera (R4) y edad tectonotérmica (IMPLEMENTADA, en main; §72–§73)
-│       │   ├── [x] nota_hundimiento_margenes.md           # Nota del responsable: hundimiento térmico de McKenzie en las franjas estiradas (IMPLEMENTADA, rama terreno-margenes-calientes-succion; §75–§76)
-│       │   ├── [x] nota_puntos_calientes.md               # Nota del responsable: puntos calientes, mesetas, trazas y abombamientos, F_int (IMPLEMENTADA, misma rama; §75–§76)
-│       │   └── [x] nota_succion_losas.md                  # Nota del responsable: succión de las losas y de los restos, soldadura tras un choque agotado (IMPLEMENTADA, misma rama; §75–§76; los choques no se agotan: decide el responsable)
+│       │   ├── [x] nota_hundimiento_margenes.md           # Nota del responsable: hundimiento térmico de McKenzie en las franjas estiradas (IMPLEMENTADA, en main; §75–§76)
+│       │   ├── [x] nota_puntos_calientes.md               # Nota del responsable: puntos calientes, mesetas, trazas y abombamientos, F_int (IMPLEMENTADA, en main; §75–§76)
+│       │   ├── [x] nota_succion_losas.md                  # Nota del responsable: succión de las losas y de los restos, soldadura tras un choque agotado (IMPLEMENTADA, en main, y APAGADA: ε_suc = 0 hasta arreglar los choques)
+│       │   ├── [x] cierre_planeta_inventado_v1.md         # Cierre del planeta inventado v1 (CONGELADO, 2026-11-08): tabla de cierre sin succión (5 semillas), decisiones fijadas y ampliación futura
+│       │   └── [ ] diseno_modo_tierra.md                  # Diseño del responsable: modo Tierra real (Fase 1, Tierra actual: EN CURSO, rama terreno-modo-tierra; Fase 2, la Tierra del pasado, esbozada)
 │       ├── paquetes/              # Fase: código dividido en el workspace de paquetes
 │       │   └── [x] README.md          # Qué es cada paquete, nudos deshechos, antes → ahora
 │       └── agentes/               # Fase: biología de los agentes por días (EN CURSO)
@@ -272,21 +274,22 @@ Estado:
 nacimientos y muertes continuos, gracias a la relación `g < m < apetito` (regeneración por celda <
 metabolismo < apetito; `m = 2 > g = 1`). Detalle en `docs/design/inicial/`.
 
-- **Relieve tectónico (incremento 4, `docs/design/terreno/incremento-4-diseno.md`; en medida: antes de congelarla se arregla el exceso de fosas, nota de demografía de placas):**
-  - deriva de placas de 500 Myr en la malla de nivel 2 (~52 km), en la caché de la génesis; tiempo con la regla relativa de la batería (≤ +5 % frente a la versión anterior a la vez, techo 330 s): con las tres notas de la quinta ronda, 259,5 s frente a 247,2 de `main` (+5,0 %);
-  - márgenes que se hunden (McKenzie), puntos calientes (mesetas, trazas, abombamientos) y succión de las losas (rama `terreno-margenes-calientes-succion`, sin fusionar);
+- **Relieve tectónico (incremento 4, `docs/design/terreno/incremento-4-diseno.md`): el planeta inventado v1, CONGELADO el 2026-11-08** (`docs/design/terreno/cierre_planeta_inventado_v1.md`: tabla de cierre sin succión con 5 semillas, decisiones fijadas y ampliación futura). Es el modo inventado del motor y debe salir idéntico byte a byte mientras se construye el modo Tierra:
+  - deriva de placas de 500 Myr en la malla de nivel 2 (~52 km), en la caché de la génesis; tiempo con la regla relativa de la batería (≤ +5 % frente a la versión anterior a la vez, techo 330 s): con la succión apagada, 238,0 s frente a 246,4 de `main` (−3,4 %);
+  - márgenes que se hunden (McKenzie), puntos calientes (mesetas, trazas, abombamientos) y succión de las losas, **apagada** (`ε_suc` = 0, decisión del responsable: se enciende cuando los choques se frenen hasta parar);
   - **isostasia con litosfera** (regla R4 y edad tectonotérmica por celda; nota de isostasia con litosfera): la tierra a 781 m de media (la Tierra 671), un 7 % por encima de 2 000 m (5,3 %) y el nivel del mar a −140 m, con `E_1` 0,02;
   - placas a 4,65 cm/año (la Tierra 4,39), con las correlaciones de Forsyth y Uyeda; India–Asia frena a 1/3 (`c_col` calibrado);
   - balance de la corteza continental (adenda de balance v9): arcos, erosión por subducción, prisma, choques con `η` según el grosor y el origen de arco por fracción, delaminación, flujo lateral cúbico, erosión con la altura y sedimento al mar, con balance exacto por paso;
   - bordes de placa (nota de bordes) y ciclo de las fosas (nota de fosas v6): nacimiento, invasión de márgenes pasivos, rotura de la losa;
   - rifts por bloques y por suturas (nota de rifts): ~5,8 rupturas por 100 Myr, ~1 de cada 4 por una sutura, con márgenes que se estiran (adenda v8);
-  - tabla de cierre (5 semillas, `herramientas/planeta_semillas.py`; 2026-11-08, cuarta ronda): fondo oceánico de 84 Myr de media (la Tierra 64), nivel del mar a −140 m, ΔV_cont −7,4 %, choques de 17 700 km (Bird 23 000). Siguen lejos de la Tierra la fosa (×1,7), el sedimento al mar (4,4 AU, ≈1,8), la pérdida en choques (1,2 AU, 0,4–0,7), los márgenes pasivos, la tierra baja (16 %, la Tierra 28 %), la plataforma (10 km, 43) y el hundimiento de los márgenes (0,38 km en 100 Myr, 2–3);
+  - tabla de cierre del planeta congelado (5 semillas, `herramientas/planeta_semillas.py`; 2026-11-08, sexta ronda): tierra a 902 m (la Tierra 671), nivel del mar a −106 m, fondo oceánico de 91 Myr (64), ΔV_cont −6,3 %, choques de 23 400 km (Bird 23 000), márgenes hundidos como McKenzie, magmatismo intraplaca de 1,36 AU. Siguen lejos de la Tierra la fosa (×1,7), el sedimento al mar (5,0 AU, ≈1,8), la pérdida en choques (1,3 AU, 0,4–0,7), los márgenes pasivos (79 Myr, 130–180), la tierra baja (13 %, la Tierra 28 %), la plataforma (10 km, 43) y una corteza demasiado joven;
   - referencias de la Tierra en `config/referencias/`;
   - interruptor `worldgen.relieve`: con `"ruido"`, el relieve de ruido de antes.
 
 **Pendiente (fases siguientes):**
+- **Modo Tierra real** (`docs/design/terreno/diseno_modo_tierra.md`, rama `terreno-modo-tierra`): Fase 1, la Tierra actual (relieve, hielo, clima mensual y variabilidad de años reales), EN CURSO; Fase 2, la Tierra del pasado, esbozada.
 - **Pendientes obligatorios de realismo** (CLAUDE §2.8; responsable, 2026-11-05), en orden:
-  - **relieve tectónico, lo que falta para que sea el de la Tierra** (hallazgos de `incremento-4-diseno.md` §6–§7):
+  - **relieve tectónico, ampliación futura del planeta inventado congelado** (lista en orden en `cierre_planeta_inventado_v1.md` §4: la resistencia de los choques, la succión de las losas, el supercontinente, el exceso de fosas, la corteza joven, la plataforma, el retroceso de las fosas y la topografía dinámica; hallazgos de `incremento-4-diseno.md` §6–§7):
     0. ~~la isostasia continental~~ **hecha** (2026-11-08, cuarta ronda; nota de isostasia con litosfera, `incremento-4-diseno.md` §72–§73): la regla R4 con la edad tectonotérmica por celda. **Limitaciones conocidas:**
        - **la densidad de la corteza (`rho_c_sup` 2 750, `rho_c_inf` 3 000) y la profundidad de su paso (`z_t_km` 15) quedan en el borde de sus rangos publicados** (Christensen y Mooney 1995) también sin las celdas con más de 300 m de residuo de Lamb (comprobación del §0 de la nota, `nota_isostasia_s0.py`). El ajuste empuja hacia una corteza más ligera arriba y más densa abajo de lo publicado: lo que la regla no tiene (la topografía dinámica, la flexión) se cuela en esos tres parámetros;
        - el sedimento cuenta como corteza (con la densidad de la capa en que está), no como relleno sin flotación: el reparto del sedimento del motor necesita que el sedimento suba la columna (§11.1 de la nota);

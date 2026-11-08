@@ -7,7 +7,7 @@
 > Complementa a `TREE.md` (qué archivos hay) y a los documentos de `docs/design/` (el porqué de cada
 > regla). Se actualiza en cada ronda que añade, quita o reordena una regla.
 
-Última actualización: 2026-11-08 (quinta ronda) — `main` = 473b805 (la isostasia con litosfera, la regla relativa del tiempo y los márgenes como entidades). Rama `terreno-margenes-calientes-succion`, sin fusionar: hundimiento térmico de McKenzie en los márgenes, puntos calientes (mesetas, trazas, abombamientos) y succión de las losas profundas y de los restos de losa, con la soldadura tras un choque agotado.
+Última actualización: 2026-11-08 (sexta ronda) — **el planeta inventado v1 queda congelado** (`docs/design/terreno/cierre_planeta_inventado_v1.md`) y se fusiona en `main` con el hundimiento térmico de McKenzie en los márgenes, los puntos calientes (mesetas, trazas, abombamientos) y la succión de las losas, programada pero **apagada** (`ε_suc` = 0). Empieza el modo Tierra real (`docs/design/terreno/diseno_modo_tierra.md`).
 
 Leyenda del estado de un parámetro (CLAUDE §2.8):
 - **medido**: lleva su valor físico real;
@@ -67,7 +67,7 @@ conservan exactamente: la deriva nunca copia corteza.
 
 | # | Etapa | Qué hace | Código | Diseño |
 |---|---|---|---|---|
-| 1 | Velocidades | Equilibrio de fuerzas por placa: tirón de la losa, empuje de dorsal, succión de las losas profundas y de los restos (`τ = ε_suc·B·(1 − d/W)/W`, en la malla gruesa), rozamiento basal (recalibrado a `v_obj`), resistencia de los choques | `velocidades`, `succion.rs: pares_de_succion` | principal §6.2; nota de fosas v2; nota de succión §6.3 |
+| 1 | Velocidades | Equilibrio de fuerzas por placa: tirón de la losa, empuje de dorsal, succión de las losas profundas y de los restos (`τ = ε_suc·B·(1 − d/W)/W`, en la malla gruesa; **apagada**, `ε_suc` = 0), rozamiento basal (recalibrado a `v_obj`), resistencia de los choques | `velocidades`, `succion.rs: pares_de_succion` | principal §6.2; nota de fosas v2; nota de succión §6.3 |
 | 0 | Edad tectonotérmica, puntos calientes y restos de losa | Toda la corteza envejece Δt; la edad vuelve a 0 donde la calientan un rift al romper, un arco, un choque, una delaminación de más de `ε_del` o una gran erupción, y se mezcla por volumen al juntar corteza. Los puntos calientes envejecen y, al morir, nace otro (con gran erupción, a veces). Los restos de losa envejecen y dejan de tirar a los `τ_hund` | `envejecer_tt`, `vida_de_puntos_calientes`, `envejecer_restos` | nota de isostasia con litosfera §6.1–6.3; nota de puntos calientes §6.1; nota de succión §6.2 |
 | 2 | Giro | Cada placa gira con su velocidad angular (y el empujón de apertura de un rift) | `dar_paso` | principal §6.1 |
 | 3 | Rasterizar, solapes, dientes, huecos | Qué placa ve cada celda del mundo; los solapes se consumen (fosa) o chocan; los dientes de borde se recolocan; los huecos se rellenan con fondo nuevo | `rasterizar`, `resolver_solapes`, `recolocar_dientes`, `rellenar_huecos`, `reconstruir_mapas` | nota de bordes |
@@ -94,7 +94,7 @@ conservan exactamente: la deriva nunca copia corteza.
 | Edad tectonotérmica | `ε_del` 1 km; edades de partida: la Tierra de hoy de más de 500 Myr, menos 500, las más viejas en el interior de cada continente | supuesto; medido (tipos de CRUST1.0 con las provincias de Artemieva y Mooney) |
 | Hundimiento de los márgenes | `E_0` 3,2 km, `τ` 62,8 Myr; `β = h_0/h_c` al romper | medido/físico (McKenzie 1978) |
 | Puntos calientes | `N_hs` 12, `T_hs` 150 Myr; una gran erupción cada 23 Myr, 0,2–2 Mkm², `h_LIP` 15 km, `h_CFB` 3 km, 2 Myr; traza `q` 1,25·10⁵ km³/Myr en `r_tr` 100 km; abombamiento 0,5–1,2 km × 1 000–1 500 km | supuesto (8–20); medido; medido (Rampino y Stothers); calibrado (magmatismo intraplaca oceánico, Crisp 1984); medido (Crough 1983) |
-| Succión de las losas | `d_off` 500 km, `W_suc` 1 500 km, `ε_suc` 0,05; `v_hund` 1,2 cm/año, `τ_hund` = 2 200 km / `v_hund` | geométrico; supuesto; calibrado (el tirón, ~50 % de la potencia); medido (van der Meer et al. 2010) |
+| Succión de las losas | `d_off` 500 km, `W_suc` 1 500 km, `ε_suc` **0** (calibrado 0,05: el tirón, ~50 % de la potencia; apagado hasta que los choques se frenen, decisión del responsable); `v_hund` 1,2 cm/año, `τ_hund` = 2 200 km / `v_hund` | geométrico; supuesto; calibrado y apagado; medido (van der Meer et al. 2010) |
 | Soldadura | `v_sold` 0,5 cm/año (`v_sutura_cm_anio`), `τ_sold` 20 Myr (`t_sutura_myr`), con la losa rota | supuestos |
 | Fuerzas | `f_sp`, `f_rp`; `c_col` 90 000; `v_obj` 4,39 cm/año | supuesto; calibrado (India–Asia); medido (NNR-MORVEL56) |
 | Bordes | `θ_tr` 20°; `L_borde` 150 km | medido (Bird); calibrado (longitudes de Bird) |
@@ -170,11 +170,12 @@ Rebrote, orden, forrajeo, reproducción, mortalidad y aplicación de cambios
 - **Forrajeo y persistencia:** cerrados.
 - **Agentes:** incremento 1 y revisión 1 hechos; siguen las cohortes y los individuos persistentes.
 - **Terreno:** incrementos 1–3 cerrados.
-  - El 4 (relieve tectónico) está en medida: antes de congelarlo se arregla el exceso de fosas (nota de demografía de placas).
-  - **Hundimiento de los márgenes, puntos calientes y succión** (quinta ronda del 2026-11-08, sin fusionar): cada uno hace lo que pide su nota (los márgenes se hunden como McKenzie; magmatismo intraplaca y grandes erupciones terrestres; el tirón, ~50 % de la potencia). Pero con la succión los continentes chocan más y **los choques no se agotan nunca** (1,1–1,4 cm/año aun con más de 80 Myr): las placas no se sueldan, se destruye corteza (−13 %), el mar baja a −202 m y la tierra sube a 963 m. Decide el responsable (informe `docs/informes/2026-11-08_margenes_calientes_succion.md`).
+  - **El planeta inventado v1 está congelado** (sexta ronda del 2026-11-08): `docs/design/terreno/cierre_planeta_inventado_v1.md` tiene su tabla de cierre (5 semillas, sin succión) y la lista de ampliación futura, que encabezan la resistencia de los choques y la succión de las losas. El modo inventado debe salir idéntico byte a byte mientras se construye el modo Tierra.
+  - **Modo Tierra real** (`diseno_modo_tierra.md`): el motor arranca sobre la Tierra medida (relieve, hielo y clima) en lugar de generar un planeta. Fase 1 en construcción en la rama `terreno-modo-tierra` (informe `docs/informes/2026-11-08_cierre_y_modo_tierra.md`).
+  - **Hundimiento de los márgenes, puntos calientes y succión** (quinta ronda del 2026-11-08): cada uno hace lo que pide su nota (los márgenes se hunden como McKenzie; magmatismo intraplaca y grandes erupciones terrestres; el tirón, ~50 % de la potencia). Pero con la succión los continentes chocan más y **los choques no se agotan nunca** (1,1–1,4 cm/año aun con más de 80 Myr): las placas no se sueldan, se destruye corteza (−13 %), el mar baja a −202 m y la tierra sube a 963 m. Por eso queda apagada (decisión del responsable, sexta ronda).
   - **Isostasia con litosfera** (cuarta ronda del 2026-11-08, en `main`): la regla R4 con la edad tectonotérmica de cada celda y la erosión recalibrada (`E_1` 0,02). La tierra baja a 781 m de media (la Tierra 671) y a un 7 % por encima de 2 000 m (5,3 %); el nivel del mar, a −140 m. **Los márgenes estirados casi no se hunden al enfriarse** (0,38 km en 100 Myr, frente a 2–3): decide el responsable.
   - Diagnóstico del supercontinente (cuarta ronda): los océanos de rift se abren pero casi nunca se cierran, y los continentes no convergen; el modelo no tiene succión de la fosa sobre la placa de arriba.
   - Nota de demografía v2 y nota de rifts v2 implementadas (tercera ronda).
-  - Lejos de la Tierra quedan la longitud de fosa (×1,7) y el fondo que se hunde, la tierra baja y la plataforma, el sedimento al mar, la pérdida en los choques, los márgenes pasivos y una corteza demasiado joven (el 71 % de la tierra de menos de 500 Myr).
-  - Tiempo: regla relativa (≤ +5 % frente a la versión anterior en la misma tanda, techo 330 s). Con las tres notas, 259,5 s frente a 247,2 de `main` a la vez: +5,0 %, justo en el límite.
+  - Lejos de la Tierra quedan la longitud de fosa (×1,7) y el fondo que se hunde, la tierra baja y la plataforma, el sedimento al mar, la pérdida en los choques, los márgenes pasivos y una corteza demasiado joven (el 80 % de la tierra de menos de 500 Myr; la Tierra, el 45 %).
+  - Tiempo: regla relativa (≤ +5 % frente a la versión anterior en la misma tanda, techo 330 s). Con la succión apagada, 238,0 s frente a 246,4 de `main` (473b805) a la vez: −3,4 %.
   - Ver `docs/design/terreno/incremento-4-diseno.md` §73–§74 y el informe de la ronda en `docs/informes/`.

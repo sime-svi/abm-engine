@@ -1600,3 +1600,39 @@ Formato de entrada:
   - el retroceso de las fosas y los restos de losa;
   - los basaltos continentales;
   - fusionar la rama.
+
+## [2026-11-08] Congelación del planeta inventado v1 y fusión con main
+
+- **Qué decidió el responsable.**
+  - Congelar el planeta inventado tal como está y pasar al modo Tierra real (`docs/design/terreno/diseno_modo_tierra.md`).
+  - La succión de las losas, apagada por defecto (`ε_suc` = 0); el código se queda.
+  - Acepta las decisiones de la ronda anterior:
+    - las mesetas, como corteza flotante no continental;
+    - los márgenes, como entidades;
+    - el caudal de las trazas;
+    - los basaltos continentales, a 0,03 AU (la cifra de Clift incluye otro magmatismo continental).
+  - Nueva regla en `CLAUDE.md` §4: cada capa tiene un máximo de tres rondas y se juzga por lo que necesita la capa siguiente.
+- **Hecho.**
+  - `ε_suc` = 0 en `config.rs` y `terreno.toml`, con su valor calibrado (0,05) en el comentario. La prueba del resto de losa la enciende con ese valor.
+  - La fila de los basaltos de `planeta_semillas.py`, con el objetivo aceptado.
+  - Documento de cierre: `docs/design/terreno/cierre_planeta_inventado_v1.md`, con la tabla de cierre sin succión (5 semillas), las decisiones fijadas y la ampliación futura en orden:
+    1. la resistencia de los choques;
+    2. la succión;
+    3. el supercontinente;
+    4. el exceso de fosas;
+    5. la corteza joven;
+    6. la plataforma;
+    7. el retroceso de las fosas;
+    8. la topografía dinámica.
+  - **La tabla, sin succión:**
+    - tierra a 902 m;
+    - mar a −106 m;
+    - fondo de 91 Myr;
+    - ΔV −6,3 %;
+    - fosa ×1,7;
+    - choques de 23 400 km;
+    - márgenes como McKenzie (1,47 y 1,66 km);
+    - magmatismo oceánico de 1,36 AU;
+    - 4,1 grandes erupciones por 100 Myr.
+  - **Batería:** 238,0 s frente a 246,4 de `main` (473b805) a la vez, −3,4 %. 27 márgenes del planeta movidos con su nota (otra realización del planeta).
+  - Fusión de `terreno-margenes-calientes-succion` con `main`.

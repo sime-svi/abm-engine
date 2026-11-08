@@ -55,6 +55,8 @@ Desarrollo estrictamente incremental. Se empieza por lo mínimo y solo se sube d
 
 Nunca implementes una capa N+1 si la capa N no produce datos estables y verificados. Ante la duda, pregunta.
 
+Cada capa tiene un máximo de **tres rondas** y se juzga por lo que necesita la capa siguiente. *(Confirmado por el responsable el 2026-11-08.)*
+
 ---
 
 ## 5. Convenciones de código

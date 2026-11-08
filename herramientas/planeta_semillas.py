@@ -265,7 +265,10 @@ FILAS += [
     ('tect_f_int_trazas_au', '… trazas (AU)', None, None),
     ('tect_f_int_trazas_flotante_au', '… parte de las trazas que flota (AU)', None, None),
     ('tect_f_int_mesetas_au', '… mesetas (AU)', None, None),
-    ('tect_f_int_cfb_au', 'Basaltos continentales (AU)', '~0,12 (Clift et al. 2009)', lambda x: 0.06 <= x <= 0.24),
+    # Aceptado por el responsable (2026-11-08): ~0,03 AU; los ~0,12 km³/año de Clift et al. (2009) incluyen
+    # otro magmatismo continental, además de los basaltos de las grandes erupciones.
+    ('tect_f_int_cfb_au', 'Basaltos continentales (AU)', '~0,03 (aceptado; Clift ~0,12 con otro magmatismo)',
+     lambda x: 0.015 <= x <= 0.06),
     ('tect_grandes_erupciones_100myr', 'Grandes erupciones por 100 Myr', '~4,3 (una cada 23 Myr)', lambda x: 2.9 <= x <= 5.8),
     ('tect_mesetas_acrecionadas_au', 'Mesetas acrecionadas (AU)', 'hasta ~1,1 (blando)', None),
     ('tect_mesetas_final_n', 'Mesetas oceánicas de más de 0,2 Mkm², al final', None, None),

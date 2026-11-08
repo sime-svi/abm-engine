@@ -5215,8 +5215,11 @@ fn una_fosa_con_losa_profunda_arrastra_a_la_placa_de_arriba_hacia_ella() {
 fn un_resto_de_losa_atrae_a_las_placas_cercanas_hasta_que_toca_fondo() {
     // §10, prueba 2: sin fosa, un resto de losa junto al borde entre dos placas tira de la base de
     // la placa de al lado mientras baja (t_s < τ_hund) y después deja de tirar.
+    // La succión está apagada por defecto (decisión del responsable): aquí, encendida con su valor
+    // calibrado.
     let cfg = TectonicaCfg {
         n_hs: 0,
+        eps_suc: 0.05,
         ..TectonicaCfg::default()
     };
     let malla = Malla::new(48, 1, 6371.0);

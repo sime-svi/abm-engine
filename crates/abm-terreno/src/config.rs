@@ -433,7 +433,7 @@ impl Default for TectonicaCfg {
             w_sw_max_km: 1500.0,
             d_off_km: 500.0,
             w_suc_km: 1500.0,
-            eps_suc: 0.05,
+            eps_suc: 0.0,
             v_hund_cm_anio: 1.2,
             prof_hund_km: 2200.0,
             edad_tt_ini_bordes_myr: vec![
