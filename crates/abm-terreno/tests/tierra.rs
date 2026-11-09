@@ -690,19 +690,27 @@ fn escribir_tiff(
 
 #[test]
 fn la_red_reescalada_crece_rio_abajo_y_las_cuencas_cerradas_no_rebosan() {
+    use abm_terreno::geometry::locate;
     use abm_terreno::tierra::hidro::{self, NINGUNA, fin};
     // Rejilla global de 1°: un continente (lon −60…60, lat −40…40) que desagua al oeste, con una
-    // cuenca cerrada dentro (lon 20…40, lat −10…10) que lleva todo a su centro.
+    // cuenca cerrada dentro (lon 20…40, lat −10…10) que lleva todo a su centro y un mar interior (lon
+    // −40…−20, lat −10…10) sin conexión con el océano, adonde va a parar lo que tiene al este.
     let (w, h) = (360usize, 180usize);
     let tierra = |r: usize, c: usize| (120..240).contains(&c) && (50..130).contains(&r);
     let cerrada = |r: usize, c: usize| (200..220).contains(&c) && (80..100).contains(&r);
+    let interior = |r: usize, c: usize| (140..160).contains(&c) && (80..100).contains(&r);
     let (cc, rc) = (210usize, 90usize);
-    let mut dir = vec![247u8; w * h];
+    // Los códigos de HydroSHEDS v1.1: el mar va sin dato (255) y todo píxel final vale 0; la máscara
+    // dice si es la salida al mar (2) o el fondo de una cuenca cerrada (3).
+    const MAR: u8 = 255;
+    let mut dir = vec![MAR; w * h];
+    let mut msk = vec![MAR; w * h];
     for r in 0..h {
         for c in 0..w {
-            if !tierra(r, c) {
+            if !tierra(r, c) || interior(r, c) {
                 continue;
             }
+            msk[r * w + c] = 1;
             dir[r * w + c] = if cerrada(r, c) {
                 if c < cc {
                     1
@@ -713,9 +721,11 @@ fn la_red_reescalada_crece_rio_abajo_y_las_cuencas_cerradas_no_rebosan() {
                 } else if r > rc {
                     64
                 } else {
-                    255
+                    msk[r * w + c] = 3;
+                    0
                 }
             } else if c == 120 {
+                msk[r * w + c] = 2;
                 0
             } else {
                 16
@@ -732,19 +742,20 @@ fn la_red_reescalada_crece_rio_abajo_y_las_cuencas_cerradas_no_rebosan() {
             64 => (-1, 0),
             _ => return None,
         };
-        Some(((r as i64 + dr) as usize) * w + (c as i64 + dc) as usize)
+        let d = ((r as i64 + dr) as usize) * w + (c as i64 + dc) as usize;
+        (dir[d] != MAR).then_some(d)
     };
     let mut entradas = vec![0u32; w * h];
     for (q, &d0) in dir.iter().enumerate() {
-        if d0 != 247
+        if d0 != MAR
             && let Some(d) = destino(q)
         {
             entradas[d] += 1;
         }
     }
-    let mut acum = vec![0i32; w * h];
+    let mut acum = vec![0u32; w * h];
     let mut cola: std::collections::VecDeque<usize> = (0..w * h)
-        .filter(|&q| dir[q] != 247 && entradas[q] == 0)
+        .filter(|&q| dir[q] != MAR && entradas[q] == 0)
         .collect();
     while let Some(q) = cola.pop_front() {
         acum[q] += 1;
@@ -758,53 +769,100 @@ fn la_red_reescalada_crece_rio_abajo_y_las_cuencas_cerradas_no_rebosan() {
     }
     let dirs_tmp = std::env::temp_dir().join(format!("abm_red_prueba_{}", std::process::id()));
     std::fs::create_dir_all(&dirs_tmp).expect("carpeta temporal");
-    let (p_dir, p_acc) = (dirs_tmp.join("dir.tif"), dirs_tmp.join("acc.tif"));
-    escribir_tiff(&p_dir, w, h, &dir, 8, 1, "247");
+    let (p_dir, p_acc, p_msk) = (
+        dirs_tmp.join("dir.tif"),
+        dirs_tmp.join("acc.tif"),
+        dirs_tmp.join("msk.tif"),
+    );
+    escribir_tiff(&p_dir, w, h, &dir, 8, 1, "255");
+    escribir_tiff(&p_msk, w, h, &msk, 8, 1, "255");
     let acc_bytes: Vec<u8> = acum
         .iter()
         .zip(&dir)
-        .flat_map(|(&a, &d)| (if d == 247 { -1 } else { a }).to_le_bytes())
+        .flat_map(|(&a, &d)| (if d == MAR { u32::MAX } else { a }).to_le_bytes())
         .collect();
-    escribir_tiff(&p_acc, w, h, &acc_bytes, 32, 2, "-1");
+    escribir_tiff(&p_acc, w, h, &acc_bytes, 32, 1, "4294967295");
 
     let mut cfg = cfg_pequena();
     let n = face_n(cfg.planet.n0, cfg.tierra.nivel_carga);
-    let red = hidro::reescalar(&p_dir, &p_acc, n).expect("reescalado");
+    let m = 6 * (n as usize) * (n as usize);
+    // La altura de cada celda, por su centro: el océano y el mar interior tienen profundidad.
+    let celda_de = |lat: f64, lon: f64| {
+        let (f, l) = (lat.to_radians(), lon.to_radians());
+        let (c, i, j) = locate([f.cos() * l.cos(), f.cos() * l.sin(), f.sin()], n);
+        ((c as usize * n as usize + j as usize) * n as usize) + i as usize
+    };
+    let mut z = vec![0.0; m];
+    for c in 0..6u8 {
+        for j in 0..n {
+            for i in 0..n {
+                let (lat, lon) = lat_lon(center_dir(c, i, j, n));
+                let (lat, lon) = (lat.to_degrees(), lon.to_degrees());
+                let k = ((c as usize * n as usize + j as usize) * n as usize) + i as usize;
+                z[k] = if lat.abs() < 10.0 && (-40.0..-20.0).contains(&lon) {
+                    -500.0
+                } else if lat.abs() < 40.0 && lon.abs() < 60.0 {
+                    400.0
+                } else {
+                    -3000.0
+                };
+            }
+        }
+    }
+    let (red, mar) = hidro::reescalar(&p_dir, &p_acc, &p_msk, &z, n).expect("reescalado");
     std::fs::remove_dir_all(&dirs_tmp).ok();
-    // El área drenada crece estrictamente río abajo y la celda de aguas abajo es vecina.
+    // El área drenada crece estrictamente río abajo, también con la regla de la vecina.
     let mut con_red = 0;
-    for k in 0..red.abajo.len() {
-        let a = red.abajo[k];
-        if a != NINGUNA {
-            con_red += 1;
-            assert!(red.acum[a as usize] > red.acum[k], "celda {k}");
+    for k in 0..m {
+        for a in [red.abajo[k], red.vecina[k]] {
+            if a != NINGUNA {
+                con_red += 1;
+                assert!(red.acum[a as usize] > red.acum[k], "celda {k}");
+                assert!(!mar[k] && !mar[a as usize], "el mar no entra en la red");
+            }
         }
     }
     assert!(con_red > 50, "la red tiene que tener tramos: {con_red}");
     let cerradas = hidro::acaba_en_cerrada(&red);
-    let terminales_cerradas = (0..red.abajo.len())
+    let terminales_cerradas = (0..m)
         .filter(|&k| red.abajo[k] == NINGUNA && red.fin[k] == fin::CERRADA)
         .count();
     assert!(terminales_cerradas >= 1, "la cuenca cerrada tiene su fondo");
+    // Cada celda acaba donde acaba su píxel de salida: el fondo de la cuenca cerrada, el mar interior o
+    // el océano.
     assert!(
-        cerradas.iter().filter(|&&x| x).count() >= 4,
-        "celdas de la cuenca cerrada"
+        cerradas[celda_de(0.0, 30.0)],
+        "el centro de la cuenca cerrada"
     );
+    assert!(
+        cerradas[celda_de(0.0, 50.0)],
+        "lo que vierte a la cuenca cerrada"
+    );
+    assert!(
+        cerradas[celda_de(0.0, 0.0)],
+        "lo que vierte al mar interior"
+    );
+    assert!(!cerradas[celda_de(30.0, 0.0)], "el norte llega al océano");
+    assert!(!cerradas[celda_de(0.0, -50.0)], "el oeste llega al océano");
+    // El mar interior tiene profundidad, pero no es mar: es una cuenca cerrada que acaba en sí misma.
+    let ki = celda_de(0.0, -30.0);
+    assert!(!mar[ki], "el mar interior no está conectado con el océano");
+    assert!(red.abajo[ki] == NINGUNA && red.fin[ki] == fin::CERRADA);
+    assert!(mar[celda_de(0.0, 150.0)], "el océano es mar");
+    // La tierra bajo el nivel del mar sin píxeles de mar no es mar aunque toque la costa.
+    let mut z_bajo = z.clone();
+    let kb = celda_de(0.0, -50.0);
+    z_bajo[kb] = -5.0;
+    assert_eq!(
+        red.pix_mar[kb], 0,
+        "la celda de la prueba es toda de tierra"
+    );
+    assert!(!hidro::mar_conectado(&z_bajo, &red.pix_mar, &red.pix_tierra, n)[kb]);
 
     // En una malla de niveles mezclados: ninguna cuenca cerrada rebosa ni ninguna abierta se cierra.
     cfg.tierra.anio_forzado = 2001;
     let datos = datos_inventados(&cfg);
-    let m = 6 * (n as usize) * (n as usize);
     let fino = &datos.niveles[cfg.tierra.nivel_carga as usize];
-    let z: Vec<f64> = (0..m)
-        .map(|k| {
-            if red.pix_mar[k] > 0 && red.acum[k] == 0 {
-                -3000.0
-            } else {
-                400.0
-            }
-        })
-        .collect();
     let nivel = Nivel {
         n,
         area: fino.area.clone(),
@@ -815,7 +873,6 @@ fn la_red_reescalada_crece_rio_abajo_y_las_cuencas_cerradas_no_rebosan() {
         p: fino.p.clone(),
         cobertura: vec![1.0; m],
     };
-    let mar = hidro::mar_conectado(&z, &red.pix_mar, n);
     let hid = Hidrologia {
         red,
         mar,
@@ -841,8 +898,17 @@ fn la_red_reescalada_crece_rio_abajo_y_las_cuencas_cerradas_no_rebosan() {
         "una cuenca cerrada rebosa"
     );
     assert_eq!(dg.abiertas_que_acaban_cerradas_km2, 0.0);
+    assert!(dg.red.cuencas_cerradas_km2 > 0.0 && dg.red.mares_interiores_km2 > 0.0);
     assert!(
         (0..world.topo.num_cells).any(|s| world.receiver[s] == abm_terreno::hydro::CERRADA),
         "la malla tiene el fondo de la cuenca cerrada"
     );
+    // El agua de cada celda de la malla acaba donde acaba la de su salida en el nivel de carga: el
+    // receptor de una celda tiene siempre más área drenada.
+    for s in 0..world.topo.num_cells {
+        let r = world.receiver[s];
+        if r >= 0 {
+            assert!(world.drainage_area[r as usize] > world.drainage_area[s]);
+        }
+    }
 }

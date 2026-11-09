@@ -63,9 +63,12 @@ pub struct TierraCfg {
     pub cru_pre: String,
     /// Tabla global de atributos del RGI 7.0 (centro y área de cada glaciar; adenda 1 §3).
     pub rgi: String,
-    /// HydroSHEDS v1 a 15″: direcciones de flujo y acumulación (GeoTIFF; adenda 1 §1).
+    /// HydroSHEDS v1 a 15″: direcciones de flujo, acumulación y máscara (GeoTIFF; adenda 1 §1). La
+    /// máscara distingue el fondo de una cuenca cerrada de la salida al mar: en las direcciones de la
+    /// versión 1.1 los dos valen 0.
     pub hydrosheds_dir: String,
     pub hydrosheds_acc: String,
+    pub hydrosheds_msk: String,
     /// HydroLAKES v1.0, polígonos (shapefile, con su .dbf al lado).
     pub hydrolakes: String,
     /// Los lagos más pequeños que esto caen enteros en la celda de su desagüe; los mayores se
@@ -104,6 +107,7 @@ impl Default for TierraCfg {
             rgi: "output/referencias/rgi7/RGI2000-v7.0-G-global-attributes.csv".to_string(),
             hydrosheds_dir: "output/referencias/hydrosheds/hyd_glo_dir_15s.tif".to_string(),
             hydrosheds_acc: "output/referencias/hydrosheds/hyd_glo_acc_15s.tif".to_string(),
+            hydrosheds_msk: "output/referencias/hydrosheds/hyd_glo_msk_15s.tif".to_string(),
             hydrolakes:
                 "output/referencias/hydrosheds/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp"
                     .to_string(),

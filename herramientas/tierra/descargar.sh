@@ -7,7 +7,9 @@
 #   CHELSA V2.1 1981–2010 (CC0 1.0): 24 GeoTIFF mensuales (tas y pr), ~4,3 GB.
 #   CRU TS 4.09 (Open Government Licence v3): tmp y pre 1901–2024, NetCDF-3 con gzip, ~1,1 GB.
 #   HydroSHEDS v1 a 15″ (licencia de HydroSHEDS: uso científico, educativo y comercial, con cita):
-#     direcciones de flujo (308 MB) y acumulación (818 MB) globales; la red de ríos del modo Tierra.
+#     direcciones de flujo (308 MB), acumulación (818 MB) y máscara (45 MB) globales; la red de ríos
+#     del modo Tierra. La máscara distingue el fondo de una cuenca cerrada de la salida al mar: en las
+#     direcciones de la versión 1.1 los dos valen 0.
 #   HydroLAKES v1.0 (CC BY 4.0), polígonos, 820 MB: los lagos.
 #   HydroRIVERS v1.0 (licencia de HydroSHEDS), ~0,5 GB: solo para validar los ríos.
 #   RGI 7.0 (CC BY 4.0), tabla global de atributos (centro y área de cada glaciar), 75 MB, de la
@@ -58,8 +60,9 @@ for v in tmp pre; do
     "$REF/cru_ts/cru_ts4.09.1901.2024.$v.dat.nc.gz"
 done
 
-echo "HydroSHEDS v1 a 15″ (direcciones y acumulación), HydroLAKES y HydroRIVERS"
+echo "HydroSHEDS v1 a 15″ (direcciones, acumulación y máscara), HydroLAKES y HydroRIVERS"
 for a in hydrosheds-v1-dir/hyd_glo_dir_15s.zip hydrosheds-v1-acc/hyd_glo_acc_15s.zip \
+         hydrosheds-v1-msk/hyd_glo_msk_15s.zip \
          hydrolakes/HydroLAKES_polys_v10_shp.zip HydroRIVERS/HydroRIVERS_v10_shp.zip; do
   bajar "https://data.hydrosheds.org/file/$a" "$REF/hydrosheds/$(basename "$a")" \
     || echo "  AVISO: no se pudo bajar $(basename "$a") (¿el bloqueo de Cloudflare durante un partido?)"
@@ -68,7 +71,7 @@ done
 python3 -I - "$REF/hydrosheds" <<'PY'
 import os, sys, zipfile
 d = sys.argv[1]
-for zipname, sub in (('hyd_glo_dir_15s.zip', ''), ('hyd_glo_acc_15s.zip', ''), ('HydroLAKES_polys_v10_shp.zip', '')):
+for zipname in ('hyd_glo_dir_15s.zip', 'hyd_glo_acc_15s.zip', 'hyd_glo_msk_15s.zip', 'HydroLAKES_polys_v10_shp.zip'):
     ruta = os.path.join(d, zipname)
     if not os.path.exists(ruta):
         continue

@@ -57,13 +57,14 @@ pub fn recompute(world: &mut World, cfg: &TerrenoConfig) {
 pub const CERRADA: i64 = -2;
 
 /// Red de ríos del modo Tierra sobre la malla actual (niveles mezclados), derivada de la red del nivel
-/// de carga:
+/// de carga con la misma regla que esta (de salida a salida):
 /// - mar, la celda con al menos la mitad de su área en el mar conectado con el océano mundial;
-/// - la salida de una celda es su descendiente del nivel de carga con más área drenada; desde ella se
-///   sigue la red del nivel de carga hasta salir de la celda, y la celda de la malla que la recibe es
-///   la de aguas abajo. Si la red acaba dentro de la celda, el receptor es −1 (sale al mar) o
-///   [`CERRADA`] (el fondo de una cuenca cerrada). El área drenada de la salida crece estrictamente
-///   río abajo, así que la red no tiene ciclos;
+/// - la salida de una celda es su descendiente de tierra del nivel de carga con más área drenada;
+///   desde ella se sigue la red del nivel de carga hasta la salida de otra celda de tierra de la malla,
+///   que es la de aguas abajo (puede no ser vecina). Si la red acaba antes, el receptor es −1 (sale al
+///   mar) o [`CERRADA`] (el fondo de una cuenca cerrada). El agua de una celda acaba así donde acaba
+///   la de su salida en el nivel de carga, y el área drenada de la salida crece estrictamente río
+///   abajo, así que la red no tiene ciclos;
 /// - orden de flujo de aguas arriba abajo, área de drenaje acumulada, y ríos y lagos: lago si la mitad
 ///   de la celda es lago de HydroLAKES, río si drena más de `river_threshold_km2`.
 fn red_de_la_tierra(world: &mut World, cfg: &TerrenoConfig, d: &crate::tierra::DatosTierra) {
@@ -96,37 +97,40 @@ fn red_de_la_tierra(world: &mut World, cfg: &TerrenoConfig, d: &crate::tierra::D
         (lc + 1..=world.topo.l_max)
             .find_map(|l| world.topo.slot_of(key(c, l, i << (l - lc), j << (l - lc))))
     };
-    world.receiver.clear();
-    world.receiver.resize(num, -1);
-    for s in 0..num {
+    // Salida de cada celda de tierra de la malla: su descendiente de tierra del nivel de carga con más
+    // área drenada (en empate, la primera). Las celdas más finas que el nivel de carga siguen a su
+    // antecesora.
+    const SIN_SALIDA: usize = usize::MAX;
+    let mut salida = vec![SIN_SALIDA; num];
+    for (s, sal) in salida.iter_mut().enumerate() {
         if matches!(world.surface[s], Surface::Oceano) {
             continue;
         }
         let (c, l, i, j) = split_key(world.topo.keys[s]);
-        // Las celdas más finas que el nivel de carga siguen a su antecesora.
         let (l, i, j) = if l > lc {
             (lc, i >> (l - lc), j >> (l - lc))
         } else {
             (l, i, j)
         };
         let sh = lc - l;
-        let dentro = |k: usize| {
-            let nn = (n as usize) * (n as usize);
-            let (c2, r) = ((k / nn) as u8, k % nn);
-            let (j2, i2) = ((r / n as usize) as u32, (r % n as usize) as u32);
-            c2 == c && i2 >> sh == i && j2 >> sh == j
-        };
-        // Salida: la descendiente con más área drenada (en empate, la primera).
-        let mut o = fino.indice(c, i << sh, j << sh);
+        let mut o = SIN_SALIDA;
         for jj in (j << sh)..((j + 1) << sh) {
             for ii in (i << sh)..((i + 1) << sh) {
                 let k = fino.indice(c, ii, jj);
-                if d.red.acum[k] > d.red.acum[o] || (d.red.acum[k] == d.red.acum[o] && k < o) {
+                if !d.mar[k] && (o == SIN_SALIDA || d.red.acum[k] > d.red.acum[o]) {
                     o = k;
                 }
             }
         }
-        let mut x = o;
+        *sal = o;
+    }
+    world.receiver.clear();
+    world.receiver.resize(num, -1);
+    for s in 0..num {
+        if salida[s] == SIN_SALIDA {
+            continue;
+        }
+        let mut x = salida[s];
         world.receiver[s] = loop {
             let a = d.red.abajo[x];
             if a == NINGUNA {
@@ -137,11 +141,10 @@ fn red_de_la_tierra(world: &mut World, cfg: &TerrenoConfig, d: &crate::tierra::D
                 };
             }
             let a = a as usize;
-            if dentro(a) {
-                x = a;
-                continue;
+            match malla_de(a) {
+                Some(q) if q != s && salida[q] == a => break q as i64,
+                _ => x = a,
             }
-            break malla_de(a).map_or(-1, |q| if q == s { -1 } else { q as i64 });
         };
     }
     // Orden de flujo (Kahn, con la cola en orden de posición): de aguas arriba abajo.

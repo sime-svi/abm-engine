@@ -21,7 +21,7 @@ use crate::config::TerrenoConfig;
 use crate::error::TerrenoError;
 use crate::geometry::{angle_between, cell_area, center_dir, face_n, lat_lon, locate};
 
-const MAGIA: &[u8; 8] = b"ABMTIE03";
+const MAGIA: &[u8; 8] = b"ABMTIE04";
 const HUELLA_CODIGO: &str = env!("ABM_TERRENO_FINGERPRINT");
 
 /// ETOPO 2022 a 2': filas y columnas, primera fila de la franja polar norte de la roca (latitud
@@ -70,6 +70,7 @@ fn fuentes(cfg: &TerrenoConfig) -> Vec<PathBuf> {
         &t.rgi,
         &t.hydrosheds_dir,
         &t.hydrosheds_acc,
+        &t.hydrosheds_msk,
         &t.hydrolakes,
     ]
     .iter()
@@ -140,12 +141,13 @@ pub fn cargar(cfg: &TerrenoConfig) -> Result<Arc<DatosTierra>, TerrenoError> {
     // Ríos y lagos como dato (adenda 1 §1): la red de HydroSHEDS reescalada, el mar conectado y los
     // lagos de HydroLAKES.
     let tc = &cfg.tierra;
-    let red = hidro::reescalar(
+    let (red, mar) = hidro::reescalar(
         Path::new(&tc.hydrosheds_dir),
         Path::new(&tc.hydrosheds_acc),
+        Path::new(&tc.hydrosheds_msk),
+        &z,
         n,
     )?;
-    let mar = hidro::mar_conectado(&z, &red.pix_mar, n);
     let (lago, lagos_total_km2) = super::lagos::fraccion_de_lagos(
         Path::new(&tc.hydrolakes),
         n,
@@ -235,6 +237,8 @@ impl Hidrologia {
                 fin: vec![hidro::fin::MAR; m],
                 acum: vec![0; m],
                 pix_mar: z.iter().map(|&x| u32::from(x < 0.0)).collect(),
+                pix_tierra: z.iter().map(|&x| u32::from(x >= 0.0)).collect(),
+                vecina: vec![hidro::NINGUNA; m],
             },
             mar: z.iter().map(|&x| x < 0.0).collect(),
             lagos_total_km2: 0.0,
@@ -1002,7 +1006,14 @@ fn codificar(f: &Nivel, cru: &Cru, cru_de_celda: &[u32], hid: &Hidrologia, huell
         w.extend_from_slice(&x.to_le_bytes());
     }
     let red = &hid.red;
-    for x in red.abajo.iter().chain(&red.acum).chain(&red.pix_mar) {
+    for x in red
+        .abajo
+        .iter()
+        .chain(&red.acum)
+        .chain(&red.pix_mar)
+        .chain(&red.pix_tierra)
+        .chain(&red.vecina)
+    {
         w.extend_from_slice(&x.to_le_bytes());
     }
     w.extend_from_slice(&red.fin);
@@ -1096,11 +1107,14 @@ fn decodificar(b: &[u8], cfg: &TerrenoConfig, huella: u64) -> Option<DatosTierra
     let abajo = u32s(&mut r)?;
     let acum = u32s(&mut r)?;
     let pix_mar = u32s(&mut r)?;
+    let pix_tierra = u32s(&mut r)?;
+    let vecina = u32s(&mut r)?;
     let fin = r.tomar(m)?.to_vec();
     let mar: Vec<bool> = r.tomar(m)?.iter().map(|&x| x != 0).collect();
     let lagos_total_km2 = f64::from_le_bytes(r.tomar(8)?.try_into().ok()?);
     if abajo
         .iter()
+        .chain(&vecina)
         .any(|&a| a != hidro::NINGUNA && a as usize >= m)
     {
         return None;
@@ -1111,6 +1125,8 @@ fn decodificar(b: &[u8], cfg: &TerrenoConfig, huella: u64) -> Option<DatosTierra
             fin,
             acum,
             pix_mar,
+            pix_tierra,
+            vecina,
         },
         mar,
         lagos_total_km2,

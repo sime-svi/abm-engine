@@ -191,6 +191,8 @@ pub struct DiagnosticoTierra {
     /// debería acabar en una cuenca cerrada y en la malla llega al mar, y al revés (km²).
     pub cerradas_que_rebosan_km2: f64,
     pub abiertas_que_acaban_cerradas_km2: f64,
+    /// La red del nivel de carga y lo que cambiaría con la regla de la letra de la adenda.
+    pub red: RedTierra,
     /// Producción vegetal de Miami del último año simulado sobre la tierra (adenda 1 §2): total en
     /// PgC/año (con 0,47 g C por g de materia seca) y media en g de materia seca/m²/año.
     pub produccion_pgc: f64,
@@ -202,6 +204,68 @@ pub struct DiagnosticoTierra {
     /// Las 50 mayores cuencas que llegan al mar (o a una depresión bajo el nivel del mar, como el
     /// Caspio), de mayor a menor.
     pub cuencas: Vec<Cuenca>,
+}
+
+/// La red de ríos del nivel de carga (adenda 1 §1.2). La celda de aguas abajo es aquella cuya salida
+/// alcanza el camino de 15″; la adenda pide tomar, si no es vecina, la vecina por la que pasa el
+/// camino. Aquí se mide lo que esa regla cambiaría.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+pub struct RedTierra {
+    /// Celdas de tierra con celda de aguas abajo, y cuántas de ellas la tienen no vecina.
+    pub celdas_con_rio_abajo: u64,
+    pub no_vecinas: u64,
+    /// Área (km²) de la tierra cuya agua acaba en una cuenca cerrada (un fondo o un mar interior) y de
+    /// la que llega al mar.
+    pub cuencas_cerradas_km2: f64,
+    pub cuencas_al_mar_km2: f64,
+    /// Área (km²) de los mares interiores: las celdas que HydroSHEDS da por mar y no están conectadas
+    /// con el océano mundial (el Caspio). En el modelo son lago.
+    pub mares_interiores_km2: f64,
+    /// Con la regla de la vecina: área (km²) cuya agua acabaría en otra desembocadura o en otro fondo,
+    /// la de las cuencas cerradas que rebosarían al mar y la de las abiertas que se cerrarían.
+    pub regla_vecina_otra_cuenca_km2: f64,
+    pub regla_vecina_cerrada_al_mar_km2: f64,
+    pub regla_vecina_mar_a_cerrada_km2: f64,
+}
+
+/// Mide la red del nivel de carga (sumas en orden de celda).
+pub fn red_tierra(d: &crate::tierra::DatosTierra) -> RedTierra {
+    use crate::tierra::hidro::{NINGUNA, fin, son_vecinas, terminales};
+    let fino = &d.niveles[d.nivel_carga as usize];
+    let red = &d.red;
+    let (term, term_v) = (terminales(&red.abajo), terminales(&red.vecina));
+    let mut r = RedTierra::default();
+    for k in 0..fino.len() {
+        if d.mar[k] {
+            continue;
+        }
+        let a = fino.area[k] / 1e6;
+        if red.abajo[k] != NINGUNA {
+            r.celdas_con_rio_abajo += 1;
+            if !son_vecinas(k, red.abajo[k] as usize, fino.n) {
+                r.no_vecinas += 1;
+            }
+        }
+        let (t, tv) = (term[k] as usize, term_v[k] as usize);
+        let (c, cv) = (red.fin[t] == fin::CERRADA, red.fin[tv] == fin::CERRADA);
+        if c {
+            r.cuencas_cerradas_km2 += a;
+            if red.pix_mar[k] > red.pix_tierra[k] {
+                r.mares_interiores_km2 += a;
+            }
+        } else {
+            r.cuencas_al_mar_km2 += a;
+        }
+        if t != tv {
+            r.regla_vecina_otra_cuenca_km2 += a;
+        }
+        if c && !cv {
+            r.regla_vecina_cerrada_al_mar_km2 += a;
+        } else if !c && cv {
+            r.regla_vecina_mar_a_cerrada_km2 += a;
+        }
+    }
+    r
 }
 
 /// Lluvia total sobre tierra (nota de sombra pluviométrica §2).
@@ -452,6 +516,7 @@ pub fn diagnostico_tierra(world: &World) -> Option<DiagnosticoTierra> {
         a_cerradas_km3_anio: a_cerradas / 1e9 / anios,
         cerradas_que_rebosan_km2: rebosan,
         abiertas_que_acaban_cerradas_km2: acaban_cerradas,
+        red: red_tierra(d),
         produccion_pgc: prod * crate::vegetacion::CARBONO_MATERIA_SECA / 1e15,
         produccion_media_g_m2: por(prod, a_tierra),
         conservacion_niveles_rel,

@@ -3,18 +3,24 @@
 //! - **Red:** las direcciones de flujo de HydroSHEDS a 15″ se reescalan al nivel de carga por píxel
 //!   de salida (Eilander et al. 2021). El píxel de salida de una celda es el de mayor área drenada
 //!   dentro de ella; desde él se sigue el camino de alta resolución río abajo hasta el píxel de
-//!   salida de otra celda, que es la de aguas abajo. Si no es vecina, se toma la vecina por la que
-//!   pasa el camino. Como el área drenada crece siempre río abajo, la red no tiene ciclos.
+//!   salida de otra celda, que es la de aguas abajo. Como el área drenada crece siempre río abajo, la
+//!   red no tiene ciclos.
+//! - **La celda de aguas abajo puede no ser vecina.** La adenda dice que, si no lo es, se tome la
+//!   vecina por la que pasa el camino. Pero el camino cruza esa vecina sin pasar por su salida: el
+//!   agua acabaría en el río mayor de la vecina, que puede ser de otra cuenca. El motor no necesita
+//!   que la celda de aguas abajo sea vecina (encamina por la lista de receptores), así que se enlaza
+//!   con la celda cuya salida se alcanza de verdad y las cuencas son exactas. La regla de la adenda se
+//!   calcula también ([`Red::vecina`]), solo para medir la diferencia.
 //! - **Cuencas cerradas:** si el camino acaba en el fondo de una cuenca cerrada (sin salida al mar)
 //!   antes de llegar a otra salida, la celda es terminal: allí el agua se evapora y nunca rebosa a
-//!   otra cuenca.
-//! - **Mar:** solo lo que está bajo el nivel del mar y conectado con el océano mundial. La conexión se
-//!   busca entre las celdas con algún píxel de mar de HydroSHEDS (o bajo el nivel del mar donde
-//!   HydroSHEDS no llega), así que los estrechos más finos que una celda (Gibraltar, el Bósforo)
-//!   siguen uniendo; las depresiones interiores (El Fayum, Qattara, Turfán) no son mar.
+//!   otra cuenca. Lo mismo si acaba en un mar interior (el Caspio), que no es mar sino lago.
+//! - **Mar:** solo lo que tiene profundidad, algún píxel de mar de HydroSHEDS y está conectado con el
+//!   océano mundial. La conexión se busca entre las celdas con algún píxel de mar, así que los
+//!   estrechos más finos que una celda (Gibraltar, el Bósforo) siguen uniendo; las depresiones
+//!   interiores (El Fayum, Qattara, Turfán) y la tierra bajo el nivel del mar (los pólderes) no son
+//!   mar. Donde HydroSHEDS no llega (al sur de 56° S y al norte de 84° N) cuenta solo la altura.
 //! - **Lagos:** la fracción de lago de cada celda, de los polígonos de HydroLAKES.
 
-use std::collections::HashMap;
 use std::path::Path;
 
 use super::geotiff::Raster;
@@ -34,22 +40,41 @@ pub mod fin {
     pub const SIGUE: u8 = 0;
     /// Llega al mar.
     pub const MAR: u8 = 1;
-    /// Acaba en una cuenca cerrada.
+    /// Acaba en una cuenca cerrada (su fondo o un mar interior).
     pub const CERRADA: u8 = 2;
 }
 
 /// Red del nivel de carga.
 #[derive(Debug, Clone, Default)]
 pub struct Red {
-    /// Celda de aguas abajo de cada celda ([`NINGUNA`] si no tiene).
+    /// Celda de aguas abajo de cada celda ([`NINGUNA`] si no tiene): la primera cuya salida alcanza el
+    /// camino de 15″ que sale de la salida de la celda. Puede no ser vecina.
     pub abajo: Vec<u32>,
     /// Cómo acaba el agua de las que no tienen celda de aguas abajo ([`fin`]).
     pub fin: Vec<u8>,
-    /// Píxeles de 15″ que drenan al píxel de salida de la celda (0 si la celda no tiene ninguno).
+    /// Píxeles de 15″ que drenan al píxel de salida de la celda (0 si no tiene salida o es de mar).
     pub acum: Vec<u32>,
-    /// Píxeles de mar de HydroSHEDS de cada celda.
+    /// Píxeles de mar y de tierra de HydroSHEDS de cada celda (los dos a 0: HydroSHEDS no llega).
     pub pix_mar: Vec<u32>,
+    pub pix_tierra: Vec<u32>,
+    /// La celda de aguas abajo según la letra de la adenda: la misma de [`Red::abajo`] si es vecina y,
+    /// si no, la primera celda por la que pasa el camino. Solo para medir cuánto cambia.
+    pub vecina: Vec<u32>,
 }
+
+/// Códigos de un píxel en memoria, además de los ocho del D8. HydroSHEDS v1.1 marca con 0 todo píxel
+/// final, sea la salida al mar o el fondo de una cuenca cerrada, y da el mar como «sin dato» (255); su
+/// máscara (`MSK`: 1 tierra, 2 salida al mar, 3 fondo de cuenca cerrada) los distingue. Aquí cada uno
+/// lleva su código.
+const P_SALIDA: u8 = 0;
+const P_FONDO: u8 = 255;
+const P_MAR: u8 = 247;
+
+/// Valor de la máscara de HydroSHEDS en el fondo de una cuenca cerrada.
+const MSK_FONDO: i64 = 3;
+
+/// Componente de una celda que no ve el mar.
+const SIN_COMPONENTE: u32 = u32::MAX;
 
 /// Códigos de las direcciones de flujo de HydroSHEDS (D8 de ESRI): `(código, dfila, dcolumna)`.
 const D8: [(u8, i64, i64); 8] = [
@@ -116,42 +141,97 @@ impl Rejilla {
     }
 }
 
-/// `true` si `b` es una de las 8 vecinas de `a` en el nivel de `n` celdas por arista.
-fn son_vecinas(a: usize, b: usize, n: u32) -> bool {
+/// Las 8 vecinas de la celda `k` del nivel de `n` celdas por arista (menos en las esquinas del cubo).
+fn vecinas(k: usize, n: u32) -> impl Iterator<Item = usize> {
     let nn = (n as usize) * (n as usize);
-    let (c, r) = (a / nn, a % nn);
+    let (c, r) = (k / nn, k % nn);
     let (j, i) = ((r / n as usize) as u32, (r % n as usize) as u32);
-    for dj in -1i64..=1 {
-        for di in -1i64..=1 {
-            if (di, dj) == (0, 0) {
-                continue;
-            }
-            if let Some((c2, i2, j2)) = neighbor_addr(c as u8, i, j, n, di, dj)
-                && indice_de(c2, i2, j2, n) == b
-            {
-                return true;
+    (-1i64..=1)
+        .flat_map(|dj| (-1i64..=1).map(move |di| (di, dj)))
+        .filter(|&d| d != (0, 0))
+        .filter_map(move |(di, dj)| neighbor_addr(c as u8, i, j, n, di, dj))
+        .map(move |(c2, i2, j2)| indice_de(c2, i2, j2, n))
+}
+
+/// `true` si `b` es una de las 8 vecinas de `a` en el nivel de `n` celdas por arista.
+pub fn son_vecinas(a: usize, b: usize, n: u32) -> bool {
+    vecinas(a, n).any(|x| x == b)
+}
+
+/// Componentes conexas (por las 8 vecinas) de las celdas que ven el mar: las que tienen algún píxel de
+/// mar de HydroSHEDS y, donde HydroSHEDS no llega, las que están bajo el nivel del mar. Devuelve la
+/// componente de cada celda ([`SIN_COMPONENTE`] si no ve el mar) y la del océano mundial, la mayor.
+fn componentes_de_mar(z: &[f64], pix_mar: &[u32], pix_tierra: &[u32], n: u32) -> (Vec<u32>, u32) {
+    let m = z.len();
+    let nodo = |k: usize| pix_mar[k] > 0 || (pix_tierra[k] == 0 && z[k] < 0.0);
+    let mut comp = vec![SIN_COMPONENTE; m];
+    let mut tam: Vec<usize> = Vec::new();
+    let mut cola = std::collections::VecDeque::new();
+    for k0 in 0..m {
+        if !nodo(k0) || comp[k0] != SIN_COMPONENTE {
+            continue;
+        }
+        let id = tam.len() as u32;
+        tam.push(0);
+        comp[k0] = id;
+        cola.push_back(k0);
+        while let Some(k) = cola.pop_front() {
+            tam[id as usize] += 1;
+            for k2 in vecinas(k, n) {
+                if nodo(k2) && comp[k2] == SIN_COMPONENTE {
+                    comp[k2] = id;
+                    cola.push_back(k2);
+                }
             }
         }
     }
-    false
+    let mundial = tam
+        .iter()
+        .enumerate()
+        .max_by_key(|(i, t)| (**t, std::cmp::Reverse(*i)))
+        .map_or(SIN_COMPONENTE, |(i, _)| i as u32);
+    (comp, mundial)
 }
 
-/// Reescala la red de HydroSHEDS al nivel de `n` celdas por arista. `dir` y `acum` son los GeoTIFF de
-/// direcciones y de acumulación a 15″.
-pub fn reescalar(dir: &Path, acum: &Path, n: u32) -> Result<Red, TerrenoError> {
+/// Mar conectado con el océano mundial (adenda 1 §1.4), en el nivel de carga: las celdas bajo el nivel
+/// del mar que ven el mar (algún píxel de mar de HydroSHEDS; donde no llega, basta la altura) y están
+/// en la componente del océano mundial.
+pub fn mar_conectado(z: &[f64], pix_mar: &[u32], pix_tierra: &[u32], n: u32) -> Vec<bool> {
+    let (comp, mundial) = componentes_de_mar(z, pix_mar, pix_tierra, n);
+    (0..z.len())
+        .map(|k| z[k] < 0.0 && comp[k] == mundial && mundial != SIN_COMPONENTE)
+        .collect()
+}
+
+/// Reescala la red de HydroSHEDS al nivel de `n` celdas por arista. `dir`, `acum` y `mascara` son los
+/// GeoTIFF de direcciones, de acumulación y de la máscara (`MSK`) a 15″, y `z` la altura media de cada
+/// celda (m). Devuelve la red y el mar conectado con el océano mundial.
+pub fn reescalar(
+    dir: &Path,
+    acum: &Path,
+    mascara: &Path,
+    z: &[f64],
+    n: u32,
+) -> Result<(Red, Vec<bool>), TerrenoError> {
     let m = 6 * (n as usize) * (n as usize);
+    if z.len() != m {
+        return Err(error("HydroSHEDS: la altura no es la del nivel de carga"));
+    }
     let ra = Raster::abrir(acum)?;
     let rd = Raster::abrir(dir)?;
-    if (ra.ancho, ra.alto) != (rd.ancho, rd.alto)
-        || (ra.lon0 - rd.lon0).abs() > 1e-9
-        || (ra.lat0 - rd.lat0).abs() > 1e-9
-        || (ra.paso_lon - rd.paso_lon).abs() > 1e-12
-        || (rd.paso_lon - rd.paso_lat).abs() > 1e-12
-    {
+    let rm = Raster::abrir(mascara)?;
+    let otra_rejilla = |x: &Raster| {
+        (x.ancho, x.alto) != (rd.ancho, rd.alto)
+            || (x.lon0 - rd.lon0).abs() > 1e-9
+            || (x.lat0 - rd.lat0).abs() > 1e-9
+            || (x.paso_lon - rd.paso_lon).abs() > 1e-12
+    };
+    if otra_rejilla(&ra) || otra_rejilla(&rm) || (rd.paso_lon - rd.paso_lat).abs() > 1e-12 {
         return Err(error(
-            "HydroSHEDS: las direcciones y la acumulación no tienen la misma rejilla de píxeles cuadrados",
+            "HydroSHEDS: las direcciones, la acumulación y la máscara no tienen la misma rejilla de píxeles cuadrados",
         ));
     }
+    drop(rm);
     let rejilla = Rejilla {
         ancho: rd.ancho,
         alto: rd.alto,
@@ -160,11 +240,11 @@ pub fn reescalar(dir: &Path, acum: &Path, n: u32) -> Result<Red, TerrenoError> {
         paso: rd.paso_lon,
         global: (rd.ancho as f64 * rd.paso_lon - 360.0).abs() < 1e-6,
     };
-    // Direcciones en memoria (un byte por píxel; el mar va como 247, que ningún código de HydroSHEDS
-    // usa): el camino río abajo salta por toda la rejilla. A la vez, el píxel de salida de cada celda
-    // (el de mayor acumulación; en empate, el primero) y los píxeles de mar de cada celda. Por bandas
-    // de filas, un hilo y un lector por banda: el máximo con desempate y las sumas no dependen del
-    // reparto, así que el resultado es el mismo con cualquier número de hilos.
+    // Direcciones en memoria (un byte por píxel, con los códigos `P_*`): el camino río abajo salta por
+    // toda la rejilla. A la vez, el píxel de salida de cada celda (el de mayor acumulación; en empate,
+    // el primero) y los píxeles de mar y de tierra de cada celda. Por bandas de filas, un hilo y un
+    // lector por banda: el máximo con desempate y las sumas no dependen del reparto, así que el
+    // resultado es el mismo con cualquier número de hilos.
     let mut dirs = vec![0u8; rejilla.ancho * rejilla.alto];
     let (sin_dato_dir, sin_dato_acum) =
         (rd.sin_dato.map(|x| x as i64), ra.sin_dato.map(|x| x as i64));
@@ -180,7 +260,7 @@ pub fn reescalar(dir: &Path, acum: &Path, n: u32) -> Result<Red, TerrenoError> {
             (lon.cos(), lon.sin())
         })
         .unzip();
-    type Banda = Result<(Vec<(i64, usize)>, Vec<u32>), TerrenoError>;
+    type Banda = Result<(Vec<(i64, usize)>, Vec<u32>, Vec<u32>), TerrenoError>;
     let mut resultados: Vec<Banda> = Vec::new();
     std::thread::scope(|sc| {
         let partes: Vec<_> = dirs
@@ -191,35 +271,42 @@ pub fn reescalar(dir: &Path, acum: &Path, n: u32) -> Result<Red, TerrenoError> {
                 sc.spawn(move || -> Banda {
                     let mut rd = Raster::abrir(dir)?;
                     let mut ra = Raster::abrir(acum)?;
-                    let (mut fd, mut fa) = (Vec::new(), Vec::new());
+                    let mut rm = Raster::abrir(mascara)?;
+                    let (mut fd, mut fa, mut fm) = (Vec::new(), Vec::new(), Vec::new());
                     let mut mejor = vec![(0i64, usize::MAX); m];
                     let mut pix_mar = vec![0u32; m];
+                    let mut pix_tierra = vec![0u32; m];
                     let r0 = b * filas_por_hilo;
                     for (dr, fila) in trozo.chunks_mut(rejilla.ancho).enumerate() {
                         let r = r0 + dr;
                         rd.fila_i64(r, &mut fd)?;
                         ra.fila_i64(r, &mut fa)?;
+                        rm.fila_i64(r, &mut fm)?;
                         let lat = (rejilla.lat0 - (r as f64 + 0.5) * rejilla.paso).to_radians();
                         let (cp, sp) = (lat.cos(), lat.sin());
                         for c in 0..rejilla.ancho {
                             let v = fd[c];
-                            let d = if Some(v) == sin_dato_dir || !(0..=255).contains(&v) {
-                                247
-                            } else {
-                                let d = v as u8;
-                                if d == 0 || d == 255 || paso(d).is_some() {
-                                    d
+                            let d = if Some(v) == sin_dato_dir {
+                                P_MAR
+                            } else if v == 0 {
+                                if fm[c] == MSK_FONDO {
+                                    P_FONDO
                                 } else {
-                                    247
+                                    P_SALIDA
                                 }
+                            } else if (1..=128).contains(&v) && paso(v as u8).is_some() {
+                                v as u8
+                            } else {
+                                P_MAR
                             };
                             fila[c] = d;
                             let (f, i, j) = locate([cp * cl[c], cp * sl[c], sp], n);
                             let k = indice_de(f, i, j, n);
-                            if d == 247 {
+                            if d == P_MAR {
                                 pix_mar[k] += 1;
                                 continue;
                             }
+                            pix_tierra[k] += 1;
                             let a = fa[c];
                             if Some(a) == sin_dato_acum || a < 0 {
                                 continue;
@@ -230,7 +317,7 @@ pub fn reescalar(dir: &Path, acum: &Path, n: u32) -> Result<Red, TerrenoError> {
                             }
                         }
                     }
-                    Ok((mejor, pix_mar))
+                    Ok((mejor, pix_mar, pix_tierra))
                 })
             })
             .collect();
@@ -243,65 +330,100 @@ pub fn reescalar(dir: &Path, acum: &Path, n: u32) -> Result<Red, TerrenoError> {
     });
     let mut mejor = vec![(0i64, usize::MAX); m];
     let mut pix_mar = vec![0u32; m];
+    let mut pix_tierra = vec![0u32; m];
     for r in resultados {
-        let (mb, pb) = r?;
+        let (mb, pm, pt) = r?;
         for k in 0..m {
             let (a, q) = mb[k];
             if q != usize::MAX && (a > mejor[k].0 || (a == mejor[k].0 && q < mejor[k].1)) {
                 mejor[k] = (a, q);
             }
-            pix_mar[k] += pb[k];
+            pix_mar[k] += pm[k];
+            pix_tierra[k] += pt[k];
         }
     }
-    let salida: HashMap<usize, usize> = mejor
-        .iter()
-        .enumerate()
-        .filter(|(_, x)| x.1 != usize::MAX)
-        .map(|(k, x)| (x.1, k))
+    // El mar: las celdas de mar no entran en la red (el camino pasa por ellas sin pararse).
+    let (comp, mundial) = componentes_de_mar(z, &pix_mar, &pix_tierra, n);
+    let mar: Vec<bool> = (0..m)
+        .map(|k| z[k] < 0.0 && comp[k] == mundial && mundial != SIN_COMPONENTE)
         .collect();
+    // A qué da un mar: al océano mundial o a un mar interior (el Caspio), que es una cuenca cerrada.
+    let fin_del_mar = |k: usize| {
+        if comp[k] == SIN_COMPONENTE || comp[k] == mundial {
+            fin::MAR
+        } else {
+            fin::CERRADA
+        }
+    };
+    let salida_de = |k: usize| (!mar[k] && mejor[k].1 != usize::MAX).then_some(mejor[k].1);
     // Desde cada salida, río abajo hasta la salida de otra celda, el mar o el fondo de una cuenca.
     let mut red = Red {
         abajo: vec![NINGUNA; m],
         fin: vec![fin::MAR; m],
-        acum: mejor.iter().map(|x| x.0.max(0) as u32).collect(),
+        acum: (0..m)
+            .map(|k| salida_de(k).map_or(0, |_| mejor[k].0.clamp(0, u32::MAX as i64) as u32))
+            .collect(),
         pix_mar,
+        pix_tierra,
+        vecina: vec![NINGUNA; m],
     };
-    for (k, &(_, q0)) in mejor.iter().enumerate() {
-        if q0 == usize::MAX {
+    for (k, &es_mar) in mar.iter().enumerate() {
+        if es_mar {
             continue;
         }
+        let Some(q0) = salida_de(k) else {
+            // Tierra sin píxeles de tierra de HydroSHEDS: un mar interior (acaba en sí mismo) o la
+            // tierra adonde HydroSHEDS no llega (la Antártida), que vierte al mar.
+            red.fin[k] = fin_del_mar(k);
+            continue;
+        };
         let (mut r, mut c) = (q0 / rejilla.ancho, q0 % rejilla.ancho);
-        let mut primera_vecina: Option<usize> = None;
+        let mut primera: Option<usize> = None;
         let mut pasos = 0usize;
         loop {
             pasos += 1;
             let d = dirs[r * rejilla.ancho + c];
-            let siguiente = paso(d).and_then(|s| rejilla.vecino(r, c, s));
-            let Some((r2, c2)) = siguiente else {
-                // 0: sale al mar; 255: fondo de una cuenca cerrada. Si acaba en otra celda sin pasar
-                // por su salida, el agua no puede seguir esa otra red (rebosaría): termina aquí.
-                red.fin[k] = if d == 255 { fin::CERRADA } else { fin::MAR };
+            if d == P_FONDO {
+                red.fin[k] = fin::CERRADA;
+                break;
+            }
+            if d == P_SALIDA {
+                // La salida al mar: el mar es el de un píxel de mar de al lado.
+                let al_lado = D8
+                    .iter()
+                    .filter_map(|x| rejilla.vecino(r, c, (x.1, x.2)))
+                    .find(|&(r2, c2)| dirs[r2 * rejilla.ancho + c2] == P_MAR);
+                red.fin[k] = match al_lado {
+                    Some((r2, c2)) => fin_del_mar(rejilla.celda(r2, c2, n)),
+                    None => fin_del_mar(rejilla.celda(r, c, n)),
+                };
+                break;
+            }
+            let Some((r2, c2)) = paso(d).and_then(|s| rejilla.vecino(r, c, s)) else {
+                // El borde de la rejilla (o un código que no es del D8): sale al mar.
+                red.fin[k] = fin::MAR;
                 break;
             };
             let q2 = r2 * rejilla.ancho + c2;
-            if dirs[q2] == 247 {
-                red.fin[k] = fin::MAR;
-                break;
-            }
             let k2 = rejilla.celda(r2, c2, n);
-            if k2 != k && primera_vecina.is_none() {
-                primera_vecina = Some(k2);
-            }
-            if k2 != k
-                && let Some(&kd) = salida.get(&q2)
-            {
-                red.abajo[k] = if son_vecinas(k, kd, n) {
-                    kd as u32
-                } else {
-                    primera_vecina.unwrap_or(kd) as u32
-                };
-                red.fin[k] = fin::SIGUE;
+            if dirs[q2] == P_MAR {
+                red.fin[k] = fin_del_mar(k2);
                 break;
+            }
+            if k2 != k && salida_de(k2).is_some() {
+                if primera.is_none() {
+                    primera = Some(k2);
+                }
+                if mejor[k2].1 == q2 {
+                    red.abajo[k] = k2 as u32;
+                    red.fin[k] = fin::SIGUE;
+                    red.vecina[k] = if son_vecinas(k, k2, n) {
+                        k2 as u32
+                    } else {
+                        primera.unwrap_or(k2) as u32
+                    };
+                    break;
+                }
             }
             (r, c) = (r2, c2);
             if pasos > 50_000_000 {
@@ -311,81 +433,42 @@ pub fn reescalar(dir: &Path, acum: &Path, n: u32) -> Result<Red, TerrenoError> {
             }
         }
     }
-    Ok(red)
+    Ok((red, mar))
 }
 
-/// Mar conectado con el océano mundial (adenda 1 §1.4), en el nivel de carga: bajo el nivel del mar
-/// y en la mayor de las componentes que forman las celdas bajo el nivel del mar o con algún píxel de
-/// mar de HydroSHEDS. Donde HydroSHEDS no llega (la Antártida), cuenta solo la altura.
-pub fn mar_conectado(z: &[f64], pix_mar: &[u32], n: u32) -> Vec<bool> {
-    let m = z.len();
-    let nodo: Vec<bool> = (0..m).map(|k| z[k] < 0.0 || pix_mar[k] > 0).collect();
-    let mut comp = vec![u32::MAX; m];
-    let mut tam: Vec<usize> = Vec::new();
-    let mut cola = std::collections::VecDeque::new();
-    let nn = (n as usize) * (n as usize);
-    for k0 in 0..m {
-        if !nodo[k0] || comp[k0] != u32::MAX {
-            continue;
-        }
-        let id = tam.len() as u32;
-        tam.push(0);
-        comp[k0] = id;
-        cola.push_back(k0);
-        while let Some(k) = cola.pop_front() {
-            tam[id as usize] += 1;
-            let (c, r) = (k / nn, k % nn);
-            let (j, i) = ((r / n as usize) as u32, (r % n as usize) as u32);
-            for dj in -1i64..=1 {
-                for di in -1i64..=1 {
-                    if (di, dj) == (0, 0) {
-                        continue;
-                    }
-                    let Some((c2, i2, j2)) = neighbor_addr(c as u8, i, j, n, di, dj) else {
-                        continue;
-                    };
-                    let k2 = indice_de(c2, i2, j2, n);
-                    if nodo[k2] && comp[k2] == u32::MAX {
-                        comp[k2] = id;
-                        cola.push_back(k2);
-                    }
-                }
-            }
-        }
-    }
-    let mundial = tam
-        .iter()
-        .enumerate()
-        .max_by_key(|(i, t)| (**t, std::cmp::Reverse(*i)))
-        .map_or(u32::MAX, |(i, _)| i as u32);
-    (0..m).map(|k| z[k] < 0.0 && comp[k] == mundial).collect()
-}
-
-/// `true` si el agua de cada celda acaba, siguiendo la red, en una cuenca cerrada.
-pub fn acaba_en_cerrada(red: &Red) -> Vec<bool> {
-    let m = red.abajo.len();
-    let mut out: Vec<Option<bool>> = vec![None; m];
+/// Celda terminal de cada celda siguiendo los enlaces `abajo` (ella misma si no tiene).
+pub fn terminales(abajo: &[u32]) -> Vec<u32> {
+    let m = abajo.len();
+    let mut out = vec![NINGUNA; m];
     let mut camino = Vec::new();
     for k0 in 0..m {
-        if out[k0].is_some() {
+        if out[k0] != NINGUNA {
             continue;
         }
         camino.clear();
         let mut k = k0;
         let res = loop {
-            if let Some(v) = out[k] {
-                break v;
+            if out[k] != NINGUNA {
+                break out[k];
             }
             camino.push(k);
-            let a = red.abajo[k];
+            let a = abajo[k];
             if a == NINGUNA || camino.len() > m {
-                break red.fin[k] == fin::CERRADA;
+                break k as u32;
             }
             k = a as usize;
         };
         for &c in &camino {
-            out[c] = Some(res);
+            out[c] = res;
         }
     }
-    out.into_iter().map(|x| x.unwrap_or(false)).collect()
+    out
+}
+
+/// `true` si el agua de cada celda acaba, siguiendo la red, en una cuenca cerrada.
+pub fn acaba_en_cerrada(red: &Red) -> Vec<bool> {
+    terminales(&red.abajo)
+        .iter()
+        .map(|&t| red.fin[t as usize] == fin::CERRADA)
+        .collect()
 }
